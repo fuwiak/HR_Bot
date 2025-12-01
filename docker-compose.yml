@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: romanbot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - YCLIENTS_PARTNER_TOKEN=${YCLIENTS_PARTNER_TOKEN}
+      - YCLIENTS_USER_TOKEN=${YCLIENTS_USER_TOKEN}
+    # Volumes commented out for Railway compatibility
+    # For local development, uncomment the volume mount below:
+    # volumes:
+    #   - ./.env:/app/.env:ro
+    # Railway will inject environment variables automatically via the environment section
+
