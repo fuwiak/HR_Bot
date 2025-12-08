@@ -281,7 +281,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-            return services
+        return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
