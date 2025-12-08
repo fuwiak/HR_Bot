@@ -398,7 +398,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-        return services
+            return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -445,7 +445,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-                name = service.get("title", "Без названия")
+            name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
@@ -745,7 +745,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-            break
+                break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1067,6 +1067,13 @@ def create_real_booking(user_id: int, service_name: str, master_name: str, date_
 
 # ===================== MENU HANDLERS ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username or "без username"
+    first_name = update.message.from_user.first_name or "без имени"
+    
+    # Логируем команду /start
+    log.info(f"🚀 КОМАНДА /start: user_id={user_id}, username=@{username}, name={first_name}")
+    
     keyboard = [
         [InlineKeyboardButton("📝 Записаться", callback_data="book_appointment")],
         [InlineKeyboardButton("📋 Услуги", callback_data="services")],
@@ -1131,7 +1138,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             record_id_int = int(record_id)
             await delete_user_record(query, str(record_id_int))
         except ValueError:
-            await delete_user_record(query, record_id)
+        await delete_user_record(query, record_id)
     elif query.data.startswith("delete_booking_"):
         # Новый формат с booking_id из Google Sheets
         booking_id = query.data.replace("delete_booking_", "")
@@ -1452,7 +1459,7 @@ async def delete_user_record(query: CallbackQuery, booking_id: str):
                 [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
                 [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
             ]
-            await query.edit_message_text(
+        await query.edit_message_text(
                 f"✅ Запись успешно удалена!\n\n"
                 f"🆔 ID записи: `{booking_id}`",
                 parse_mode='Markdown',
@@ -1618,6 +1625,12 @@ def create_test_record(user_id: int):
 async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.message.from_user.id
+    username = update.message.from_user.username or "без username"
+    first_name = update.message.from_user.first_name or "без имени"
+    
+    # Логируем ВСЕ входящие сообщения для отладки
+    log.info(f"📨 ВХОДЯЩЕЕ СООБЩЕНИЕ: user_id={user_id}, username=@{username}, name={first_name}, text='{text[:100]}'")
+    
     add_memory(user_id, "user", text)
     
     # Флаг для отслеживания отправки ответа
@@ -1902,19 +1915,19 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                            for service in all_services)
-                        
-                        if not service_exists:
-                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                            await update.message.reply_text(
-                                f"❌ *Услуга не найдена*\n\n"
-                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                f"Пожалуйста, выберите услугу из списка доступных.",
-                                parse_mode='Markdown'
-                            )
-                            response_sent = True
-                            return
+                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                               for service in all_services)
+                            
+                            if not service_exists:
+                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                                await update.message.reply_text(
+                                    f"❌ *Услуга не найдена*\n\n"
+                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                    f"Пожалуйста, выберите услугу из списка доступных.",
+                                    parse_mode='Markdown'
+                                )
+                                response_sent = True
+                                return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
@@ -2108,6 +2121,26 @@ def main():
     
     # Start Telegram bot
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+    
+    # Удаляем webhook если он установлен (для Railway может быть установлен автоматически)
+    # Это критично для работы polling - webhook блокирует получение обновлений через polling
+    import asyncio
+    async def setup_polling():
+        try:
+            bot = app.bot
+            webhook_info = await bot.get_webhook_info()
+            if webhook_info.url:
+                log.warning(f"⚠️ Обнаружен webhook: {webhook_info.url}. Удаляем для использования polling...")
+                await bot.delete_webhook(drop_pending_updates=True)
+                log.info("✅ Webhook удален, используем polling")
+            else:
+                log.info("✅ Webhook не установлен, используем polling")
+        except Exception as e:
+            log.error(f"❌ Ошибка проверки webhook: {e}")
+            import traceback
+            log.error(f"❌ Traceback: {traceback.format_exc()}")
+    
+    asyncio.run(setup_polling())
     
     # Command handlers
     app.add_handler(CommandHandler("start", start))
