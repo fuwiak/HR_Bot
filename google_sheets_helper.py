@@ -587,3 +587,137 @@ def refresh_services_cache():
     log.info("🔄 Кэш услуг очищен")
 
 
+def get_user_bookings(user_id: int) -> List[Dict]:
+    """Получить все записи пользователя из Google Sheets"""
+    client = get_sheets_client()
+    
+    if not client:
+        log.error("❌ Google Sheets не настроены для получения записей")
+        return []
+    
+    try:
+        spreadsheet = client.open_by_key(GOOGLE_SHEETS_SPREADSHEET_ID)
+        try:
+            worksheet = spreadsheet.worksheet("Запись")
+        except gspread.exceptions.WorksheetNotFound:
+            log.info("📝 Лист 'Запись' не найден, записей нет")
+            return []
+        
+        # Получаем все записи (пропускаем заголовок)
+        all_values = worksheet.get_all_values()
+        if len(all_values) <= 1:
+            return []
+        
+        user_bookings = []
+        # Структура: ["Дата создания", "ID записи", "Дата", "Время", "Мастер", "Услуга", 
+        #            "Имя клиента", "Телефон", "Цена", "Статус", "Комментарий"]
+        for row_idx, row in enumerate(all_values[1:], start=2):  # Пропускаем заголовок
+            if len(row) < 11:
+                continue
+            
+            # Извлекаем user_id из комментария (формат: "Запись через Telegram бот (user_id: 123456)")
+            comment = row[10].strip() if len(row) > 10 else ""
+            row_user_id = None
+            if "user_id:" in comment.lower():
+                try:
+                    user_id_part = comment.split("user_id:")[1].split(")")[0].strip()
+                    row_user_id = int(user_id_part)
+                except (ValueError, IndexError):
+                    pass
+            
+            # Проверяем, что запись принадлежит пользователю
+            if row_user_id == user_id:
+                booking_id = row[1].strip() if len(row) > 1 else ""
+                status = row[9].strip() if len(row) > 9 else "confirmed"
+                
+                # Пропускаем отмененные записи
+                if "отмен" in status.lower() or "cancel" in status.lower():
+                    continue
+                
+                booking = {
+                    "id": booking_id,
+                    "date": row[2].strip() if len(row) > 2 else "",
+                    "time": row[3].strip() if len(row) > 3 else "",
+                    "datetime": f"{row[2].strip()} {row[3].strip()}" if len(row) > 3 else row[2].strip(),
+                    "master": row[4].strip() if len(row) > 4 else "",
+                    "service": row[5].strip() if len(row) > 5 else "",
+                    "client_name": row[6].strip() if len(row) > 6 else "",
+                    "client_phone": row[7].strip() if len(row) > 7 else "",
+                    "price": int(row[8]) if len(row) > 8 and row[8].strip().isdigit() else 0,
+                    "status": status,
+                    "created_at": row[0].strip() if len(row) > 0 else "",
+                    "row_number": row_idx  # Номер строки в Google Sheets для удаления
+                }
+                user_bookings.append(booking)
+        
+        # Сортируем по дате (новые сначала)
+        user_bookings.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        log.info(f"✅ Найдено {len(user_bookings)} записей для user_id={user_id}")
+        return user_bookings
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка получения записей пользователя из Google Sheets: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return []
+
+
+def delete_user_booking(user_id: int, booking_id: str) -> bool:
+    """Удалить запись пользователя из Google Sheets (только свои записи)"""
+    client = get_sheets_client()
+    
+    if not client:
+        log.error("❌ Google Sheets не настроены для удаления записи")
+        return False
+    
+    try:
+        spreadsheet = client.open_by_key(GOOGLE_SHEETS_SPREADSHEET_ID)
+        try:
+            worksheet = spreadsheet.worksheet("Запись")
+        except gspread.exceptions.WorksheetNotFound:
+            log.warning("📝 Лист 'Запись' не найден")
+            return False
+        
+        # Получаем все записи
+        all_values = worksheet.get_all_values()
+        if len(all_values) <= 1:
+            return False
+        
+        # Ищем запись с нужным ID и проверяем, что она принадлежит пользователю
+        for row_idx, row in enumerate(all_values[1:], start=2):  # Пропускаем заголовок
+            if len(row) < 11:
+                continue
+            
+            row_booking_id = row[1].strip() if len(row) > 1 else ""
+            if row_booking_id != booking_id:
+                continue
+            
+            # Проверяем, что запись принадлежит пользователю
+            comment = row[10].strip() if len(row) > 10 else ""
+            row_user_id = None
+            if "user_id:" in comment.lower():
+                try:
+                    user_id_part = comment.split("user_id:")[1].split(")")[0].strip()
+                    row_user_id = int(user_id_part)
+                except (ValueError, IndexError):
+                    pass
+            
+            if row_user_id != user_id:
+                log.warning(f"⚠️ Попытка удалить чужую запись: user_id={user_id}, booking_id={booking_id}")
+                return False
+            
+            # Удаляем строку (используем delete_rows, индексация с 1)
+            worksheet.delete_rows(row_idx)
+            log.info(f"✅ Запись {booking_id} успешно удалена из Google Sheets (строка {row_idx})")
+            return True
+        
+        log.warning(f"⚠️ Запись {booking_id} не найдена")
+        return False
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка удаления записи из Google Sheets: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return False
+
+

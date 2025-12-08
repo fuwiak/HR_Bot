@@ -372,7 +372,9 @@ from google_sheets_helper import (
     get_services as get_services_from_sheets,
     create_booking as create_booking_in_sheets,
     check_slot_available,
-    get_available_slots
+    get_available_slots,
+    get_user_bookings,
+    delete_user_booking,
 )
 
 # ===================== QDRANT VECTOR DATABASE ===========
@@ -1123,8 +1125,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "back_to_menu":
         await show_main_menu(query)
     elif query.data.startswith("delete_record_"):
-        record_id = int(query.data.replace("delete_record_", ""))
-        await delete_user_record(query, record_id)
+        # Старый формат для обратной совместимости
+        record_id = query.data.replace("delete_record_", "")
+        try:
+            record_id_int = int(record_id)
+            await delete_user_record(query, str(record_id_int))
+        except ValueError:
+            await delete_user_record(query, record_id)
+    elif query.data.startswith("delete_booking_"):
+        # Новый формат с booking_id из Google Sheets
+        booking_id = query.data.replace("delete_booking_", "")
+        await delete_user_record(query, booking_id)
+    elif query.data == "reset_session":
+        await reset_user_session(query)
+    elif query.data.startswith("delete_booking_"):
+        # Новый формат с booking_id из Google Sheets
+        booking_id = query.data.replace("delete_booking_", "")
+        await delete_user_record(query, booking_id)
+    elif query.data == "reset_session":
+        await reset_user_session(query)
     elif query.data.startswith("services_page_"):
         await show_services_page(query)
 
@@ -1346,13 +1365,20 @@ async def show_masters(query: CallbackQuery):
     await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
 
 async def show_user_records(query: CallbackQuery):
-    """Показать записи пользователя"""
+    """Показать записи пользователя из Google Sheets"""
     user_id = query.from_user.id
-    records = get_user_records(user_id)
     
-    if not records:
+    # Получаем записи из Google Sheets
+    try:
+        bookings = get_user_bookings(user_id)
+    except Exception as e:
+        log.error(f"❌ Ошибка получения записей: {e}")
+        bookings = []
+    
+    if not bookings:
         keyboard = [
             [InlineKeyboardButton("📝 Записаться", callback_data="book_appointment")],
+            [InlineKeyboardButton("🔄 Начать заново", callback_data="reset_session")],
             [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1370,18 +1396,34 @@ async def show_user_records(query: CallbackQuery):
     text = "📅 *Мои записи* 📅\n\n"
     keyboard = []
     
-    for i, record in enumerate(records[:5]):  # Показываем первые 5 записей
-        record_text = format_user_record(record)
-        text += f"📋 *Запись {i+1}:*\n{record_text}\n"
+    # Показываем все записи (или первые 10, если их много)
+    for i, booking in enumerate(bookings[:10], 1):
+        date_time = booking.get("datetime", f"{booking.get('date', '')} {booking.get('time', '')}")
+        master = booking.get("master", "Не указан")
+        service = booking.get("service", "Не указана")
+        price = booking.get("price", 0)
+        booking_id = booking.get("id", "")
+        
+        text += f"📋 *Запись {i}:*\n"
+        text += f"📅 Дата: {date_time}\n"
+        text += f"👤 Мастер: *{master}*\n"
+        text += f"💇 Услуга: *{service}*\n"
+        if price > 0:
+            text += f"💰 Цена: {price} ₽\n"
+        text += f"🆔 ID: `{booking_id}`\n\n"
         
         # Добавляем кнопку удаления для каждой записи
         keyboard.append([
             InlineKeyboardButton(
-                f"🗑 Удалить запись {i+1}", 
-                callback_data=f"delete_record_{record.get('id', i)}"
+                f"🗑 Удалить запись {i}", 
+                callback_data=f"delete_booking_{booking_id}"
             )
         ])
     
+    if len(bookings) > 10:
+        text += f"\n... и еще {len(bookings) - 10} записей\n"
+    
+    keyboard.append([InlineKeyboardButton("🔄 Начать заново", callback_data="reset_session")])
     keyboard.append([InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -1391,31 +1433,79 @@ async def show_user_records(query: CallbackQuery):
         reply_markup=reply_markup
     )
 
-async def delete_user_record(query: CallbackQuery, record_id: int):
-    """Удалить запись пользователя"""
+async def delete_user_record(query: CallbackQuery, booking_id: str):
+    """Удалить запись пользователя из Google Sheets (только свои записи)"""
     user_id = query.from_user.id
     
     try:
-        # Удаляем из локального хранилища
-        remove_user_record(user_id, record_id)
+        # Удаляем из Google Sheets (проверка прав выполняется внутри функции)
+        success = delete_user_booking(user_id, booking_id)
         
-        # TODO: Здесь можно добавить вызов API для удаления записи
-        # yclients.delete_user_record(record_id, record_hash)
+        if success:
+            # Также удаляем из локального хранилища если есть
+            try:
+                remove_user_record(user_id, booking_id)
+            except:
+                pass  # Не критично, если нет в локальном хранилище
+            
+            keyboard = [
+                [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
+                [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+            ]
+            await query.edit_message_text(
+                f"✅ Запись успешно удалена!\n\n"
+                f"🆔 ID записи: `{booking_id}`",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            await query.answer("❌ Не удалось удалить запись. Возможно, она уже удалена или не принадлежит вам.", show_alert=True)
+            await show_user_records(query)
+    except Exception as e:
+        log.error(f"❌ Ошибка удаления записи: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        await query.answer("❌ Ошибка при удалении записи. Попробуйте позже.", show_alert=True)
+        await show_user_records(query)
+
+async def reset_user_session(query: CallbackQuery):
+    """Сбросить сессию пользователя (начать заново)"""
+    user_id = query.from_user.id
+    
+    try:
+        # Очищаем память разговора
+        if user_id in UserMemory:
+            UserMemory[user_id] = deque(maxlen=MEMORY_TURNS)
+        
+        # Очищаем локальные записи (но не удаляем из Google Sheets)
+        if user_id in UserRecords:
+            UserRecords[user_id] = []
+        
+        # Очищаем имя и телефон (опционально, можно оставить)
+        # if user_id in UserName:
+        #     del UserName[user_id]
+        # if user_id in UserPhone:
+        #     del UserPhone[user_id]
+        
+        keyboard = [
+            [InlineKeyboardButton("📝 Записаться", callback_data="book_appointment")],
+            [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+        ]
         
         await query.edit_message_text(
-            f"✅ Запись #{record_id} успешно удалена!",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 К записям", callback_data="my_records")
-            ]])
+            "🔄 *Сессия сброшена*\n\n"
+            "Вы можете начать новый диалог.\n\n"
+            "💡 *Что дальше?*\n"
+            "• Используйте кнопку \"📝 Записаться\"\n"
+            "• Или напишите в чат \"хочу записаться\"\n"
+            "• Просмотрите свои записи через \"📅 Мои записи\"",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
         )
     except Exception as e:
-        log.error(f"Error deleting record: {e}")
-        await query.edit_message_text(
-            "❌ Ошибка при удалении записи. Попробуйте позже.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🔙 К записям", callback_data="my_records")
-            ]])
-        )
+        log.error(f"❌ Ошибка сброса сессии: {e}")
+        await query.answer("❌ Ошибка при сбросе сессии", show_alert=True)
 
 async def start_booking_process(query: CallbackQuery):
     """Начать процесс записи"""
@@ -1813,18 +1903,18 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
                         service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                             for service in all_services)
+                                            for service in all_services)
                         
                         if not service_exists:
-                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                                await update.message.reply_text(
-                                    f"❌ *Услуга не найдена*\n\n"
-                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                    f"Пожалуйста, выберите услугу из списка доступных.",
-                                    parse_mode='Markdown'
-                                )
-                                response_sent = True
-                                return
+                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                            await update.message.reply_text(
+                                f"❌ *Услуга не найдена*\n\n"
+                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                f"Пожалуйста, выберите услугу из списка доступных.",
+                                parse_mode='Markdown'
+                            )
+                            response_sent = True
+                            return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
