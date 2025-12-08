@@ -242,13 +242,21 @@ def is_booking(text):
     time_markers = [
         "завтра", "сегодня", "послезавтра", "в ", "на ", "часов", ":", 
         "октября", "ноября", "декабря", "января", "февраля", "марта", 
-        "апреля", "мая", "июня", "июля", "августа", "сентября"
+        "апреля", "мая", "июня", "июля", "августа", "сентября",
+        "утра", "утром", "вечера", "вечером", "дня", "днем", "ночи", "ночью",
+        "утро", "вечер", "день"
     ]
+    time_markers_found = 0
     for marker in time_markers:
         if marker in text_lower:
-            score += 10
+            time_markers_found += 1
             reasons.append(f"временной маркер '{marker}'")
-            break
+    
+    # Если найдено несколько временных маркеров - это явно запрос на запись
+    if time_markers_found >= 2:
+        score += 25  # Достаточно для порога
+    elif time_markers_found >= 1:
+        score += 15  # Один маркер тоже может быть запросом
     
     # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Формат даты DD.MM.YYYY или DD/MM/YYYY с временем
     import re
@@ -1552,7 +1560,36 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response_sent = True
         return
 
-    if is_booking(text):
+    # Используем улучшенный классификатор намерений с эмбеддингами и опционально LLM
+    try:
+        from intent_classifier import is_booking_intent
+        services_list = get_services()
+        masters_list = get_masters()
+        # Используем LLM для классификации если доступен OpenRouter API
+        use_llm = bool(OPENROUTER_API_KEY)
+        is_booking_result, intent_details = is_booking_intent(
+            text, 
+            services=services_list, 
+            masters=masters_list, 
+            threshold=0.4,
+            use_llm=use_llm,
+            openrouter_api_key=OPENROUTER_API_KEY if use_llm else None,
+            openrouter_url=OPENROUTER_API_URL if use_llm else None
+        )
+        log.info(f"🎯 INTENT CLASSIFIER: score={intent_details.get('final_score', 0):.3f}, method={intent_details.get('method', 'unknown')}")
+    except ImportError:
+        # Fallback на старый метод если новый классификатор недоступен
+        is_booking_result = is_booking(text)
+        intent_details = {}
+        log.debug("⚠️ Новый классификатор намерений недоступен, используется старый метод")
+    except Exception as e:
+        log.error(f"❌ Ошибка классификатора намерений: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        is_booking_result = is_booking(text)
+        intent_details = {}
+    
+    if is_booking_result:
         log.info(f"🎯 BOOKING DETECTED: '{text}'")
         # Сначала пробуем парсить сообщение напрямую
         history = get_recent_history(user_id, 50)
@@ -1779,15 +1816,15 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                              for service in all_services)
                         
                         if not service_exists:
-                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                            await update.message.reply_text(
-                                f"❌ *Услуга не найдена*\n\n"
-                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                f"Пожалуйста, выберите услугу из списка доступных.",
-                                parse_mode='Markdown'
-                            )
-                            response_sent = True
-                            return
+                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                                await update.message.reply_text(
+                                    f"❌ *Услуга не найдена*\n\n"
+                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                    f"Пожалуйста, выберите услугу из списка доступных.",
+                                    parse_mode='Markdown'
+                                )
+                                response_sent = True
+                                return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
@@ -1821,6 +1858,69 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         answer = openrouter_chat([{"role": "user", "content": msg}])
 
     add_memory(user_id, "assistant", answer)
+    
+    # КРИТИЧЕСКОЕ: Проверяем ответ AI на подтверждение записи
+    # Если AI подтвердил запись (даже если is_booking() вернул False), создаем запись автоматически
+    if answer and not response_sent:
+        answer_lower = answer.lower()
+        confirmation_keywords = [
+            "записали", "записала", "записан", "записана", "записано",
+            "подтверждена", "подтвержден", "подтверждено", "подтвердил",
+            "запись создана", "запись оформлена", "запись подтверждена"
+        ]
+        
+        is_confirmed = any(keyword in answer_lower for keyword in confirmation_keywords)
+        
+        if is_confirmed:
+            log.info(f"✅ AI подтвердил запись в ответе: '{answer[:100]}...'")
+            
+            # Пытаемся извлечь данные из истории и ответа AI
+            history = get_recent_history(user_id, 50)
+            parsed_data = parse_booking_message(text, history)
+            
+            # Если в истории есть данные об услуге и мастере, пытаемся создать запись
+            if parsed_data.get("service") and parsed_data.get("master"):
+                # Пытаемся извлечь дату/время из ответа AI или использовать последнее сообщение
+                if not parsed_data.get("datetime"):
+                    # Парсим дату/время из ответа AI
+                    import re
+                    date_time_pattern = r'(\d{1,2})[./](\d{1,2})[./](\d{4})\s+(\d{1,2}):(\d{2})'
+                    match = re.search(date_time_pattern, answer)
+                    if match:
+                        day, month, year, hour, minute = match.groups()
+                        parsed_data["datetime"] = f"{day.zfill(2)}.{month.zfill(2)}.{year} {hour.zfill(2)}:{minute}"
+                    else:
+                        # Пробуем найти относительные даты в ответе
+                        if "завтра" in answer_lower:
+                            tomorrow = datetime.now() + timedelta(days=1)
+                            time_match = re.search(r'(\d{1,2}):?(\d{2})?', answer)
+                            if time_match:
+                                hour = time_match.group(1)
+                                minute = time_match.group(2) or "00"
+                                parsed_data["datetime"] = f"{tomorrow.strftime('%Y-%m-%d')} {hour.zfill(2)}:{minute.zfill(2)}"
+                
+                # Если есть все данные, создаем запись
+                if parsed_data.get("service") and parsed_data.get("master") and parsed_data.get("datetime"):
+                    try:
+                        user_phone = UserPhone.get(user_id)
+                        if not user_phone:
+                            # Не создаем запись без номера, но не блокируем ответ
+                            log.warning("⚠️ Номер телефона не указан, запись не создана")
+                        else:
+                            booking_record = create_booking_from_parsed_data(
+                                user_id,
+                                parsed_data,
+                                client_name=update.message.from_user.first_name or "Клиент",
+                                client_phone=user_phone
+                            )
+                            log.info(f"✅ Запись автоматически создана из подтверждения AI: {parsed_data}")
+                            # Обновляем ответ, чтобы показать что запись создана
+                            if "🎉" not in answer:
+                                answer = f"🎉 *Запись успешно создана в системе!* 🎉\n\n{answer}"
+                    except Exception as e:
+                        log.error(f"❌ Ошибка автоматического создания записи из подтверждения AI: {e}")
+                        import traceback
+                        log.error(f"❌ Traceback: {traceback.format_exc()}")
     
     # Отправляем ответ только если он не был отправлен ранее
     if answer and not response_sent:  # Проверяем что есть ответ для отправки
