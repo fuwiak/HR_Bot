@@ -116,11 +116,20 @@ def generate_service_id(service: Dict) -> str:
 
 def index_services(services: List[Dict]) -> bool:
     """Индексировать услуги в Qdrant"""
+    if not QDRANT_AVAILABLE:
+        log.warning("⚠️ Qdrant библиотеки не установлены. Установите: pip install qdrant-client sentence-transformers")
+        return False
+    
     client = get_qdrant_client()
     model = get_embedding_model()
     
-    if not client or not model:
-        log.error("❌ Qdrant клиент или модель не доступны")
+    if not client:
+        log.error(f"❌ Qdrant клиент не доступен. Проверьте подключение к {QDRANT_URL}")
+        log.error(f"❌ Запустите Qdrant: docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant")
+        return False
+    
+    if not model:
+        log.error("❌ Модель эмбеддингов не доступна. Проверьте установку sentence-transformers")
         return False
     
     if not ensure_collection():
