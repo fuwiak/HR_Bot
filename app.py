@@ -1516,6 +1516,10 @@ async def reset_user_session(query: CallbackQuery):
         if user_id in UserRecords:
             UserRecords[user_id] = []
         
+        # Очищаем частично собранные данные для записи
+        if user_id in UserBookingData:
+            del UserBookingData[user_id]
+        
         # Очищаем имя и телефон (опционально, можно оставить)
         # if user_id in UserName:
         #     del UserName[user_id]
