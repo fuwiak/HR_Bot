@@ -164,6 +164,7 @@ UserMemory: Dict[int, Deque] = defaultdict(lambda: deque(maxlen=MEMORY_TURNS * 2
 UserRecords: Dict[int, List[Dict]] = defaultdict(list)  # Хранилище записей пользователей
 UserAuth: Dict[int, Dict] = defaultdict(dict)  # Данные авторизации пользователей
 UserPhone: Dict[int, str] = {}  # Номера телефонов пользователей
+UserBookingData: Dict[int, Dict] = {}  # Частично собранные данные для записи (service, master, datetime)
 
 def add_memory(user_id, role, text):
     UserMemory[user_id].append((role, text))
@@ -376,7 +377,7 @@ async def openrouter_chat(messages, use_system_message=False, system_content="")
                     content = response_json["choices"][0]["message"]["content"]
                     log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
                     return content
-                else:
+        else:
                     log.error(f"❌ Неожиданный формат ответа OpenRouter: {response_json}")
                     return "Извините, произошла ошибка при обработке запроса."
                     
@@ -425,7 +426,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-        return services
+            return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -472,7 +473,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-                name = service.get("title", "Без названия")
+            name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
@@ -772,7 +773,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-            break
+                break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1165,7 +1166,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             record_id_int = int(record_id)
             await delete_user_record(query, str(record_id_int))
         except ValueError:
-            await delete_user_record(query, record_id)
+        await delete_user_record(query, record_id)
     elif query.data.startswith("delete_booking_"):
         # Новый формат с booking_id из Google Sheets
         booking_id = query.data.replace("delete_booking_", "")
@@ -1486,7 +1487,7 @@ async def delete_user_record(query: CallbackQuery, booking_id: str):
                 [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
                 [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
             ]
-            await query.edit_message_text(
+        await query.edit_message_text(
                 f"✅ Запись успешно удалена!\n\n"
                 f"🆔 ID записи: `{booking_id}`",
                 parse_mode='Markdown',
@@ -1970,19 +1971,19 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                            for service in all_services)
-                        
-                        if not service_exists:
-                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                            await update.message.reply_text(
-                                f"❌ *Услуга не найдена*\n\n"
-                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                f"Пожалуйста, выберите услугу из списка доступных.",
-                                parse_mode='Markdown'
-                            )
-                            response_sent = True
-                            return
+                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                               for service in all_services)
+                            
+                            if not service_exists:
+                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                                await update.message.reply_text(
+                                    f"❌ *Услуга не найдена*\n\n"
+                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                    f"Пожалуйста, выберите услугу из списка доступных.",
+                                    parse_mode='Markdown'
+                                )
+                                response_sent = True
+                                return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
@@ -2189,6 +2190,99 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Не меняем ответ пользователю, чтобы не показывать ошибку
             else:
                 log.warning(f"⚠️ Недостаточно данных для создания записи: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
+                
+                # МЕХАНИЗМ СБОРА ДАННЫХ: Сохраняем частично собранные данные и задаем вопросы
+                # Объединяем данные из текущего сообщения с уже сохраненными
+                if user_id not in UserBookingData:
+                    UserBookingData[user_id] = {}
+                
+                # Обновляем сохраненные данные новыми (если они есть)
+                if parsed_data.get("service"):
+                    UserBookingData[user_id]["service"] = parsed_data.get("service")
+                if parsed_data.get("master"):
+                    UserBookingData[user_id]["master"] = parsed_data.get("master")
+                if parsed_data.get("datetime"):
+                    UserBookingData[user_id]["datetime"] = parsed_data.get("datetime")
+                
+                # Объединяем сохраненные данные с текущими
+                combined_data = {
+                    "service": UserBookingData[user_id].get("service") or parsed_data.get("service"),
+                    "master": UserBookingData[user_id].get("master") or parsed_data.get("master"),
+                    "datetime": UserBookingData[user_id].get("datetime") or parsed_data.get("datetime")
+                }
+                
+                log.info(f"📋 Объединенные данные: service={combined_data.get('service')}, master={combined_data.get('master')}, datetime={combined_data.get('datetime')}")
+                
+                # Определяем недостающие данные и задаем вопросы
+                missing_fields = []
+                questions = []
+                
+                if not combined_data.get("service"):
+                    missing_fields.append("услуга")
+                    services = get_services()
+                    services_list = ", ".join([s.get("title") for s in services[:5]])  # Первые 5 услуг
+                    questions.append(f"📋 *Какая услуга вам нужна?*\n\nНапример: {services_list}...")
+                
+                if not combined_data.get("master"):
+                    missing_fields.append("мастер")
+                    masters = get_masters()
+                    masters_list = ", ".join([m.get("name") for m in masters])
+                    questions.append(f"👤 *К какому мастеру хотите записаться?*\n\nДоступны: {masters_list}")
+                
+                if not combined_data.get("datetime"):
+                    missing_fields.append("дата и время")
+                    questions.append(f"📅 *На какое время записаться?*\n\nНапример: завтра 17:00, или 10.12.2025 15:00")
+                
+                # Если все еще недостаточно данных, задаем вопросы
+                if missing_fields:
+                    question_text = f"❓ *Нужна дополнительная информация для записи*\n\n"
+                    question_text += "\n".join(questions)
+                    question_text += f"\n\n💡 Укажите недостающие данные: {', '.join(missing_fields)}"
+                    
+                    # Если ответ AI уже был сформирован, добавляем вопрос к нему
+                    if answer:
+                        answer = f"{answer}\n\n{question_text}"
+                    else:
+                        answer = question_text
+                    
+                    log.info(f"❓ Заданы вопросы о недостающих данных: {missing_fields}")
+                else:
+                    # Все данные собраны! Создаем запись
+                    log.info(f"✅ Все данные собраны! Создаем запись: {combined_data}")
+                    try:
+                        user_phone = UserPhone.get(user_id, "")
+                        client_name = update.message.from_user.first_name or "Клиент"
+                        
+                        booking_record = create_real_booking(
+                            user_id,
+                            combined_data.get("service"),
+                            combined_data.get("master"),
+                            combined_data.get("datetime"),
+                            client_name=client_name,
+                            client_phone=user_phone
+                        )
+                        
+                        log.info(f"✅ Запись создана после сбора данных: {booking_record.get('id', 'N/A')}")
+                        
+                        # Очищаем сохраненные данные после успешного создания
+                        if user_id in UserBookingData:
+                            del UserBookingData[user_id]
+                        
+                        # Обновляем ответ
+                        if answer:
+                            answer = f"🎉 *Запись успешно создана в системе!* 🎉\n\n{answer}"
+                        else:
+                            answer = f"🎉 *Запись успешно создана!* 🎉\n\n"
+                            answer += f"📅 *Услуга:* {combined_data.get('service')}\n"
+                            answer += f"👤 *Мастер:* {combined_data.get('master')}\n"
+                            answer += f"⏰ *Время:* {combined_data.get('datetime')}\n\n"
+                            answer += "Спасибо за запись! Ждем вас в салоне! ✨"
+                    except Exception as e:
+                        log.error(f"❌ Ошибка создания записи после сбора данных: {e}")
+                        import traceback
+                        log.error(f"❌ Traceback: {traceback.format_exc()}")
+                        if not answer:
+                            answer = f"❌ Произошла ошибка при создании записи. Попробуйте еще раз."
     
     # Отправляем ответ только если он не был отправлен ранее
     if answer and not response_sent:  # Проверяем что есть ответ для отправки
