@@ -2023,26 +2023,60 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         log.info(f"✅ Найден мастер из ответа AI: {master_name}")
                         break
             
-            # Извлекаем услугу из истории или ответа AI
+            # Извлекаем услугу из истории или ответа AI (КРИТИЧЕСКИ ВАЖНО!)
             if not parsed_data.get("service"):
-                # Сначала ищем в истории
                 services = get_services()
                 history_lower = history.lower()
+                answer_lower_lower = answer_lower
+                
+                # Сначала ищем точное совпадение в истории (приоритет)
+                found_service = None
                 for service in services:
                     service_title = service.get("title", "").lower()
+                    # Точное совпадение
                     if service_title in history_lower:
-                        parsed_data["service"] = service.get("title")
-                        log.info(f"✅ Найдена услуга из истории: {service.get('title')}")
+                        found_service = service.get("title")
+                        log.info(f"✅ Найдена услуга из истории (точное совпадение): {found_service}")
                         break
                 
-                # Если не нашли в истории, ищем в ответе AI
-                if not parsed_data.get("service"):
+                # Если не нашли, ищем частичное совпадение в истории
+                if not found_service:
                     for service in services:
                         service_title = service.get("title", "").lower()
-                        if service_title in answer_lower:
-                            parsed_data["service"] = service.get("title")
-                            log.info(f"✅ Найдена услуга из ответа AI: {service.get('title')}")
+                        # Разбиваем название услуги на слова и ищем каждое слово
+                        service_words = service_title.split()
+                        for word in service_words:
+                            if len(word) > 3 and word in history_lower:  # Игнорируем короткие слова
+                                found_service = service.get("title")
+                                log.info(f"✅ Найдена услуга из истории (частичное совпадение '{word}'): {found_service}")
+                                break
+                        if found_service:
                             break
+                
+                # Если не нашли в истории, ищем в ответе AI
+                if not found_service:
+                    for service in services:
+                        service_title = service.get("title", "").lower()
+                        if service_title in answer_lower_lower:
+                            found_service = service.get("title")
+                            log.info(f"✅ Найдена услуга из ответа AI: {found_service}")
+                            break
+                
+                # Если все еще не нашли, ищем в исходном сообщении пользователя
+                if not found_service:
+                    text_lower = text.lower()
+                    for service in services:
+                        service_title = service.get("title", "").lower()
+                        if service_title in text_lower:
+                            found_service = service.get("title")
+                            log.info(f"✅ Найдена услуга из исходного сообщения: {found_service}")
+                            break
+                
+                # Если нашли услугу, сохраняем её
+                if found_service:
+                    parsed_data["service"] = found_service
+                else:
+                    log.warning(f"⚠️ Услуга не найдена ни в истории, ни в ответе AI, ни в сообщении пользователя")
             
             # Извлекаем дату/время из ответа AI
             if not parsed_data.get("datetime"):
