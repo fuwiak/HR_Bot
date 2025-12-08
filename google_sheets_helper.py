@@ -196,23 +196,24 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 if not service_name or not current_type:
                     continue
                 
-                # Колонка C: Мастер 1 (единственный мастер в этой структуре)
+                # Колонка C: Мастер 1
                 master1 = row[2].strip() if len(row) > 2 else ""
-                master2 = ""  # В данной таблице Мастер 2 отсутствует
+                # Колонка D: Мастер 2 (может быть пусто)
+                master2 = row[3].strip() if len(row) > 3 else ""
                 
-                # Колонка D: Цена (может быть диапазон "1000–2500")
-                price_str = row[3].strip() if len(row) > 3 else "0"
+                # Колонка E: Цена (может быть диапазон "1000–2500")
+                price_str = row[4].strip() if len(row) > 4 else "0"
                 price = parse_price(price_str)
                 
-                # Колонка E: Время оказания (в мин.)
-                duration_str = row[4].strip() if len(row) > 4 else "0"
+                # Колонка F: Время оказания (в мин.)
+                duration_str = row[5].strip() if len(row) > 5 else "0"
                 try:
                     duration = int(duration_str) if duration_str else 0
                 except ValueError:
                     duration = 0
                 
-                # Колонка F: Доп. услуги
-                additional_services = row[5].strip() if len(row) > 5 else ""
+                # Колонка G: Доп. услуги
+                additional_services = row[6].strip() if len(row) > 6 else ""
                 
                 service = {
                     "id": service_id,
@@ -241,8 +242,14 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             _services_cache_time = datetime.now()
             log.info(f"✅ Получено {len(services)} услуг из Google Sheets")
             # Логируем первые несколько услуг для проверки
-            for s in services[:5]:
-                log.info(f"  📋 {s.get('title')} - {s.get('price_str') or s.get('price')} ₽ ({s.get('duration')} мин) - {s.get('master')}")
+            for s in services[:10]:
+                log.info(f"  📋 {s.get('title')} - цена: '{s.get('price_str')}' ({s.get('price')}₽) - {s.get('duration')} мин - мастер: {s.get('master')}")
+            
+            # Проверяем конкретно "Бритье головы"
+            briтье_услуги = [s for s in services if "бритье" in s.get('title', '').lower() and "голов" in s.get('title', '').lower()]
+            if briтье_услуги:
+                for s in briтье_услуги:
+                    log.info(f"  🔍 НАЙДЕНО 'Бритье головы': {s.get('title')} - цена: '{s.get('price_str')}' ({s.get('price')}₽)")
             
             if master_name:
                 filtered_services = [s for s in services if master_name.lower() in (s.get("master1", "") + " " + s.get("master2", "")).lower()]
