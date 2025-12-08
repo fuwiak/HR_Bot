@@ -631,10 +631,10 @@ def parse_booking_message(message: str, history: str) -> Dict:
                 break
     
     # Используем продвинутый поиск мастеров как fallback
-    if not result["master"]:
-        result["master"] = find_master_advanced(message)
-        if result["master"]:
-            log.info(f"✅ Найден мастер через find_master_advanced: {result['master']}")
+            if not result["master"]:
+                result["master"] = find_master_advanced(message)
+                if result["master"]:
+                    log.info(f"✅ Найден мастер через find_master_advanced: {result['master']}")
     
     # Fallback для мастеров (если не нашли в реальных данных)
     if not result["master"]:
