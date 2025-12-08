@@ -445,7 +445,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-            name = service.get("title", "Без названия")
+                name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
@@ -1131,7 +1131,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             record_id_int = int(record_id)
             await delete_user_record(query, str(record_id_int))
         except ValueError:
-        await delete_user_record(query, record_id)
+            await delete_user_record(query, record_id)
     elif query.data.startswith("delete_booking_"):
         # Новый формат с booking_id из Google Sheets
         booking_id = query.data.replace("delete_booking_", "")
@@ -1902,19 +1902,19 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                               for service in all_services)
-                            
-                            if not service_exists:
-                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                                await update.message.reply_text(
-                                    f"❌ *Услуга не найдена*\n\n"
-                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                    f"Пожалуйста, выберите услугу из списка доступных.",
-                                    parse_mode='Markdown'
-                                )
-                                response_sent = True
-                                return
+                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                            for service in all_services)
+                        
+                        if not service_exists:
+                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                            await update.message.reply_text(
+                                f"❌ *Услуга не найдена*\n\n"
+                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                f"Пожалуйста, выберите услугу из списка доступных.",
+                                parse_mode='Markdown'
+                            )
+                            response_sent = True
+                            return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
@@ -2037,33 +2037,33 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Создаем запись если есть все необходимые данные
             if parsed_data.get("service") and parsed_data.get("master") and parsed_data.get("datetime"):
-                    try:
-                        user_phone = UserPhone.get(user_id, "")
-                        client_name = update.message.from_user.first_name or "Клиент"
-                        
-                        log.info(f"🚀 СОЗДАНИЕ ЗАПИСИ из подтверждения AI: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}, phone={user_phone or 'не указан'}")
-                        
-                        # Создаем запись даже без номера телефона (можно добавить позже)
-                        booking_record = create_real_booking(
-                            user_id,
-                            parsed_data.get("service"),
-                            parsed_data.get("master"),
-                            parsed_data.get("datetime"),
-                            client_name=client_name,
-                            client_phone=user_phone
-                        )
-                        log.info(f"✅ Запись автоматически создана из подтверждения AI: {booking_record.get('id', 'N/A')}")
-                        
-                        # Обновляем ответ, чтобы показать что запись создана
-                        if "🎉" not in answer:
-                            answer = f"🎉 *Запись успешно создана в системе!* 🎉\n\n{answer}"
-                    except Exception as e:
-                        log.error(f"❌ Ошибка автоматического создания записи из подтверждения AI: {e}")
-                        import traceback
-                        log.error(f"❌ Traceback: {traceback.format_exc()}")
-                        # Не меняем ответ пользователю, чтобы не показывать ошибку
-                else:
-                    log.warning(f"⚠️ Недостаточно данных для создания записи: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
+                try:
+                    user_phone = UserPhone.get(user_id, "")
+                    client_name = update.message.from_user.first_name or "Клиент"
+                    
+                    log.info(f"🚀 СОЗДАНИЕ ЗАПИСИ из подтверждения AI: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}, phone={user_phone or 'не указан'}")
+                    
+                    # Создаем запись даже без номера телефона (можно добавить позже)
+                    booking_record = create_real_booking(
+                        user_id,
+                        parsed_data.get("service"),
+                        parsed_data.get("master"),
+                        parsed_data.get("datetime"),
+                        client_name=client_name,
+                        client_phone=user_phone
+                    )
+                    log.info(f"✅ Запись автоматически создана из подтверждения AI: {booking_record.get('id', 'N/A')}")
+                    
+                    # Обновляем ответ, чтобы показать что запись создана
+                    if "🎉" not in answer:
+                        answer = f"🎉 *Запись успешно создана в системе!* 🎉\n\n{answer}"
+                except Exception as e:
+                    log.error(f"❌ Ошибка автоматического создания записи из подтверждения AI: {e}")
+                    import traceback
+                    log.error(f"❌ Traceback: {traceback.format_exc()}")
+                    # Не меняем ответ пользователю, чтобы не показывать ошибку
+            else:
+                log.warning(f"⚠️ Недостаточно данных для создания записи: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
     
     # Отправляем ответ только если он не был отправлен ранее
     if answer and not response_sent:  # Проверяем что есть ответ для отправки
