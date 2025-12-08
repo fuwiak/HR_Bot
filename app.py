@@ -377,7 +377,7 @@ async def openrouter_chat(messages, use_system_message=False, system_content="")
                     content = response_json["choices"][0]["message"]["content"]
                     log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
                     return content
-        else:
+                else:
                     log.error(f"❌ Неожиданный формат ответа OpenRouter: {response_json}")
                     return "Извините, произошла ошибка при обработке запроса."
                     
@@ -426,7 +426,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-            return services
+        return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -473,7 +473,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-            name = service.get("title", "Без названия")
+                name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
@@ -773,7 +773,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-                break
+            break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1166,7 +1166,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             record_id_int = int(record_id)
             await delete_user_record(query, str(record_id_int))
         except ValueError:
-        await delete_user_record(query, record_id)
+            await delete_user_record(query, record_id)
     elif query.data.startswith("delete_booking_"):
         # Новый формат с booking_id из Google Sheets
         booking_id = query.data.replace("delete_booking_", "")
@@ -1978,7 +1978,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         service_exists = any(service_name.lower() in service.get("title", "").lower() 
                                              for service in all_services)
                             
-                            if not service_exists:
+                        if not service_exists:
                                 log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
                                 await update.message.reply_text(
                                     f"❌ *Услуга не найдена*\n\n"
