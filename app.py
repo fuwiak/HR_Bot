@@ -302,20 +302,20 @@ def get_api_data_for_ai():
             
             # Добавляем услуги мастера
             master_services = get_services_for_master(name)
-                if master_services:
+            if master_services:
                 data_text += " - услуги: "
-                    service_names = []
-                    for service in master_services:
-                        service_name = service.get("title", "")
+                service_names = []
+                for service in master_services:
+                    service_name = service.get("title", "")
                     price_str = service.get("price_str", "")
                     price = service.get("price", 0)
-                        if service_name:
+                    if service_name:
                         if price_str and ("–" in price_str or "-" in price_str):
                             service_names.append(f"{service_name} ({price_str}₽)")
                         elif price > 0:
                             service_names.append(f"{service_name} ({price}₽)")
-                            else:
-                                service_names.append(service_name)
+                        else:
+                            service_names.append(service_name)
                 data_text += ", ".join(service_names)
             
             data_text += "\n"
@@ -559,7 +559,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-                break
+            break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1505,10 +1505,10 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                               for service in all_services)
-                            
-                            if not service_exists:
+                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                           for service in all_services)
+                        
+                        if not service_exists:
                                 log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
                                 await update.message.reply_text(
                                     f"❌ *Услуга не найдена*\n\n"
