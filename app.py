@@ -745,7 +745,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-                break
+            break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1131,7 +1131,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             record_id_int = int(record_id)
             await delete_user_record(query, str(record_id_int))
         except ValueError:
-        await delete_user_record(query, record_id)
+            await delete_user_record(query, record_id)
     elif query.data.startswith("delete_booking_"):
         # Новый формат с booking_id из Google Sheets
         booking_id = query.data.replace("delete_booking_", "")
@@ -1452,7 +1452,7 @@ async def delete_user_record(query: CallbackQuery, booking_id: str):
                 [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
                 [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
             ]
-        await query.edit_message_text(
+            await query.edit_message_text(
                 f"✅ Запись успешно удалена!\n\n"
                 f"🆔 ID записи: `{booking_id}`",
                 parse_mode='Markdown',
@@ -1902,8 +1902,8 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                               for service in all_services)
+                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                             for service in all_services)
                             
                             if not service_exists:
                                 log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
