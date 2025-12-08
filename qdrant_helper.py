@@ -46,10 +46,13 @@ def get_qdrant_client():
             _qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
         else:
             _qdrant_client = QdrantClient(url=QDRANT_URL)
+        # Проверяем подключение
+        _qdrant_client.get_collections()
         log.info(f"✅ Qdrant клиент успешно подключен: {QDRANT_URL}")
         return _qdrant_client
     except Exception as e:
-        log.error(f"❌ Ошибка подключения к Qdrant: {e}")
+        log.error(f"❌ Ошибка подключения к Qdrant ({QDRANT_URL}): {e}")
+        log.error(f"❌ Убедитесь, что Qdrant сервер запущен. Запустите: docker run -p 6333:6333 qdrant/qdrant")
         return None
 
 def get_embedding_model():
@@ -64,11 +67,13 @@ def get_embedding_model():
     
     try:
         # Используем русскоязычную модель для лучшего качества
+        log.info("🔄 Загрузка модели для эмбеддингов (это может занять 1-2 минуты при первом запуске)...")
         _embedding_model = SentenceTransformer('intfloat/multilingual-e5-base')
         log.info("✅ Модель для эмбеддингов загружена")
         return _embedding_model
     except Exception as e:
         log.error(f"❌ Ошибка загрузки модели эмбеддингов: {e}")
+        log.error(f"❌ Убедитесь, что sentence-transformers установлен: pip install sentence-transformers")
         return None
 
 def ensure_collection():
