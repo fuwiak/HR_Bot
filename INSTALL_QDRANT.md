@@ -29,16 +29,21 @@ docker run -d -p 6333:6333 -p 6334:6334 --name qdrant qdrant/qdrant
 docker-compose up -d qdrant
 ```
 
-### Вариант 3: Qdrant Cloud (для продакшена)
+### Вариант 3: Qdrant Cloud (для продакшена на Railway) ✅ У ВАС УЖЕ ЕСТЬ
 
-1. Зарегистрируйтесь на https://cloud.qdrant.io
-2. Создайте кластер
-3. Получите URL и API ключ
-4. Установите переменные окружения:
-   ```bash
-   export QDRANT_URL=https://your-cluster.qdrant.io
-   export QDRANT_API_KEY=your_api_key
+**Ваш кластер уже создан:**
+- Endpoint: `https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io`
+
+**Для Railway:**
+
+1. Получите API ключ из панели Qdrant Cloud: https://cloud.qdrant.io
+2. Добавьте переменные в Railway:
    ```
+   QDRANT_URL=https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io
+   QDRANT_API_KEY=ваш_api_ключ
+   ```
+
+**Подробная инструкция**: см. `QDRANT_RAILWAY_SETUP.md`
 
 ## 3. Проверьте подключение
 
