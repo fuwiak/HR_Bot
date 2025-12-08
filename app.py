@@ -349,6 +349,16 @@ def get_api_data_for_ai():
                 data_text += "\n"
         
         if women_services:
+            data_text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            data_text += "👩 ЖЕНСКИЙ ЗАЛ (Мастер: Анжела):\n"
+            data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            for service in women_services:
+                name = service.get("title", "Без названия")
+                price = service.get("price", 0)
+                price_str = service.get("price_str", "")
+                duration = service.get("duration", 0)
+                
+                data_text += f"• {name}"
                 
                 # Отображаем цену (приоритет строковому формату с диапазоном) - ЯВНО и ЧЕТКО
                 if price_str and ("–" in price_str or "-" in price_str):
@@ -357,11 +367,11 @@ def get_api_data_for_ai():
                     data_text += f" → ЦЕНА: {price} ₽"
                 else:
                     data_text += f" → ЦЕНА: уточнить"
+                    
+                if duration > 0:
+                    data_text += f" ({duration} мин)"
                 
-            if duration > 0:
-                data_text += f" ({duration} мин)"
-                
-            data_text += "\n"
+                data_text += "\n"
         
         data_text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         data_text += "👥 МАСТЕРА:\n"
