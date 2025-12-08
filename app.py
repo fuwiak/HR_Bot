@@ -3,11 +3,13 @@ import os
 import re
 import time
 import logging
+import asyncio
 from collections import defaultdict, deque
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Deque, List, Tuple
 
 import requests
+import aiohttp
 from dotenv import load_dotenv
 from telegram import Update, Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
@@ -27,6 +29,13 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKE
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 # OpenRouter API URL - правильный формат
 OPENROUTER_API_URL = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
+
+# Webhook конфигурация для Railway (масштабируемость и concurrent updates)
+PORT = int(os.getenv("PORT", 8000))  # Railway автоматически предоставляет PORT
+# Railway предоставляет публичный домен через RAILWAY_PUBLIC_DOMAIN или можно указать вручную через WEBHOOK_URL
+RAILWAY_PUBLIC_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "") or (f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else "")
+USE_WEBHOOK = os.getenv("USE_WEBHOOK", "true").lower() == "true"  # По умолчанию используем webhook
 
 # ===================== VALIDATION =====================
 if not TELEGRAM_BOT_TOKEN:
@@ -299,8 +308,8 @@ def is_booking(text):
     
     return is_booking_request
 
-def openrouter_chat(messages, use_system_message=False, system_content=""):
-    """Отправка запроса в OpenRouter API для генерации ответа"""
+async def openrouter_chat(messages, use_system_message=False, system_content=""):
+    """Асинхронная отправка запроса в OpenRouter API для генерации ответа (неблокирующая)"""
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
@@ -320,46 +329,58 @@ def openrouter_chat(messages, use_system_message=False, system_content=""):
         "max_tokens": 1500,
         "temperature": 0.5  # Снижаем температуру для более детерминированных ответов
     }
+    
     try:
-        log.info(f"🌐 Отправка запроса к OpenRouter: {OPENROUTER_API_URL}, модель: {OPENROUTER_MODEL}")
-        r = requests.post(OPENROUTER_API_URL, json=data, headers=headers, timeout=30)
+        log.info(f"🌐 Отправка асинхронного запроса к OpenRouter: {OPENROUTER_API_URL}, модель: {OPENROUTER_MODEL}")
         
-        # Логируем статус ответа
-        log.info(f"📡 Статус ответа OpenRouter: {r.status_code}")
-        
-        if r.status_code == 404:
-            error_text = r.text
-            log.error(f"❌ 404 Not Found - проверьте URL и модель")
-            log.error(f"❌ URL: {OPENROUTER_API_URL}")
-            log.error(f"❌ Модель: {OPENROUTER_MODEL}")
-            log.error(f"❌ Ответ сервера: {error_text}")
-            
-            # Попытка использовать альтернативную модель если текущая недоступна
-            if "model" in error_text.lower() or "not found" in error_text.lower():
-                log.warning(f"⚠️ Модель {OPENROUTER_MODEL} недоступна. Проверьте список доступных моделей на https://openrouter.ai/models")
-                log.warning(f"⚠️ Попробуйте установить OPENROUTER_MODEL=x-ai/grok-beta или другую доступную модель")
-            
-            return "Извините, произошла ошибка подключения к сервису. Пожалуйста, попробуйте позже."
-        
-        r.raise_for_status()
-        response = r.json()
-        
-        if "choices" in response and len(response["choices"]) > 0:
-            content = response["choices"][0]["message"]["content"]
-            log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
-            return content
+        # Используем aiohttp для асинхронных HTTP запросов (неблокирующие)
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                OPENROUTER_API_URL,
+                json=data,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                # Логируем статус ответа
+                log.info(f"📡 Статус ответа OpenRouter: {response.status}")
+                
+                if response.status == 404:
+                    error_text = await response.text()
+                    log.error(f"❌ 404 Not Found - проверьте URL и модель")
+                    log.error(f"❌ URL: {OPENROUTER_API_URL}")
+                    log.error(f"❌ Модель: {OPENROUTER_MODEL}")
+                    log.error(f"❌ Ответ сервера: {error_text}")
+                    
+                    # Попытка использовать альтернативную модель если текущая недоступна
+                    if "model" in error_text.lower() or "not found" in error_text.lower():
+                        log.warning(f"⚠️ Модель {OPENROUTER_MODEL} недоступна. Проверьте список доступных моделей на https://openrouter.ai/models")
+                        log.warning(f"⚠️ Попробуйте установить OPENROUTER_MODEL=x-ai/grok-beta или другую доступную модель")
+                    
+                    return "Извините, произошла ошибка подключения к сервису. Пожалуйста, попробуйте позже."
+                
+                if response.status >= 400:
+                    error_text = await response.text()
+                    log.error(f"❌ HTTP ошибка при запросе к OpenRouter API: статус {response.status}")
+                    log.error(f"❌ Ответ: {error_text}")
+                    return "Извините, временно недоступно. Попробуйте позже."
+                
+                response_json = await response.json()
+                
+                if "choices" in response_json and len(response_json["choices"]) > 0:
+                    content = response_json["choices"][0]["message"]["content"]
+                    log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
+                    return content
         else:
-            log.error(f"❌ Неожиданный формат ответа OpenRouter: {response}")
-            return "Извините, произошла ошибка при обработке запроса."
-    except requests.exceptions.HTTPError as e:
-        log.error(f"❌ HTTP ошибка при запросе к OpenRouter API: {e}")
-        log.error(f"❌ Статус: {e.response.status_code if hasattr(e, 'response') else 'N/A'}")
-        log.error(f"❌ Ответ: {e.response.text if hasattr(e, 'response') and e.response else 'N/A'}")
-        return "Извините, временно недоступно. Попробуйте позже."
-    except requests.exceptions.RequestException as e:
-        log.error(f"❌ Ошибка запроса к OpenRouter API: {e}")
+                    log.error(f"❌ Неожиданный формат ответа OpenRouter: {response_json}")
+                    return "Извините, произошла ошибка при обработке запроса."
+                    
+    except aiohttp.ClientError as e:
+        log.error(f"❌ Ошибка клиента при запросе к OpenRouter API: {e}")
         log.error(f"❌ Тип ошибки: {type(e).__name__}")
         return "Извините, временно недоступно. Попробуйте позже."
+    except asyncio.TimeoutError:
+        log.error(f"❌ Таймаут при запросе к OpenRouter API (30 секунд)")
+        return "Извините, запрос занял слишком много времени. Попробуйте позже."
     except Exception as e:
         log.error(f"❌ Неожиданная ошибка: {e}")
         import traceback
@@ -1887,7 +1908,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - Если услуга есть в списке - используй ТОЧНУЮ цену
 - Если видишь блок "НАЙДЕНА УСЛУГА" - используй ТОЧНО эти данные"""
                 
-                answer = openrouter_chat([{"role": "user", "content": msg}], use_system_message=True, system_content=system_msg)
+                answer = await openrouter_chat([{"role": "user", "content": msg}], use_system_message=True, system_content=system_msg)
                 log.info(f"🤖 AI RESPONSE: {answer[:300]}...")  # Логируем больше для проверки
             
             # Проверяем, содержит ли ответ команду для создания записи
@@ -1958,7 +1979,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         answer += f"\n\n❌ *Ошибка при создании записи:* {str(e)}"
     else:
         msg = CHAT_PROMPT.replace("{{history}}", get_history(user_id)).replace("{{message}}", text)
-        answer = openrouter_chat([{"role": "user", "content": msg}])
+        answer = await openrouter_chat([{"role": "user", "content": msg}])
 
     add_memory(user_id, "assistant", answer)
     
@@ -2119,28 +2140,9 @@ def main():
         index_thread.start()
         log.info("🔄 Запущена фоновая индексация Qdrant (бот запускается, не ждет завершения)")
     
-    # Start Telegram bot
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    
-    # Удаляем webhook если он установлен (для Railway может быть установлен автоматически)
-    # Это критично для работы polling - webhook блокирует получение обновлений через polling
-    import asyncio
-    async def setup_polling():
-        try:
-            bot = app.bot
-            webhook_info = await bot.get_webhook_info()
-            if webhook_info.url:
-                log.warning(f"⚠️ Обнаружен webhook: {webhook_info.url}. Удаляем для использования polling...")
-                await bot.delete_webhook(drop_pending_updates=True)
-                log.info("✅ Webhook удален, используем polling")
-            else:
-                log.info("✅ Webhook не установлен, используем polling")
-        except Exception as e:
-            log.error(f"❌ Ошибка проверки webhook: {e}")
-            import traceback
-            log.error(f"❌ Traceback: {traceback.format_exc()}")
-    
-    asyncio.run(setup_polling())
+    # Start Telegram bot с поддержкой concurrent updates для масштабирования
+    # concurrent_updates=True позволяет обрабатывать до 100+ одновременных пользователей
+    app = Application.builder().token(TELEGRAM_BOT_TOKEN).concurrent_updates(True).build()
     
     # Command handlers
     app.add_handler(CommandHandler("start", start))
@@ -2152,9 +2154,99 @@ def main():
     # Message handler for AI chat
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, reply))
     
-    # Start bot
-    log.info("🚀 Starting Telegram Bot...")
-    app.run_polling()
+    # Запуск бота: webhook для production (Railway) или polling для локальной разработки
+    async def start_bot():
+        """Асинхронный запуск бота с webhook или polling"""
+        if USE_WEBHOOK and WEBHOOK_URL:
+            # Используем webhook для production (лучше для масштабирования)
+            webhook_path = f"/webhook/{TELEGRAM_BOT_TOKEN}"
+            full_webhook_url = f"{WEBHOOK_URL.rstrip('/')}{webhook_path}"
+            
+            log.info(f"🌐 Настройка webhook: {full_webhook_url}")
+            log.info(f"🔌 Порт: {PORT}")
+            
+            # Инициализируем и запускаем приложение
+            await app.initialize()
+            await app.start()
+            
+            # Устанавливаем webhook
+            await app.bot.set_webhook(
+                url=full_webhook_url,
+                drop_pending_updates=True,
+                max_connections=100  # Максимум одновременных соединений для обработки обновлений
+            )
+            
+            log.info(f"✅ Webhook установлен: {full_webhook_url}")
+            
+            # Запускаем HTTP сервер для приема webhook запросов
+            await app.updater.start_webhook(
+                listen="0.0.0.0",
+                port=PORT,
+                webhook_url=full_webhook_url,
+                url_path=webhook_path
+            )
+            
+            log.info(f"✅ Бот запущен с webhook на порту {PORT}")
+            log.info(f"📡 Webhook URL: {full_webhook_url}")
+            log.info("🚀 Готов к обработке обновлений от Telegram (concurrent_updates=True)")
+            
+            # Держим бота запущенным
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                pass
+        else:
+            # Используем polling для локальной разработки
+            log.info("🔄 Используем polling (локальная разработка)")
+            log.info("💡 Для production установите USE_WEBHOOK=true и WEBHOOK_URL")
+            
+            # Удаляем webhook если он был установлен ранее
+            try:
+                webhook_info = await app.bot.get_webhook_info()
+                if webhook_info.url:
+                    log.warning(f"⚠️ Обнаружен webhook: {webhook_info.url}. Удаляем для polling...")
+                    await app.bot.delete_webhook(drop_pending_updates=True)
+                    log.info("✅ Webhook удален")
+            except Exception as e:
+                log.error(f"❌ Ошибка проверки webhook: {e}")
+            
+            # Запускаем polling
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
+            log.info("✅ Бот запущен с polling (concurrent_updates=True)")
+            log.info("🚀 Готов к обработке обновлений от Telegram")
+            
+            # Держим бота запущенным
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                pass
+    
+    # Запускаем бота
+    log.info("🚀 Запуск Telegram Bot...")
+    log.info(f"⚙️  Режим: {'WEBHOOK' if USE_WEBHOOK and WEBHOOK_URL else 'POLLING'}")
+    log.info(f"🔄 Concurrent updates: ВКЛЮЧЕН (поддержка 100+ одновременных пользователей)")
+    
+    try:
+        asyncio.run(start_bot())
+    except KeyboardInterrupt:
+        log.info("⏹️  Остановка бота...")
+    finally:
+        # Корректное завершение
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(app.stop())
+                loop.create_task(app.shutdown())
+            else:
+                loop.run_until_complete(app.stop())
+                loop.run_until_complete(app.shutdown())
+        except Exception as e:
+            log.error(f"❌ Ошибка при остановке бота: {e}")
 
 if __name__ == "__main__":
     main()
