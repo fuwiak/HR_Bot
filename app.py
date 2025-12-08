@@ -376,7 +376,7 @@ async def openrouter_chat(messages, use_system_message=False, system_content="")
                     content = response_json["choices"][0]["message"]["content"]
                     log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
                     return content
-        else:
+                else:
                     log.error(f"❌ Неожиданный формат ответа OpenRouter: {response_json}")
                     return "Извините, произошла ошибка при обработке запроса."
                     
@@ -1165,7 +1165,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             record_id_int = int(record_id)
             await delete_user_record(query, str(record_id_int))
         except ValueError:
-        await delete_user_record(query, record_id)
+            await delete_user_record(query, record_id)
     elif query.data.startswith("delete_booking_"):
         # Новый формат с booking_id из Google Sheets
         booking_id = query.data.replace("delete_booking_", "")
@@ -1970,19 +1970,19 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                               for service in all_services)
-                            
-                            if not service_exists:
-                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                                await update.message.reply_text(
-                                    f"❌ *Услуга не найдена*\n\n"
-                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                    f"Пожалуйста, выберите услугу из списка доступных.",
-                                    parse_mode='Markdown'
-                                )
-                                response_sent = True
-                                return
+                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                            for service in all_services)
+                        
+                        if not service_exists:
+                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                            await update.message.reply_text(
+                                f"❌ *Услуга не найдена*\n\n"
+                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                f"Пожалуйста, выберите услугу из списка доступных.",
+                                parse_mode='Markdown'
+                            )
+                            response_sent = True
+                            return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
