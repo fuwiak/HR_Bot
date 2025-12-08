@@ -1990,27 +1990,85 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 parsed_data["datetime"] = f"{tomorrow.strftime('%Y-%m-%d')} {hour.zfill(2)}:{minute.zfill(2)}"
                 
                 # Если есть все данные, создаем запись
+                log.info(f"🔍 Проверка данных для создания записи: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
+                
+                # Улучшенный парсинг: извлекаем данные из ответа AI если их нет в parsed_data
+                if not parsed_data.get("service") or not parsed_data.get("master") or not parsed_data.get("datetime"):
+                    log.info("🔍 Данные неполные, пытаемся извлечь из ответа AI и истории...")
+                    
+                    # Извлекаем мастера из ответа AI
+                    if not parsed_data.get("master"):
+                        import re
+                        masters = get_masters()
+                        for master in masters:
+                            master_name = master.get("name", "")
+                            if master_name.lower() in answer_lower:
+                                parsed_data["master"] = master_name
+                                log.info(f"✅ Найден мастер из ответа AI: {master_name}")
+                                break
+                    
+                    # Извлекаем услугу из истории
+                    if not parsed_data.get("service"):
+                        # Ищем в истории последние упоминания услуг
+                        services = get_services()
+                        history_lower = history.lower()
+                        for service in services:
+                            service_title = service.get("title", "").lower()
+                            if service_title in history_lower:
+                                parsed_data["service"] = service.get("title")
+                                log.info(f"✅ Найдена услуга из истории: {service.get('title')}")
+                                break
+                    
+                    # Извлекаем дату/время из ответа AI если еще не найдено
+                    if not parsed_data.get("datetime"):
+                        import re
+                        # Пробуем найти относительные даты в ответе
+                        if "завтра" in answer_lower:
+                            tomorrow = datetime.now() + timedelta(days=1)
+                            time_match = re.search(r'(\d{1,2}):?(\d{2})?', answer)
+                            if time_match:
+                                hour = time_match.group(1)
+                                minute = time_match.group(2) or "00"
+                                parsed_data["datetime"] = f"{tomorrow.strftime('%d.%m.%Y')} {hour.zfill(2)}:{minute.zfill(2)}"
+                                log.info(f"✅ Найдена дата/время из ответа AI: {parsed_data['datetime']}")
+                        elif "сегодня" in answer_lower:
+                            today = datetime.now()
+                            time_match = re.search(r'(\d{1,2}):?(\d{2})?', answer)
+                            if time_match:
+                                hour = time_match.group(1)
+                                minute = time_match.group(2) or "00"
+                                parsed_data["datetime"] = f"{today.strftime('%d.%m.%Y')} {hour.zfill(2)}:{minute.zfill(2)}"
+                                log.info(f"✅ Найдена дата/время из ответа AI: {parsed_data['datetime']}")
+                
+                # Создаем запись если есть все необходимые данные
                 if parsed_data.get("service") and parsed_data.get("master") and parsed_data.get("datetime"):
                     try:
-                        user_phone = UserPhone.get(user_id)
-                        if not user_phone:
-                            # Не создаем запись без номера, но не блокируем ответ
-                            log.warning("⚠️ Номер телефона не указан, запись не создана")
-                        else:
-                            booking_record = create_booking_from_parsed_data(
-                                user_id,
-                                parsed_data,
-                                client_name=update.message.from_user.first_name or "Клиент",
-                                client_phone=user_phone
-                            )
-                            log.info(f"✅ Запись автоматически создана из подтверждения AI: {parsed_data}")
-                            # Обновляем ответ, чтобы показать что запись создана
-                            if "🎉" not in answer:
-                                answer = f"🎉 *Запись успешно создана в системе!* 🎉\n\n{answer}"
+                        user_phone = UserPhone.get(user_id, "")
+                        client_name = update.message.from_user.first_name or "Клиент"
+                        
+                        log.info(f"🚀 СОЗДАНИЕ ЗАПИСИ из подтверждения AI: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}, phone={user_phone or 'не указан'}")
+                        
+                        # Создаем запись даже без номера телефона (можно добавить позже)
+                        booking_record = create_real_booking(
+                            user_id,
+                            parsed_data.get("service"),
+                            parsed_data.get("master"),
+                            parsed_data.get("datetime"),
+                            client_name=client_name,
+                            client_phone=user_phone
+                        )
+                        log.info(f"✅ Запись автоматически создана из подтверждения AI: {booking_record.get('id', 'N/A')}")
+                        
+                        # Обновляем ответ, чтобы показать что запись создана
+                        if "🎉" not in answer:
+                            answer = f"🎉 *Запись успешно создана в системе!* 🎉\n\n{answer}"
                     except Exception as e:
                         log.error(f"❌ Ошибка автоматического создания записи из подтверждения AI: {e}")
                         import traceback
                         log.error(f"❌ Traceback: {traceback.format_exc()}")
+                        # Не меняем ответ пользователю, чтобы не показывать ошибку
+                else:
+                    log.warning(f"⚠️ Недостаточно данных для создания записи: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
     
     # Отправляем ответ только если он не был отправлен ранее
     if answer and not response_sent:  # Проверяем что есть ответ для отправки
