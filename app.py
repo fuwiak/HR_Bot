@@ -388,7 +388,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-            return services
+        return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -735,7 +735,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-                break
+            break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
