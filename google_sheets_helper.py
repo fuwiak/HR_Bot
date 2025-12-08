@@ -212,24 +212,48 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                     log.debug(f"⚠️ Пропущена услуга '{service_name}' (строка {row_idx}) - секция не определена")
                     continue
                 
-                # Колонка C: Мастер 1
+                # КРИТИЧЕСКОЕ: Структура Google Sheets (согласно таблице):
+                # Строка 1 (заголовок): A="Мужской зал", B="Услуга название", C="Мастер 1", D="Мастер 2", E="Цена", F="Время", G="Доп. услуги"
+                # Строка 2 (данные): A="Мужской зал", B="Бритье головы", C="Роман", D=пусто, E="1700", F="60", G="Камуфляж..."
+                # Значит: row[0]=A, row[1]=B, row[2]=C, row[3]=D, row[4]=E, row[5]=F, row[6]=G
+                
+                # Колонка C: Мастер 1 (row[2])
                 master1 = row[2].strip() if len(row) > 2 else ""
-                # Колонка D: Мастер 2 (может быть пусто)
+                # Колонка D: Мастер 2 (может быть пусто) (row[3])
                 master2 = row[3].strip() if len(row) > 3 else ""
                 
-                # Колонка E: Цена (может быть диапазон "1000–2500")
+                # Колонка E: Цена (может быть диапазон "1000–2500") (row[4]) - ВАЖНО: это row[4], не row[3]!
                 price_str = row[4].strip() if len(row) > 4 else "0"
                 price = parse_price(price_str)
                 
-                # Колонка F: Время оказания (в мин.)
+                # Колонка F: Время оказания (в мин.) (row[5]) - ВАЖНО: это row[5], не row[4]!
                 duration_str = row[5].strip() if len(row) > 5 else "0"
                 try:
                     duration = int(duration_str) if duration_str else 0
                 except ValueError:
                     duration = 0
                 
-                # Колонка G: Доп. услуги
+                # Колонка G: Доп. услуги (row[6])
                 additional_services = row[6].strip() if len(row) > 6 else ""
+                
+                # ДЕТАЛЬНОЕ ЛОГИРОВАНИЕ для "Бритье головы" для отладки
+                if "бритье" in service_name.lower() and "голов" in service_name.lower():
+                    log.info(f"🔍🔍🔍 ОБРАБОТКА 'Бритье головы' (строка {row_idx}):")
+                    log.info(f"   row[0] (A, col_a): '{col_a}'")
+                    log.info(f"   row[1] (B, service_name): '{service_name}'")
+                    log.info(f"   row[2] (C, master1): '{master1}'")
+                    log.info(f"   row[3] (D, master2): '{master2}'")
+                    log.info(f"   row[4] (E, price_str): '{price_str}' -> parse_price() -> {price}₽")
+                    log.info(f"   row[5] (F, duration_str): '{duration_str}' -> int() -> {duration} мин")
+                    log.info(f"   row[6] (G, additional_services): '{additional_services}'")
+                    log.info(f"   current_type: '{current_type}'")
+                    log.info(f"   ОЖИДАЕТСЯ: price=1700, duration=60, master='Роман'")
+                    if price != 1700:
+                        log.error(f"   ❌❌❌ ОШИБКА: price={price}, ожидается 1700!")
+                    if duration != 60:
+                        log.error(f"   ❌❌❌ ОШИБКА: duration={duration}, ожидается 60!")
+                    if "роман" not in master1.lower():
+                        log.error(f"   ❌❌❌ ОШИБКА: master1='{master1}', ожидается 'Роман'!")
                 
                 service = {
                     "id": service_id,
