@@ -23,7 +23,7 @@ log = get_logger()
 # Попытка импорта Qdrant
 try:
     from qdrant_client import QdrantClient
-    from qdrant_client.models import Distance, VectorParams, PointStruct, Query
+    from qdrant_client.models import Distance, VectorParams, PointStruct
     from sentence_transformers import SentenceTransformer
     QDRANT_AVAILABLE = True
 except ImportError:
