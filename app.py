@@ -2196,11 +2196,14 @@ def main():
             log.info(f"📡 Webhook URL: {full_webhook_url}")
             log.info("🚀 Готов к обработке обновлений от Telegram (concurrent_updates=True)")
             
-            # Держим бота запущенным
+            # Держим бота запущенным (бесконечное ожидание)
             try:
                 await asyncio.Event().wait()
-            except asyncio.CancelledError:
-                pass
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                log.info("⏹️  Получен сигнал остановки...")
+                await app.updater.stop()
+                await app.stop()
+                await app.shutdown()
         else:
             # Используем polling для локальной разработки
             log.info("🔄 Используем polling (локальная разработка)")
@@ -2240,19 +2243,12 @@ def main():
     try:
         asyncio.run(start_bot())
     except KeyboardInterrupt:
-        log.info("⏹️  Остановка бота...")
-    finally:
-        # Корректное завершение
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(app.stop())
-                loop.create_task(app.shutdown())
-            else:
-                loop.run_until_complete(app.stop())
-                loop.run_until_complete(app.shutdown())
-        except Exception as e:
-            log.error(f"❌ Ошибка при остановке бота: {e}")
+        log.info("⏹️  Остановка бота по запросу пользователя...")
+    except Exception as e:
+        log.error(f"❌ Критическая ошибка при запуске бота: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        raise
 
 if __name__ == "__main__":
     main()
