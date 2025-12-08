@@ -173,9 +173,12 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             log.info(f"📋 Прочитано {len(all_values)} строк из листа 'Ценник'")
             if len(all_values) > 0:
                 log.info(f"📋 Первая строка (заголовок): {all_values[0]}")
-                # Логируем первые несколько строк для отладки
-                for i, row in enumerate(all_values[:5], 1):
-                    log.info(f"📋 Строка {i}: {row[:7]}")  # Первые 7 колонок
+                # Логируем первые 10 строк для отладки
+                log.info(f"📋 Первые 10 строк из Google Sheets:")
+                for i, row in enumerate(all_values[:10], 1):
+                    # Показываем первые 7 колонок (A-G)
+                    row_preview = row[:7] if len(row) >= 7 else row
+                    log.info(f"   Строка {i}: A='{row[0] if len(row) > 0 else ''}', B='{row[1] if len(row) > 1 else ''}', C='{row[2] if len(row) > 2 else ''}', D='{row[3] if len(row) > 3 else ''}', E='{row[4] if len(row) > 4 else ''}', F='{row[5] if len(row) > 5 else ''}', G='{row[6] if len(row) > 6 else ''}'")
             
             services = []
             current_type = None
@@ -297,6 +300,11 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             men_services = [s for s in services if s.get('type') == 'men']
             women_services = [s for s in services if s.get('type') == 'women']
             log.info(f"📊 Статистика: Мужской зал - {len(men_services)} услуг, Женский зал - {len(women_services)} услуг")
+            
+            # КРИТИЧЕСКОЕ: Логируем ВСЕ услуги для диагностики
+            log.info(f"📋 ВСЕ НАЙДЕННЫЕ УСЛУГИ ({len(services)} шт.):")
+            for s in services:
+                log.info(f"  Строка {s.get('row_number')}: '{s.get('title')}' ({s.get('type')}) - {s.get('price_str')}₽ - {s.get('duration')} мин - мастер: '{s.get('master')}'")
             
             # Логируем первые несколько услуг для проверки
             log.info("📋 Первые услуги из Мужского зала:")
