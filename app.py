@@ -376,7 +376,7 @@ async def openrouter_chat(messages, use_system_message=False, system_content="")
                     content = response_json["choices"][0]["message"]["content"]
                     log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
                     return content
-                else:
+        else:
                     log.error(f"❌ Неожиданный формат ответа OpenRouter: {response_json}")
                     return "Извините, произошла ошибка при обработке запроса."
                     
@@ -425,7 +425,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-        return services
+            return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -472,7 +472,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-                name = service.get("title", "Без названия")
+            name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
@@ -772,7 +772,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-            break
+                break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1165,7 +1165,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             record_id_int = int(record_id)
             await delete_user_record(query, str(record_id_int))
         except ValueError:
-            await delete_user_record(query, record_id)
+        await delete_user_record(query, record_id)
     elif query.data.startswith("delete_booking_"):
         # Новый формат с booking_id из Google Sheets
         booking_id = query.data.replace("delete_booking_", "")
@@ -1486,7 +1486,7 @@ async def delete_user_record(query: CallbackQuery, booking_id: str):
                 [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
                 [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
             ]
-            await query.edit_message_text(
+        await query.edit_message_text(
                 f"✅ Запись успешно удалена!\n\n"
                 f"🆔 ID записи: `{booking_id}`",
                 parse_mode='Markdown',
@@ -1690,34 +1690,62 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response_sent = True
         return
 
-    # Используем улучшенный классификатор намерений с эмбеддингами и опционально LLM
-    try:
-        from intent_classifier import is_booking_intent
-        services_list = get_services()
-        masters_list = get_masters()
-        # Используем LLM для классификации если доступен OpenRouter API
-        use_llm = bool(OPENROUTER_API_KEY)
-        is_booking_result, intent_details = is_booking_intent(
-            text, 
-            services=services_list, 
-            masters=masters_list, 
-            threshold=0.4,
-            use_llm=use_llm,
-            openrouter_api_key=OPENROUTER_API_KEY if use_llm else None,
-            openrouter_url=OPENROUTER_API_URL if use_llm else None
-        )
-        log.info(f"🎯 INTENT CLASSIFIER: score={intent_details.get('final_score', 0):.3f}, method={intent_details.get('method', 'unknown')}")
-    except ImportError:
-        # Fallback на старый метод если новый классификатор недоступен
-        is_booking_result = is_booking(text)
-        intent_details = {}
-        log.debug("⚠️ Новый классификатор намерений недоступен, используется старый метод")
-    except Exception as e:
-        log.error(f"❌ Ошибка классификатора намерений: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
-        is_booking_result = is_booking(text)
-        intent_details = {}
+    # БЫСТРАЯ ПРОВЕРКА: Если есть мастер, время и услуга/цена - это точно запрос на запись
+    # Это работает лучше чем сложный классификатор для очевидных случаев
+    text_lower = text.lower()
+    services_list = get_services()
+    masters_list = get_masters()
+    
+    # Проверяем наличие мастера
+    has_master = any(master.get("name", "").lower() in text_lower for master in masters_list)
+    
+    # Проверяем наличие времени (форматы: HH:MM, завтра, сегодня, дата)
+    import re
+    has_time = bool(
+        re.search(r'\d{1,2}:\d{2}', text) or  # HH:MM
+        re.search(r'\d{1,2}[./]\d{1,2}[./]\d{2,4}', text) or  # Дата
+        "завтра" in text_lower or "сегодня" in text_lower or
+        any(word in text_lower for word in ["час", "часа", "часов", "утра", "дня", "вечера"])
+    )
+    
+    # Проверяем наличие услуги или цены
+    has_service = any(service.get("title", "").lower() in text_lower for service in services_list)
+    has_price = bool(re.search(r'\d+\s*[₽руб]', text) or re.search(r'\d{3,4}', text))  # Цена в формате 1700 или 1700₽
+    
+    # Если есть мастер + время + (услуга или цена) - это точно запрос на запись
+    is_obvious_booking = has_master and has_time and (has_service or has_price)
+    
+    if is_obvious_booking:
+        log.info(f"✅ ОЧЕВИДНЫЙ ЗАПРОС НА ЗАПИСЬ (быстрая проверка): мастер={has_master}, время={has_time}, услуга={has_service}, цена={has_price}")
+        is_booking_result = True
+        intent_details = {"method": "quick_check", "final_score": 1.0}
+    else:
+        # Используем улучшенный классификатор намерений только если быстрая проверка не сработала
+        try:
+            from intent_classifier import is_booking_intent
+            # Используем LLM для классификации если доступен OpenRouter API
+            use_llm = bool(OPENROUTER_API_KEY)
+            is_booking_result, intent_details = is_booking_intent(
+                text, 
+                services=services_list, 
+                masters=masters_list, 
+                threshold=0.4,
+                use_llm=use_llm,
+                openrouter_api_key=OPENROUTER_API_KEY if use_llm else None,
+                openrouter_url=OPENROUTER_API_URL if use_llm else None
+            )
+            log.info(f"🎯 INTENT CLASSIFIER: score={intent_details.get('final_score', 0):.3f}, method={intent_details.get('method', 'unknown')}")
+        except ImportError:
+            # Fallback на старый метод если новый классификатор недоступен
+            is_booking_result = is_booking(text)
+            intent_details = {}
+            log.debug("⚠️ Новый классификатор намерений недоступен, используется старый метод")
+        except Exception as e:
+            log.error(f"❌ Ошибка классификатора намерений: {e}")
+            import traceback
+            log.error(f"❌ Traceback: {traceback.format_exc()}")
+            is_booking_result = is_booking(text)
+            intent_details = {}
     
     if is_booking_result:
         log.info(f"🎯 BOOKING DETECTED: '{text}'")
@@ -1942,19 +1970,19 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                           for service in all_services)
-                        
-                        if not service_exists:
-                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                            await update.message.reply_text(
-                                f"❌ *Услуга не найдена*\n\n"
-                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                f"Пожалуйста, выберите услугу из списка доступных.",
-                                parse_mode='Markdown'
-                            )
-                            response_sent = True
-                            return
+                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                               for service in all_services)
+                            
+                            if not service_exists:
+                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                                await update.message.reply_text(
+                                    f"❌ *Услуга не найдена*\n\n"
+                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                    f"Пожалуйста, выберите услугу из списка доступных.",
+                                    parse_mode='Markdown'
+                                )
+                                response_sent = True
+                                return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
