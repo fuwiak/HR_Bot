@@ -27,13 +27,24 @@ OPENROUTER_API_URL=https://openrouter.ai/api/v1/chat/completions
 
 ## Опциональные переменные (Google Sheets)
 
-### Google Sheets Credentials Path
+### Google Sheets Credentials (выберите один способ)
+
+#### Способ 1: JSON из переменной окружения (рекомендуется для Railway)
+```
+GOOGLE_SHEETS_CREDENTIALS_JSON={"type":"service_account","project_id":"...","private_key":"..."}
+```
+- Содержимое файла `credentials.json` в виде JSON строки
+- Удобно для Railway и других облачных платформ
+- Просто скопируйте весь JSON из `credentials.json` и вставьте в переменную
+
+#### Способ 2: Путь к файлу (для локальной разработки)
 ```
 GOOGLE_SHEETS_CREDENTIALS_PATH=./credentials.json
 ```
 - Путь к файлу с credentials для Google Sheets API
-- Если не указано - используется placeholder режим
-- Подробная инструкция: см. `GOOGLE_SHEETS_SETUP.md`
+- Используется если `GOOGLE_SHEETS_CREDENTIALS_JSON` не указан
+
+**Приоритет**: Если указаны обе переменные, используется `GOOGLE_SHEETS_CREDENTIALS_JSON`
 
 ### Google Sheets Spreadsheet ID
 ```
@@ -42,6 +53,8 @@ GOOGLE_SHEETS_SPREADSHEET_ID=1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU
 - ID Google таблицы (установлен по умолчанию из вашей ссылки)
 - Лист "Ценник" используется для чтения услуг
 - Лист "Запись" используется для записи записей (создается автоматически)
+
+**Подробная инструкция**: см. `GOOGLE_SHEETS_SETUP.md`
 
 ## Установка переменных в Railway
 

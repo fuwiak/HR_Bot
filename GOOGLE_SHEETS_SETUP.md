@@ -70,6 +70,8 @@
 
 ## Шаг 4: Настройка переменных окружения
 
+### Локальная разработка:
+
 Добавьте в `.env` файл:
 
 ```bash
@@ -77,22 +79,33 @@ GOOGLE_SHEETS_CREDENTIALS_PATH=./credentials.json
 GOOGLE_SHEETS_SPREADSHEET_ID=1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU
 ```
 
-Или для Railway:
-- `GOOGLE_SHEETS_CREDENTIALS_PATH` - путь к файлу credentials.json
-- `GOOGLE_SHEETS_SPREADSHEET_ID` - ID таблицы (уже установлен по умолчанию)
-
-## Шаг 5: Размещение credentials.json
-
-### Локально:
 Поместите `credentials.json` в корень проекта рядом с `app.py`
 
-### На Railway:
-1. Конвертируйте `credentials.json` в строку base64:
-   ```bash
-   cat credentials.json | base64
+### На Railway (рекомендуемый способ):
+
+1. **Откройте файл `credentials.json`** и скопируйте все его содержимое
+2. **В Railway Dashboard**:
+   - Перейдите в ваш проект → Variables
+   - Добавьте новую переменную:
+     - **Имя**: `GOOGLE_SHEETS_CREDENTIALS_JSON`
+     - **Значение**: Вставьте содержимое `credentials.json` целиком (весь JSON)
+   
+   Пример значения:
+   ```json
+   {
+     "type": "service_account",
+     "project_id": "your-project",
+     "private_key_id": "...",
+     "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+     ...
+   }
    ```
-2. Добавьте переменную окружения `GOOGLE_SHEETS_CREDENTIALS` со значением base64
-3. Или разместите файл в контейнере через volume
+
+3. **Spreadsheet ID** уже установлен по умолчанию, но можно переопределить:
+   - Переменная: `GOOGLE_SHEETS_SPREADSHEET_ID`
+   - Значение: `1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU`
+
+**Примечание**: Бот автоматически определит, использовать ли JSON из переменной или файл. Приоритет у JSON переменной (для Railway).
 
 ## Проверка работы
 

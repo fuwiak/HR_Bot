@@ -383,51 +383,58 @@ def find_service_advanced(message: str) -> str:
     """Продвинутый поиск услуги с regex и нечетким поиском"""
     message_lower = message.lower()
     
-    # Расширенные варианты услуг с regex паттернами
+    # Сначала пытаемся найти в реальных услугах из Google Sheets
+    try:
+        all_services = get_services()
+        for service in all_services:
+            service_title = service.get("title", "").lower()
+            # Проверяем точное совпадение или частичное
+            if service_title in message_lower or any(word in service_title for word in message_lower.split() if len(word) > 3):
+                log.info(f"🔍 Найдена услуга в реальных данных: {service.get('title')}")
+                return service.get("title")
+    except Exception as e:
+        log.debug(f"Не удалось получить услуги для поиска: {e}")
+    
+    # Расширенные варианты услуг с regex паттернами (fallback)
     service_patterns = {
         "маникюр": [
-            r'\bманикюр\w*\b',  # маникюр, маникюра, маникюру, маникюром, маникюре
-            r'\bманикюрн\w*\b',  # маникюрный, маникюрная, маникюрное
-            r'\bманик\w*\b',     # маник, маника (сокращения)
+            r'\bманикюр\w*\b',
+            r'\bманикюрн\w*\b',
+            r'\bманик\w*\b',
         ],
         "педикюр": [
-            r'\bпедикюр\w*\b',  # педикюр, педикюра, педикюру, педикюром, педикюре
-            r'\bпедикюрн\w*\b',  # педикюрный, педикюрная, педикюрное
-            r'\bпедик\w*\b',     # педик, педика (сокращения)
+            r'\bпедикюр\w*\b',
+            r'\bпедикюрн\w*\b',
+            r'\bпедик\w*\b',
         ],
         "массаж": [
-            r'\bмассаж\w*\b',   # массаж, массажа, массажу, массажем, массаже
-            r'\bмассажн\w*\b',   # массажный, массажная, массажное
-            r'\bмасаж\w*\b',     # масаж, масажа (опечатки)
-            r'\bмас\w*ж\w*\b',   # мас*ж (опечатки)
-        ]
+            r'\bмассаж\w*\b',
+            r'\bмассажн\w*\b',
+            r'\bмасаж\w*\b',
+        ],
+        "бритье": [
+            r'\bбрить\w*\b',  # бритье, брить, бритья
+            r'\bбрить[её]\s+голов\w*\b',  # бритье головы
+        ],
+        "стрижка": [
+            r'\bстриж\w*\b',  # стрижка, стрижку, стрижки
+            r'\bстриг\w*\b',  # стригу, стригут
+        ],
     }
     
     # Ищем по regex паттернам
-    for service, patterns in service_patterns.items():
+    for service_key, patterns in service_patterns.items():
         for pattern in patterns:
             if re.search(pattern, message_lower):
-                return service
-    
-    # Fallback к нечеткому поиску
-    service_variants = {
-        "маникюр": ["маникюр", "маникюра", "маникюру", "маникюром", "маникюре", "маникюрный", "маникюрная", "маник", "маника"],
-        "педикюр": ["педикюр", "педикюра", "педикюру", "педикюром", "педикюре", "педикюрный", "педикюрная", "педик", "педика"],
-        "массаж": ["массаж", "массажа", "массажу", "массажем", "массаже", "масаж", "масажа", "массажный", "массажная"]
-    }
-    
-    # Нечеткий поиск по словам
-    words = message_lower.split()
-    for word in words:
-        all_variants = []
-        for variants in service_variants.values():
-            all_variants.extend(variants)
-        
-        best_match = find_best_match(word, all_variants, threshold=70)
-        if best_match:
-            for service, variants in service_variants.items():
-                if best_match in variants:
-                    return service
+                # Пытаемся найти полное название услуги в реальных данных
+                try:
+                    all_services = get_services()
+                    for real_service in all_services:
+                        if service_key in real_service.get("title", "").lower():
+                            return real_service.get("title")
+                except:
+                    pass
+                return service_key
     
     return None
 
@@ -492,42 +499,71 @@ def parse_booking_message(message: str, history: str) -> Dict:
         "has_all_info": False
     }
     
-    # Список услуг для поиска
-    services = [
-        "маникюр с покрытием гель-лак", "маникюр", "педикюр с покрытием гель-лак", 
-        "педикюр", "массаж оздоровительный", "массаж", "маникюр в 4 руки", 
-        "педикюр в 4 руки"
-    ]
-    
-    # Список мастеров
-    masters = ["арина", "екатерина", "полина", "катя", "катюша"]
-    
     message_lower = message.lower()
     
-    # Используем продвинутый поиск услуг
-    result["service"] = find_service_advanced(message)
+    # Получаем реальные услуги из Google Sheets
+    try:
+        all_services = get_services()
+        service_titles = [s.get("title", "") for s in all_services]
+        log.info(f"🔍 Поиск услуги среди {len(service_titles)} услуг: {service_titles[:5]}...")
+    except Exception as e:
+        log.error(f"❌ Ошибка получения услуг для парсинга: {e}")
+        service_titles = []
     
-    # Используем продвинутый поиск мастеров
-    result["master"] = find_master_advanced(message)
+    # Получаем реальных мастеров
+    try:
+        all_masters = get_masters()
+        master_names = [m.get("name", "") for m in all_masters]
+        log.info(f"🔍 Поиск мастера среди: {master_names}")
+    except Exception as e:
+        log.error(f"❌ Ошибка получения мастеров для парсинга: {e}")
+        master_names = ["Роман", "Анжела"]  # Fallback
     
-    # Fallback к старому методу если не найдено
+    # Ищем услугу в реальных данных
+    if service_titles:
+        for service_title in service_titles:
+            service_lower = service_title.lower()
+            # Проверяем, содержится ли название услуги в сообщении
+            if service_lower in message_lower:
+                result["service"] = service_title
+                log.info(f"✅ Найдена услуга: {service_title}")
+                break
+            # Проверяем частичное совпадение (например, "бритье головы" vs "бритье")
+            words = message_lower.split()
+            for word in words:
+                if word in service_lower or service_lower in word:
+                    if len(word) > 3:  # Игнорируем короткие слова
+                        result["service"] = service_title
+                        log.info(f"✅ Найдена услуга (частичное совпадение): {service_title}")
+                        break
+            if result["service"]:
+                break
+    
+    # Используем продвинутый поиск как fallback
     if not result["service"]:
-        for service in services:
-            if service.lower() in message_lower:
-                result["service"] = service
-                break
+        result["service"] = find_service_advanced(message)
+        if result["service"]:
+            log.info(f"✅ Найдена услуга через find_service_advanced: {result['service']}")
     
+    # Ищем мастера в реальных данных
+    for master_name in master_names:
+        if master_name.lower() in message_lower:
+            result["master"] = master_name
+            log.info(f"✅ Найден мастер: {master_name}")
+            break
+    
+    # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
-        for master in masters:
-            if master in message_lower:
-                # Преобразуем обратно в правильное имя
-                if master in ["арина"]:
-                    result["master"] = "Арина"
-                elif master in ["екатерина", "катя", "катюша"]:
-                    result["master"] = "Екатерина"
-                elif master in ["полина"]:
-                    result["master"] = "Полина"
-                break
+        result["master"] = find_master_advanced(message)
+        if result["master"]:
+            log.info(f"✅ Найден мастер через find_master_advanced: {result['master']}")
+    
+    # Fallback для мастеров (если не нашли в реальных данных)
+    if not result["master"]:
+        if "роман" in message_lower:
+            result["master"] = "Роман"
+        elif "анжела" in message_lower or "анжел" in message_lower:
+            result["master"] = "Анжела"
     
     # Ищем дату и время
     # Паттерны для поиска времени

@@ -47,6 +47,7 @@
 
 ## Настройка
 
+### Локально:
 1. Создайте Service Account в Google Cloud Console
 2. Скачайте credentials.json
 3. Поделитесь таблицей с email Service Account (права: Editor)
@@ -55,6 +56,15 @@
    GOOGLE_SHEETS_CREDENTIALS_PATH=./credentials.json
    GOOGLE_SHEETS_SPREADSHEET_ID=1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU
    ```
+
+### На Railway:
+1. Создайте Service Account и скачайте credentials.json
+2. Поделитесь таблицей с email Service Account
+3. Откройте credentials.json и скопируйте весь JSON
+4. В Railway Dashboard → Variables добавьте:
+   - **Имя**: `GOOGLE_SHEETS_CREDENTIALS_JSON`
+   - **Значение**: Вставьте весь JSON из credentials.json (как есть, без base64)
+5. Spreadsheet ID уже установлен по умолчанию
 
 Подробная инструкция: `GOOGLE_SHEETS_SETUP.md`
 

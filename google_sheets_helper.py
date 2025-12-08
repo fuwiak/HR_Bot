@@ -3,6 +3,7 @@ Google Sheets интеграция для хранения записей и р�
 Если Google Sheets не настроены, используется placeholder для тестирования
 """
 import os
+import json
 import logging
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
@@ -20,6 +21,7 @@ except ImportError:
 
 # Конфигурация
 GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
+GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")  # JSON напрямую из переменной (для Railway)
 # Spreadsheet ID из URL пользователя
 GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU")
 
@@ -41,20 +43,42 @@ def get_sheets_client():
     if _sheets_client is not None:
         return _sheets_client
     
-    if not GOOGLE_SHEETS_CREDENTIALS_PATH or not GOOGLE_SHEETS_SPREADSHEET_ID:
+    if not GOOGLE_SHEETS_SPREADSHEET_ID:
         log.warning("Google Sheets не настроены - используем placeholder")
+        return None
+    
+    # Проверяем наличие credentials (либо путь к файлу, либо JSON)
+    if not GOOGLE_SHEETS_CREDENTIALS_PATH and not GOOGLE_SHEETS_CREDENTIALS_JSON:
+        log.warning("Google Sheets не настроены - используем placeholder (нет credentials)")
         return None
     
     try:
         scope = ['https://spreadsheets.google.com/feeds',
                  'https://www.googleapis.com/auth/drive']
-        creds = Credentials.from_service_account_file(
-            GOOGLE_SHEETS_CREDENTIALS_PATH, scopes=scope)
+        
+        # Приоритет: JSON из переменной окружения (для Railway), затем файл
+        if GOOGLE_SHEETS_CREDENTIALS_JSON:
+            log.info("📋 Используем credentials из переменной окружения GOOGLE_SHEETS_CREDENTIALS_JSON")
+            creds_data = json.loads(GOOGLE_SHEETS_CREDENTIALS_JSON)
+            creds = Credentials.from_service_account_info(creds_data, scopes=scope)
+        elif GOOGLE_SHEETS_CREDENTIALS_PATH:
+            log.info(f"📋 Используем credentials из файла: {GOOGLE_SHEETS_CREDENTIALS_PATH}")
+            creds = Credentials.from_service_account_file(
+                GOOGLE_SHEETS_CREDENTIALS_PATH, scopes=scope)
+        else:
+            log.warning("Google Sheets не настроены - нет credentials")
+            return None
+        
         _sheets_client = gspread.authorize(creds)
         log.info("✅ Google Sheets клиент успешно инициализирован")
         return _sheets_client
+    except json.JSONDecodeError as e:
+        log.error(f"❌ Ошибка парсинга JSON credentials: {e}")
+        return None
     except Exception as e:
         log.error(f"❌ Ошибка инициализации Google Sheets: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
         return None
 
 
@@ -169,12 +193,15 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
     
     if client:
         try:
+            log.info(f"🔗 Подключение к Google Sheets (ID: {GOOGLE_SHEETS_SPREADSHEET_ID})")
             spreadsheet = client.open_by_key(GOOGLE_SHEETS_SPREADSHEET_ID)
             worksheet = spreadsheet.worksheet("Ценник")
             
             # Получаем все данные
             all_values = worksheet.get_all_values()
             log.info(f"📋 Прочитано {len(all_values)} строк из листа 'Ценник'")
+            if len(all_values) > 0:
+                log.info(f"📋 Первая строка (заголовок): {all_values[0]}")
             
             services = []
             current_type = None
@@ -238,6 +265,10 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             _services_cache = services
             _services_cache_time = datetime.now()
             log.info(f"✅ Получено {len(services)} услуг из Google Sheets")
+            # Логируем первые несколько услуг для проверки
+            if services:
+                for s in services[:3]:
+                    log.info(f"  📋 Пример: {s.get('title')} - {s.get('price_str') or s.get('price')} ₽ ({s.get('duration')} мин) - {s.get('master')}")
             
             if master_name:
                 services = [s for s in services if master_name.lower() in (s.get("master1", "") + " " + s.get("master2", "")).lower()]
@@ -249,7 +280,9 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             import traceback
             log.error(f"❌ Traceback: {traceback.format_exc()}")
     
-    # Используем placeholder данные
+    # Используем placeholder данные (fallback)
+    log.warning(f"⚠️ Используются PLACEHOLDER данные (Google Sheets не настроены или недоступны)")
+    log.warning(f"⚠️ Убедитесь, что GOOGLE_SHEETS_CREDENTIALS_JSON или GOOGLE_SHEETS_CREDENTIALS_PATH установлены")
     services = PLACEHOLDER_SERVICES.copy()
     if master_name:
         services = [s for s in services if s.get("master", "").lower() == master_name.lower()]
