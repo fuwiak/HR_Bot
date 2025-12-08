@@ -435,7 +435,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-            name = service.get("title", "Без названия")
+                name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
