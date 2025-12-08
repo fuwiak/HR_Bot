@@ -250,6 +250,14 @@ def is_booking(text):
             reasons.append(f"временной маркер '{marker}'")
             break
     
+    # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: Формат даты DD.MM.YYYY или DD/MM/YYYY с временем
+    import re
+    date_time_pattern = r'\d{1,2}[./]\d{1,2}[./]\d{4}\s+\d{1,2}:\d{2}'
+    if re.search(date_time_pattern, text):
+        score += 30
+        reasons.append("формат даты и времени (DD.MM.YYYY HH:MM)")
+        log.info(f"🔍 BOOKING CHECK: '{text}' -> найдена дата и время в формате DD.MM.YYYY HH:MM")
+    
     # 4. ПРОВЕРКА: Ключевые слова записи (fallback)
     booking_keywords = [
         "запись", "записаться", "записать", "забронировать",
@@ -427,7 +435,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-                name = service.get("title", "Без названия")
+            name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
@@ -441,11 +449,11 @@ def get_api_data_for_ai():
                     data_text += f" → ЦЕНА: {price} ₽"
                 else:
                     data_text += f" → ЦЕНА: уточнить"
-                    
-                if duration > 0:
-                    data_text += f" ({duration} мин)"
                 
-                data_text += "\n"
+            if duration > 0:
+                data_text += f" ({duration} мин)"
+                
+            data_text += "\n"
         
         if women_services:
             data_text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -727,7 +735,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-            break
+                break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -776,8 +784,21 @@ def parse_booking_message(message: str, history: str) -> Dict:
         r'(\d{1,2})[./](\d{1,2})',  # 26.10 или 26/10
         
         # Даты с годами
-        r'(\d{1,2})[./](\d{1,2})[./](\d{4})',  # 26.10.2025
+        r'(\d{1,2})[./](\d{1,2})[./](\d{4})',  # 26.10.2025 или 01.01.2026
     ]
+    
+    # КРИТИЧЕСКОЕ: Проверяем формат "DD.MM.YYYY HH:MM" или "DD/MM/YYYY HH:MM"
+    date_time_pattern = r'(\d{1,2})[./](\d{1,2})[./](\d{4})\s+(\d{1,2}):(\d{2})'
+    date_time_match = re.search(date_time_pattern, message)
+    if date_time_match:
+        day, month, year, hour, minute = date_time_match.groups()
+        # Форматируем дату и время
+        date_str = f"{day.zfill(2)}.{month.zfill(2)}.{year}"
+        time_str = f"{hour.zfill(2)}:{minute}"
+        result["datetime"] = f"{date_str} {time_str}"
+        log.info(f"✅ Найдена дата и время в формате DD.MM.YYYY HH:MM: {result['datetime']}")
+        result["has_all_info"] = result["service"] is not None and result["master"] is not None
+        return result
     
     # Ищем время
     time_match = None
@@ -1754,10 +1775,10 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                            for service in all_services)
-                        
-                        if not service_exists:
+                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                               for service in all_services)
+                            
+                            if not service_exists:
                                 log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
                                 await update.message.reply_text(
                                     f"❌ *Услуга не найдена*\n\n"
