@@ -50,6 +50,7 @@ GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
 GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU")
 USE_GOOGLE_SHEETS = bool(GOOGLE_SHEETS_CREDENTIALS_PATH and GOOGLE_SHEETS_SPREADSHEET_ID)
 
+# Устаревший подход - оставлен для обратной совместимости, но не используется
 BOOKING_KEYWORDS = [
     "запись", "записаться", "записать", "забронировать",
     "услуга", "мастер", "время", "дата",
@@ -157,32 +158,117 @@ def get_history(user_id):
 
 # ===================== NLP ============================
 def is_booking(text):
-    """Проверяет, является ли сообщение запросом на запись"""
-    text_lower = text.lower()
+    """
+    Улучшенная функция определения запроса на запись.
+    Использует многоуровневый подход:
+    1. Проверка наличия услуг из Google Sheets
+    2. Проверка упоминания мастеров
+    3. Проверка временных маркеров (дата/время)
+    4. Проверка ключевых слов (fallback)
+    """
+    text_lower = text.lower().strip()
     
-    # Сначала проверяем ключевые слова
-    matches = [k for k in BOOKING_KEYWORDS if k in text_lower]
+    # Если сообщение слишком короткое (меньше 2 символов) - не запрос на запись
+    if len(text_lower) < 2:
+        return False
     
-    # Если ключевых слов нет, проверяем, есть ли название услуги из Google Sheets
-    if not matches:
-        try:
-            all_services = get_services()
-            for service in all_services:
-                service_title = service.get("title", "").lower()
-                # Проверяем точное или частичное совпадение названия услуги
-                if service_title in text_lower or text_lower in service_title:
-                    # Проверяем, что это не просто случайное совпадение
-                    service_words = set(service_title.split())
-                    text_words = set(text_lower.split())
-                    # Если совпало 2+ слова или точное совпадение - это запрос на запись
-                    if len(service_words & text_words) >= 2 or service_title == text_lower:
-                        log.info(f"🔍 BOOKING CHECK: '{text}' -> найдена услуга '{service.get('title')}' -> это запрос на запись")
-                        return True
-        except Exception as e:
-            log.debug(f"Ошибка при проверке услуг для is_booking: {e}")
+    score = 0  # Система scoring для определения вероятности запроса на запись
+    reasons = []  # Причины, почему это может быть запрос на запись
     
-    log.info(f"🔍 BOOKING CHECK: '{text}' -> matches: {matches}")
-    return len(matches) > 0
+    # 1. ПРОВЕРКА: Есть ли название услуги из Google Sheets (самый важный признак)
+    try:
+        all_services = get_services()
+        for service in all_services:
+            service_title = service.get("title", "").lower()
+            service_words = set(service_title.split())
+            text_words = set(text_lower.split())
+            
+            # Точное совпадение - максимальный score
+            if service_title == text_lower:
+                score += 50
+                reasons.append(f"точное совпадение услуги '{service.get('title')}'")
+                log.info(f"🔍 BOOKING CHECK: '{text}' -> точное совпадение услуги '{service.get('title')}'")
+                break
+            
+            # Полное вхождение названия услуги в текст
+            elif service_title in text_lower:
+                score += 40
+                reasons.append(f"найдена услуга '{service.get('title')}'")
+                log.info(f"🔍 BOOKING CHECK: '{text}' -> найдена услуга '{service.get('title')}'")
+                break
+            
+            # Полное вхождение текста в название услуги
+            elif text_lower in service_title:
+                score += 35
+                reasons.append(f"текст совпадает с услугой '{service.get('title')}'")
+                log.info(f"🔍 BOOKING CHECK: '{text}' -> текст совпадает с услугой '{service.get('title')}'")
+                break
+            
+            # Совпадение 2+ слов
+            elif len(service_words & text_words) >= 2:
+                score += 30
+                reasons.append(f"частичное совпадение услуги '{service.get('title')}'")
+                log.info(f"🔍 BOOKING CHECK: '{text}' -> частичное совпадение услуги '{service.get('title')}'")
+                break
+    except Exception as e:
+        log.debug(f"Ошибка при проверке услуг для is_booking: {e}")
+    
+    # 2. ПРОВЕРКА: Упоминание мастеров
+    try:
+        all_masters = get_masters()
+        for master in all_masters:
+            master_name = master.get("name", "").lower()
+            if master_name in text_lower:
+                score += 15
+                reasons.append(f"упоминание мастера '{master.get('name')}'")
+                break
+    except Exception as e:
+        log.debug(f"Ошибка при проверке мастеров для is_booking: {e}")
+    
+    # 3. ПРОВЕРКА: Временные маркеры (дата/время)
+    time_markers = [
+        "завтра", "сегодня", "послезавтра", "в ", "на ", "часов", ":", 
+        "октября", "ноября", "декабря", "января", "февраля", "марта", 
+        "апреля", "мая", "июня", "июля", "августа", "сентября"
+    ]
+    for marker in time_markers:
+        if marker in text_lower:
+            score += 10
+            reasons.append(f"временной маркер '{marker}'")
+            break
+    
+    # 4. ПРОВЕРКА: Ключевые слова записи (fallback)
+    booking_keywords = [
+        "запись", "записаться", "записать", "забронировать",
+        "когда можно", "свободное время", "расписание",
+        "записаться на", "хочу записаться", "нужна запись"
+    ]
+    for keyword in booking_keywords:
+        if keyword in text_lower:
+            score += 20
+            reasons.append(f"ключевое слово '{keyword}'")
+            break
+    
+    # 5. ПРОВЕРКА: Вопросы о услугах/ценах
+    question_patterns = [
+        "сколько стоит", "какая цена", "сколько стоит", "цена",
+        "можно ли", "возможно ли", "есть ли"
+    ]
+    for pattern in question_patterns:
+        if pattern in text_lower:
+            score += 5
+            reasons.append(f"вопрос о услуге/цене")
+            break
+    
+    # Решение: если score >= 20, это запрос на запись
+    is_booking_request = score >= 20
+    
+    if is_booking_request:
+        log.info(f"🔍 BOOKING CHECK: '{text}' -> ДА (score={score}, причины: {', '.join(reasons)})")
+    else:
+        log.info(f"🔍 BOOKING CHECK: '{text}' -> НЕТ (score={score}, недостаточно признаков)")
+    
+    return is_booking_request
 
 def openrouter_chat(messages, use_system_message=False, system_content=""):
     """Отправка запроса в OpenRouter API для генерации ответа"""
