@@ -1975,8 +1975,8 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                               for service in all_services)
+                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                             for service in all_services)
                             
                             if not service_exists:
                                 log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
