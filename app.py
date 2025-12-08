@@ -1613,7 +1613,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Отправляем ответ только если он не был отправлен ранее
     if answer and not response_sent:  # Проверяем что есть ответ для отправки
-            await update.message.reply_text(answer)
+        await update.message.reply_text(answer)
 
 # ===================== RUN BOT ========================
 def main():
