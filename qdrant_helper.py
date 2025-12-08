@@ -23,7 +23,7 @@ log = get_logger()
 # Попытка импорта Qdrant
 try:
     from qdrant_client import QdrantClient
-    from qdrant_client.models import Distance, VectorParams, PointStruct
+    from qdrant_client.models import Distance, VectorParams, PointStruct, Query
     from sentence_transformers import SentenceTransformer
     QDRANT_AVAILABLE = True
 except ImportError:
@@ -220,13 +220,11 @@ def search_service(query: str, limit: int = 3) -> List[Dict]:
         query_embedding = model.encode(query, normalize_embeddings=True).tolist()
         
         # Ищем в Qdrant - используем правильный метод query_points
-        query_obj = Query(
-            vector=query_embedding,
-            limit=limit
-        )
+        # query может быть list[float] напрямую
         search_results = client.query_points(
             collection_name=COLLECTION_NAME,
-            query=query_obj
+            query=query_embedding,
+            limit=limit
         )
         
         results = []

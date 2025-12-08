@@ -282,13 +282,22 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             else:
                 log.warning("⚠️ Услуга 'Бритье головы' не найдена!")
             
-            # Автоматически обновляем индекс в Qdrant
+            # Автоматически обновляем индекс в Qdrant в фоне (не блокируем чтение данных)
             try:
-                from qdrant_helper import index_services as qdrant_index
-                if qdrant_index(services):
-                    log.info("✅ Индекс Qdrant обновлен автоматически")
+                import threading
+                def update_qdrant_index():
+                    try:
+                        from qdrant_helper import index_services as qdrant_index
+                        if qdrant_index(services):
+                            log.info(f"✅ Индекс Qdrant обновлен автоматически ({len(services)} услуг)")
+                    except Exception as e:
+                        log.warning(f"⚠️ Не удалось обновить индекс Qdrant: {e}")
+                
+                # Запускаем обновление индекса в фоне
+                index_thread = threading.Thread(target=update_qdrant_index, daemon=True)
+                index_thread.start()
             except Exception as e:
-                log.warning(f"⚠️ Не удалось обновить индекс Qdrant: {e}")
+                log.warning(f"⚠️ Не удалось запустить обновление индекса Qdrant: {e}")
             
             if master_name:
                 filtered_services = [s for s in services if master_name.lower() in (s.get("master1", "") + " " + s.get("master2", "")).lower()]
