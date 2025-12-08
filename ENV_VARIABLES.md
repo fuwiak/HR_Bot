@@ -58,21 +58,28 @@ GOOGLE_SHEETS_SPREADSHEET_ID=1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU
 
 ## Опциональные переменные (Qdrant Vector Database)
 
-### Qdrant URL
+### Qdrant URL (для Qdrant Cloud на Railway)
 ```
-QDRANT_URL=http://localhost:6333
+QDRANT_URL=https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io
 ```
-- URL Qdrant сервера (по умолчанию: localhost:6333)
-- Для Qdrant Cloud: `https://your-cluster.qdrant.io`
+- URL Qdrant Cloud кластера
+- Для локальной разработки: `http://localhost:6333`
 
-### Qdrant API Key
+### Qdrant API Key (ОБЯЗАТЕЛЬНО для Qdrant Cloud)
 ```
-QDRANT_API_KEY=your_api_key
+QDRANT_API_KEY=your_api_key_from_qdrant_cloud
 ```
-- API ключ для Qdrant Cloud (опционально, только для облачной версии)
-- Не требуется для локального Qdrant
+- API ключ из панели управления Qdrant Cloud (https://cloud.qdrant.io)
+- Найти можно в разделе "API Keys" вашего кластера
+- **Обязателен** для Qdrant Cloud, не требуется для локального Qdrant
 
-**Подробная инструкция**: см. `QDRANT_SETUP.md`
+**Пример для Railway:**
+```
+QDRANT_URL=https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io
+QDRANT_API_KEY=ваш_api_ключ_из_qdrant_cloud
+```
+
+**Подробная инструкция**: см. `QDRANT_SETUP.md` и `INSTALL_QDRANT.md`
 
 ## Установка переменных в Railway
 

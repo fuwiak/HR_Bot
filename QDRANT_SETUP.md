@@ -21,16 +21,32 @@ docker run -p 6333:6333 -p 6334:6334 qdrant/qdrant
 pip install qdrant-client
 ```
 
-### Вариант 2: Qdrant Cloud (для продакшена)
+### Вариант 2: Qdrant Cloud (для продакшена на Railway) ✅ РЕКОМЕНДУЕТСЯ
 
-1. Зарегистрируйтесь на https://cloud.qdrant.io
-2. Создайте кластер
-3. Получите URL и API ключ
-4. Установите переменные окружения:
-   ```
-   QDRANT_URL=https://your-cluster.qdrant.io
-   QDRANT_API_KEY=your_api_key
-   ```
+**Ваш кластер уже создан:**
+- **Endpoint**: `https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io`
+- **Cluster ID**: `239a4026-d673-4b8b-bfab-a99c7044e6b1`
+
+**Шаги для настройки:**
+
+1. **Получите API ключ:**
+   - Войдите в https://cloud.qdrant.io
+   - Выберите ваш кластер
+   - Перейдите в раздел "API Keys"
+   - Создайте новый API ключ или используйте существующий
+   - Скопируйте API ключ
+
+2. **Установите переменные окружения в Railway:**
+   - Перейдите в дашборд Railway
+   - Выберите ваш сервис бота
+   - Откройте вкладку "Variables"
+   - Добавьте две переменные:
+     ```
+     QDRANT_URL=https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io
+     QDRANT_API_KEY=ваш_api_ключ_из_qdrant_cloud
+     ```
+
+3. **Перезапустите сервис** - Railway сделает это автоматически после добавления переменных
 
 ### Вариант 3: Railway (если используете Railway для деплоя)
 

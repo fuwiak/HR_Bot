@@ -12,10 +12,20 @@ This guide explains how to deploy the RomanBot to Railway using Docker.
 
 The following environment variables must be set in Railway:
 
-- `TELEGRAM_BOT_TOKEN` - Your Telegram bot token from @BotFather
-- `GROQ_API_KEY` - Your Groq API key
-- `YCLIENTS_PARTNER_TOKEN` - Your YClients partner token
-- `YCLIENTS_USER_TOKEN` - Your YClients user token
+### Обязательные переменные:
+- `TELEGRAM_TOKEN` - Your Telegram bot token from @BotFather
+- `OPENROUTER_API_KEY` - Your OpenRouter API key
+- `OPENROUTER_API_URL` - OpenRouter API URL (default: https://openrouter.ai/api/v1/chat/completions)
+
+### Google Sheets (рекомендуется):
+- `GOOGLE_SHEETS_SPREADSHEET_ID` - Your Google Sheets spreadsheet ID
+- `GOOGLE_SHEETS_CREDENTIALS_JSON` - Google Service Account credentials as JSON string
+
+### Qdrant Cloud (для векторного поиска):
+- `QDRANT_URL` - Your Qdrant Cloud endpoint (https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io)
+- `QDRANT_API_KEY` - Your Qdrant Cloud API key (get from https://cloud.qdrant.io)
+
+**Подробные инструкции**: см. `QDRANT_RAILWAY_SETUP.md`
 
 ## Deployment Steps
 
@@ -33,11 +43,8 @@ The following environment variables must be set in Railway:
 3. **Set Environment Variables**
    - Go to your project settings
    - Navigate to "Variables" tab
-   - Add all required environment variables:
-     - `TELEGRAM_BOT_TOKEN`
-     - `GROQ_API_KEY`
-     - `YCLIENTS_PARTNER_TOKEN`
-     - `YCLIENTS_USER_TOKEN`
+   - Add all required environment variables (см. `ENV_VARIABLES.md`)
+   - **Для Qdrant Cloud**: добавьте `QDRANT_URL` и `QDRANT_API_KEY` (см. `QDRANT_RAILWAY_SETUP.md`)
 
 4. **Deploy**
    - Railway will automatically build and deploy using the Dockerfile
@@ -67,10 +74,11 @@ The following environment variables must be set in Railway:
 
 5. **Set Environment Variables**
    ```bash
-   railway variables set TELEGRAM_BOT_TOKEN=your_token
-   railway variables set GROQ_API_KEY=your_key
-   railway variables set YCLIENTS_PARTNER_TOKEN=your_token
-   railway variables set YCLIENTS_USER_TOKEN=your_token
+   railway variables set TELEGRAM_TOKEN=your_token
+   railway variables set OPENROUTER_API_KEY=your_key
+   railway variables set QDRANT_URL=https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io
+   railway variables set QDRANT_API_KEY=your_qdrant_api_key
+   # ... другие переменные см. ENV_VARIABLES.md
    ```
 
 6. **Deploy**
