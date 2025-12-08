@@ -1804,6 +1804,98 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     answer = f"❌ *Ошибка при создании записи:* {str(e)}"
         else:
+            # КРИТИЧЕСКОЕ: Проверяем, есть ли сохраненные данные для записи
+            # Если пользователь отвечает на вопрос бота (например, просто "Роман"), 
+            # нужно использовать сохраненные данные и попытаться создать запись
+            if user_id in UserBookingData and UserBookingData[user_id]:
+                log.info(f"📋 Найдены сохраненные данные для записи: {UserBookingData[user_id]}")
+                
+                # Парсим текущее сообщение для извлечения новых данных
+                history = get_recent_history(user_id, 50)
+                parsed_data = parse_booking_message(text, history)
+                
+                # Обновляем сохраненные данные новыми (если они есть)
+                if parsed_data.get("service"):
+                    UserBookingData[user_id]["service"] = parsed_data.get("service")
+                if parsed_data.get("master"):
+                    UserBookingData[user_id]["master"] = parsed_data.get("master")
+                if parsed_data.get("datetime"):
+                    UserBookingData[user_id]["datetime"] = parsed_data.get("datetime")
+                
+                # Объединяем сохраненные данные с текущими
+                combined_data = {
+                    "service": UserBookingData[user_id].get("service") or parsed_data.get("service"),
+                    "master": UserBookingData[user_id].get("master") or parsed_data.get("master"),
+                    "datetime": UserBookingData[user_id].get("datetime") or parsed_data.get("datetime")
+                }
+                
+                log.info(f"📋 Объединенные данные после ответа на вопрос: service={combined_data.get('service')}, master={combined_data.get('master')}, datetime={combined_data.get('datetime')}")
+                
+                # Если все данные собраны, создаем запись
+                if combined_data.get("service") and combined_data.get("master") and combined_data.get("datetime"):
+                    log.info(f"✅ Все данные собраны после ответа на вопрос! Создаем запись: {combined_data}")
+                    try:
+                        user_phone = UserPhone.get(user_id, "")
+                        client_name = update.message.from_user.first_name or "Клиент"
+                        
+                        booking_record = create_real_booking(
+                            user_id,
+                            combined_data.get("service"),
+                            combined_data.get("master"),
+                            combined_data.get("datetime"),
+                            client_name=client_name,
+                            client_phone=user_phone
+                        )
+                        
+                        log.info(f"✅ Запись создана после ответа на вопрос: {booking_record.get('id', 'N/A')}")
+                        
+                        # Очищаем сохраненные данные после успешного создания
+                        if user_id in UserBookingData:
+                            del UserBookingData[user_id]
+                        
+                        answer = f"🎉 *Запись успешно создана в системе!* 🎉\n\n"
+                        answer += f"📅 *Услуга:* {combined_data.get('service')}\n"
+                        answer += f"👤 *Мастер:* {combined_data.get('master')}\n"
+                        answer += f"⏰ *Время:* {combined_data.get('datetime')}\n\n"
+                        answer += "Спасибо за запись! Ждем вас в салоне! ✨"
+                        response_sent = True
+                        await update.message.reply_text(answer)
+                        return
+                    except Exception as e:
+                        log.error(f"❌ Ошибка создания записи после ответа на вопрос: {e}")
+                        import traceback
+                        log.error(f"❌ Traceback: {traceback.format_exc()}")
+                        # Продолжаем обычную обработку
+                else:
+                    # Данных все еще недостаточно, задаем вопросы
+                    missing_fields = []
+                    questions = []
+                    
+                    if not combined_data.get("service"):
+                        missing_fields.append("услуга")
+                        services = get_services()
+                        services_list = ", ".join([s.get("title") for s in services[:5]])
+                        questions.append(f"📋 *Какая услуга вам нужна?*\n\nНапример: {services_list}...")
+                    
+                    if not combined_data.get("master"):
+                        missing_fields.append("мастер")
+                        masters = get_masters()
+                        masters_list = ", ".join([m.get("name") for m in masters])
+                        questions.append(f"👤 *К какому мастеру хотите записаться?*\n\nДоступны: {masters_list}")
+                    
+                    if not combined_data.get("datetime"):
+                        missing_fields.append("дата и время")
+                        questions.append(f"📅 *На какое время записаться?*\n\nНапример: завтра 17:00, или 10.12.2025 15:00")
+                    
+                    if missing_fields:
+                        question_text = f"❓ *Нужна дополнительная информация для записи*\n\n"
+                        question_text += "\n".join(questions)
+                        question_text += f"\n\n💡 Укажите недостающие данные: {', '.join(missing_fields)}"
+                        answer = question_text
+                        response_sent = True
+                        await update.message.reply_text(answer)
+                        return
+            
             # Проверяем, спрашивает ли пользователь об услугах конкретного мастера
             masters = get_masters()
             master_names = [m.get("name", "").lower() for m in masters]
