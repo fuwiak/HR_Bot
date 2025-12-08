@@ -1,6 +1,7 @@
 """
 Google Sheets интеграция для хранения записей и расписания
-Если Google Sheets не настроены, используется placeholder для тестирования
+ВАЖНО: Используются ТОЛЬКО данные из Google Sheets, без fallback на placeholder.
+Если Google Sheets недоступны - бот не может работать.
 """
 import os
 import json
@@ -82,101 +83,71 @@ def get_sheets_client():
         return None
 
 
-# ===================== PLACEHOLDER ДАННЫЕ =====================
-
-# Мастера и их расписание (placeholder)
-PLACEHOLDER_MASTERS = [
-    {
-        "id": 1,
-        "name": "Роман",
-        "specialization": "Мужской зал",
-        "services": ["Стрижка", "Стрижка под машинку", "Тонировка бороды", "Бритье"],
-        "schedule": {
-            "daily_start": "11:00",
-            "daily_end": "21:00",
-            "days_off": []  # Будет заполняться из Google Sheets
-        }
-    },
-    {
-        "id": 2,
-        "name": "Анжела",
-        "specialization": "Женский зал",
-        "services": ["Стрижка", "Окрашивание", "Маникюр", "Педикюр"],
-        "schedule": {
-            "pattern": "3/1",  # 3 дня работы, 1 выходной
-            "daily_start": "09:00",
-            "daily_end": "20:00",
-            "days_off": []
-        }
-    }
-]
-
-# Услуги (placeholder)
-PLACEHOLDER_SERVICES = [
-    # Мужские услуги (Роман)
-    {"id": 1, "title": "Стрижка", "price": 1500, "duration": 60, "master": "Роман", "type": "men"},
-    {"id": 2, "title": "Стрижка под машинку", "price": 800, "duration": 30, "master": "Роман", "type": "men"},
-    {"id": 3, "title": "Тонировка бороды", "price": 500, "duration": 20, "master": "Роман", "type": "men", "additional": True},
-    {"id": 4, "title": "Бритье", "price": 600, "duration": 30, "master": "Роман", "type": "men"},
-    # Женские услуги (Анжела)
-    {"id": 5, "title": "Стрижка", "price": 2000, "duration": 90, "master": "Анжела", "type": "women"},
-    {"id": 6, "title": "Окрашивание", "price": 4000, "duration": 180, "master": "Анжела", "type": "women"},
-    {"id": 7, "title": "Маникюр", "price": 1500, "duration": 60, "master": "Анжела", "type": "women"},
-    {"id": 8, "title": "Педикюр", "price": 1800, "duration": 60, "master": "Анжела", "type": "women"},
-]
-
-# Записи (placeholder - в реальности будет в Google Sheets)
-PLACEHOLDER_BOOKINGS = []
+# ===================== ВАЖНО: PLACEHOLDER ДАННЫЕ УДАЛЕНЫ =====================
+# Все данные ТОЛЬКО из Google Sheets. Бот не работает без доступа к таблице.
+# Если Google Sheets недоступны - бот выдает ошибку, а не использует placeholder данные.
 
 
 # ===================== ФУНКЦИИ РАБОТЫ С ДАННЫМИ =====================
 
 def get_masters() -> List[Dict]:
-    """Получить список мастеров из Google Sheets или placeholder"""
+    """Получить список мастеров из Google Sheets (ТОЛЬКО из Google Sheets, без fallback)"""
     client = get_sheets_client()
     
-    if client:
-        try:
-            # Получаем мастеров из услуг (уникальные имена из колонок Мастер 1 и Мастер 2)
-            services = get_services()
-            master_names = set()
-            
-            for service in services:
-                master1 = service.get("master1", "").strip()
-                master2 = service.get("master2", "").strip()
-                if master1:
-                    master_names.add(master1)
-                if master2:
-                    master_names.add(master2)
-            
-            masters = []
-            for idx, name in enumerate(sorted(master_names), 1):
-                # Определяем тип зала по услугам
-                master_services = [s for s in services if s.get("master1") == name or s.get("master2") == name]
-                service_type = "Мужской зал" if any(s.get("type") == "men" for s in master_services) else "Женский зал"
-                
-                masters.append({
-                    "id": idx,
-                    "name": name,
-                    "specialization": service_type,
-                    "schedule": {
-                        "daily_start": "11:00" if name == "Роман" else "09:00",
-                        "daily_end": "21:00" if name == "Роман" else "20:00"
-                    }
-                })
-            
-            if masters:
-                log.info(f"✅ Получено {len(masters)} мастеров из Google Sheets")
-                return masters
-        except Exception as e:
-            log.error(f"❌ Ошибка чтения мастеров из Google Sheets: {e}")
+    if not client:
+        error_msg = (
+            "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets клиент не инициализирован!\n"
+            "Не удалось получить список мастеров.\n"
+            "Убедитесь, что Google Sheets настроены правильно."
+        )
+        log.error(error_msg)
+        raise Exception(error_msg)
     
-    # Используем placeholder данные
-    return PLACEHOLDER_MASTERS.copy()
+    try:
+        # Получаем мастеров из услуг (уникальные имена из колонок Мастер 1 и Мастер 2)
+        services = get_services()
+        master_names = set()
+        
+        for service in services:
+            master1 = service.get("master1", "").strip()
+            master2 = service.get("master2", "").strip()
+            if master1:
+                master_names.add(master1)
+            if master2:
+                master_names.add(master2)
+        
+        masters = []
+        for idx, name in enumerate(sorted(master_names), 1):
+            # Определяем тип зала по услугам
+            master_services = [s for s in services if s.get("master1") == name or s.get("master2") == name]
+            service_type = "Мужской зал" if any(s.get("type") == "men" for s in master_services) else "Женский зал"
+            
+            masters.append({
+                "id": idx,
+                "name": name,
+                "specialization": service_type,
+                "schedule": {
+                    "daily_start": "11:00" if name == "Роман" else "09:00",
+                    "daily_end": "21:00" if name == "Роман" else "20:00"
+                }
+            })
+        
+        if not masters:
+            error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Не найдено ни одного мастера в Google Sheets!"
+            log.error(error_msg)
+            raise Exception(error_msg)
+        
+        log.info(f"✅ Получено {len(masters)} мастеров из Google Sheets")
+        return masters
+    except Exception as e:
+        log.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА чтения мастеров из Google Sheets: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        raise
 
 
 def get_services(master_name: Optional[str] = None) -> List[Dict]:
-    """Получить список услуг из Google Sheets 'Ценник' или placeholder"""
+    """Получить список услуг из Google Sheets 'Ценник' (ТОЛЬКО из Google Sheets, без fallback)"""
     global _services_cache, _services_cache_time
     
     client = get_sheets_client()
@@ -225,24 +196,23 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 if not service_name or not current_type:
                     continue
                 
-                # Колонка C: Мастер 1
+                # Колонка C: Мастер 1 (единственный мастер в этой структуре)
                 master1 = row[2].strip() if len(row) > 2 else ""
-                # Колонка D: Мастер 2
-                master2 = row[3].strip() if len(row) > 3 else ""
+                master2 = ""  # В данной таблице Мастер 2 отсутствует
                 
-                # Колонка E: Цена (может быть диапазон "1000–2500")
-                price_str = row[4].strip() if len(row) > 4 else "0"
+                # Колонка D: Цена (может быть диапазон "1000–2500")
+                price_str = row[3].strip() if len(row) > 3 else "0"
                 price = parse_price(price_str)
                 
-                # Колонка F: Время оказания (в мин.)
-                duration_str = row[5].strip() if len(row) > 5 else "0"
+                # Колонка E: Время оказания (в мин.)
+                duration_str = row[4].strip() if len(row) > 4 else "0"
                 try:
                     duration = int(duration_str) if duration_str else 0
                 except ValueError:
                     duration = 0
                 
-                # Колонка G: Доп. услуги
-                additional_services = row[6].strip() if len(row) > 6 else ""
+                # Колонка F: Доп. услуги
+                additional_services = row[5].strip() if len(row) > 5 else ""
                 
                 service = {
                     "id": service_id,
@@ -261,33 +231,43 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 services.append(service)
                 service_id += 1
             
+            if not services:
+                error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Не найдено ни одной услуги в Google Sheets (лист 'Ценник')!"
+                log.error(error_msg)
+                raise Exception(error_msg)
+            
             # Обновляем кэш
             _services_cache = services
             _services_cache_time = datetime.now()
             log.info(f"✅ Получено {len(services)} услуг из Google Sheets")
             # Логируем первые несколько услуг для проверки
-            if services:
-                for s in services[:3]:
-                    log.info(f"  📋 Пример: {s.get('title')} - {s.get('price_str') or s.get('price')} ₽ ({s.get('duration')} мин) - {s.get('master')}")
+            for s in services[:5]:
+                log.info(f"  📋 {s.get('title')} - {s.get('price_str') or s.get('price')} ₽ ({s.get('duration')} мин) - {s.get('master')}")
             
             if master_name:
-                services = [s for s in services if master_name.lower() in (s.get("master1", "") + " " + s.get("master2", "")).lower()]
+                filtered_services = [s for s in services if master_name.lower() in (s.get("master1", "") + " " + s.get("master2", "")).lower()]
+                if not filtered_services:
+                    log.warning(f"⚠️ Не найдено услуг для мастера '{master_name}' в Google Sheets")
+                return filtered_services
             
             return services
             
         except Exception as e:
-            log.error(f"❌ Ошибка чтения услуг из Google Sheets: {e}")
+            log.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА чтения услуг из Google Sheets: {e}")
             import traceback
             log.error(f"❌ Traceback: {traceback.format_exc()}")
+            raise Exception(f"Не удалось прочитать услуги из Google Sheets: {e}")
     
-    # Используем placeholder данные (fallback)
-    log.warning(f"⚠️ Используются PLACEHOLDER данные (Google Sheets не настроены или недоступны)")
-    log.warning(f"⚠️ Убедитесь, что GOOGLE_SHEETS_CREDENTIALS_JSON или GOOGLE_SHEETS_CREDENTIALS_PATH установлены")
-    services = PLACEHOLDER_SERVICES.copy()
-    if master_name:
-        services = [s for s in services if s.get("master", "").lower() == master_name.lower()]
-    
-    return services
+    # КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены
+    error_msg = (
+        "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены или недоступны!\n"
+        "Бот не может работать без доступа к таблице.\n"
+        "Убедитесь, что установлены:\n"
+        "- GOOGLE_SHEETS_CREDENTIALS_JSON (для Railway)\n"
+        "- или GOOGLE_SHEETS_CREDENTIALS_PATH (для локальной разработки)"
+    )
+    log.error(error_msg)
+    raise Exception(error_msg)
 
 
 def parse_price(price_str: str) -> int:
@@ -319,39 +299,46 @@ def parse_price(price_str: str) -> int:
 
 
 def get_available_slots(master_name: str, date: str) -> List[str]:
-    """Получить доступные слоты времени для мастера на дату"""
+    """Получить доступные слоты времени для мастера на дату (из Google Sheets)"""
     client = get_sheets_client()
     
-    if client:
-        try:
-            # TODO: Реализовать чтение расписания из Google Sheets
-            pass
-        except Exception as e:
-            log.error(f"Ошибка чтения расписания из Google Sheets: {e}")
+    if not client:
+        error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены для получения расписания!"
+        log.error(error_msg)
+        raise Exception(error_msg)
     
-    # Placeholder: возвращаем базовые временные слоты
-    master = next((m for m in PLACEHOLDER_MASTERS if m["name"].lower() == master_name.lower()), None)
-    if not master:
-        return []
-    
-    schedule = master["schedule"]
-    start_time = datetime.strptime(schedule.get("daily_start", "09:00"), "%H:%M")
-    end_time = datetime.strptime(schedule.get("daily_end", "20:00"), "%H:%M")
-    
-    slots = []
-    current = start_time
-    while current < end_time:
-        slots.append(current.strftime("%H:%M"))
-        current += timedelta(hours=1)
-    
-    return slots
+    try:
+        # Получаем расписание мастера из реальных данных
+        masters = get_masters()
+        master = next((m for m in masters if m.get("name", "").lower() == master_name.lower()), None)
+        
+        if not master:
+            error_msg = f"❌ ОШИБКА: Мастер '{master_name}' не найден в Google Sheets!"
+            log.error(error_msg)
+            raise Exception(error_msg)
+        
+        schedule = master.get("schedule", {})
+        start_time = datetime.strptime(schedule.get("daily_start", "09:00"), "%H:%M")
+        end_time = datetime.strptime(schedule.get("daily_end", "20:00"), "%H:%M")
+        
+        slots = []
+        current = start_time
+        while current < end_time:
+            slots.append(current.strftime("%H:%M"))
+            current += timedelta(hours=1)
+        
+        return slots
+    except Exception as e:
+        log.error(f"❌ Ошибка получения расписания из Google Sheets: {e}")
+        raise
 
 
 def create_booking(booking_data: Dict) -> Dict:
-    """Создать запись в Google Sheets лист 'Запись' или placeholder"""
+    """Создать запись в Google Sheets лист 'Запись' (ТОЛЬКО в Google Sheets, без fallback)"""
+    import uuid
     client = get_sheets_client()
     
-    booking_id = len(PLACEHOLDER_BOOKINGS) + 1
+    booking_id = str(uuid.uuid4())  # Генерируем уникальный ID
     booking_record = {
         "id": booking_id,
         **booking_data,
@@ -399,23 +386,30 @@ def create_booking(booking_data: Dict) -> Dict:
             _services_cache = None
             
         except Exception as e:
-            log.error(f"❌ Ошибка записи в Google Sheets: {e}")
+            error_msg = f"❌ КРИТИЧЕСКАЯ ОШИБКА записи в Google Sheets: {e}"
+            log.error(error_msg)
             import traceback
             log.error(f"❌ Traceback: {traceback.format_exc()}")
-            # Сохраняем в placeholder как fallback
-            PLACEHOLDER_BOOKINGS.append(booking_record)
-            log.warning("⚠️ Запись сохранена в placeholder (fallback)")
+            raise Exception(error_msg)
     else:
-        # Сохраняем в placeholder
-        PLACEHOLDER_BOOKINGS.append(booking_record)
-        log.info(f"✅ Запись {booking_id} создана (placeholder режим)")
+        error_msg = (
+            "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены!\n"
+            "Не удалось создать запись. Бот не может работать без доступа к таблице."
+        )
+        log.error(error_msg)
+        raise Exception(error_msg)
     
     return booking_record
 
 
 def check_slot_available(master_name: str, date: str, time: str) -> bool:
-    """Проверить доступность слота времени в Google Sheets листе 'Запись'"""
+    """Проверить доступность слота времени в Google Sheets листе 'Запись' (ТОЛЬКО из Google Sheets)"""
     client = get_sheets_client()
+    
+    if not client:
+        error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены для проверки доступности!"
+        log.error(error_msg)
+        raise Exception(error_msg)
     
     if client:
         try:
@@ -453,18 +447,16 @@ def check_slot_available(master_name: str, date: str, time: str) -> bool:
             return True
             
         except Exception as e:
-            log.error(f"❌ Ошибка проверки слота в Google Sheets: {e}")
-            # При ошибке считаем что свободно (можно записаться)
-            return True
+            error_msg = f"❌ КРИТИЧЕСКАЯ ОШИБКА проверки слота в Google Sheets: {e}"
+            log.error(error_msg)
+            import traceback
+            log.error(f"❌ Traceback: {traceback.format_exc()}")
+            raise Exception(error_msg)
     
-    # Placeholder: проверяем в памяти
-    for booking in PLACEHOLDER_BOOKINGS:
-        if (booking.get("master", "").lower() == master_name.lower() and
-            booking.get("date") == date and
-            booking.get("time") == time):
-            return False
-    
-    return True
+    # КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены
+    error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены для проверки доступности!"
+    log.error(error_msg)
+    raise Exception(error_msg)
 
 
 def refresh_services_cache():
