@@ -328,12 +328,27 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-            name = service.get("title", "Без названия")
+                name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
                 
                 data_text += f"• {name}"
+                
+                # Отображаем цену (приоритет строковому формату с диапазоном) - ЯВНО и ЧЕТКО
+                if price_str and ("–" in price_str or "-" in price_str):
+                    data_text += f" → ЦЕНА: {price_str} ₽"
+                elif price > 0:
+                    data_text += f" → ЦЕНА: {price} ₽"
+                else:
+                    data_text += f" → ЦЕНА: уточнить"
+                    
+                if duration > 0:
+                    data_text += f" ({duration} мин)"
+                
+                data_text += "\n"
+        
+        if women_services:
                 
                 # Отображаем цену (приоритет строковому формату с диапазоном) - ЯВНО и ЧЕТКО
                 if price_str and ("–" in price_str or "-" in price_str):
