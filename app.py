@@ -1498,40 +1498,67 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         all_services = get_services()
                         text_lower = text.lower()
                         
-                        # Ищем точное или частичное совпадение
+                        # Сначала ищем ТОЧНОЕ совпадение (приоритет)
+                        best_match = None
+                        best_score = 0
+                        
                         for service in all_services:
                             service_title = service.get("title", "").lower()
                             service_words = set(service_title.split())
                             text_words = set(text_lower.split())
                             
-                            # Проверяем разные варианты совпадения
-                            if (service_title in text_lower or 
-                                text_lower in service_title or
-                                any(word in service_title for word in text_lower.split() if len(word) > 3) or
-                                len(service_words & text_words) >= 2):  # Если совпало 2+ слова
-                                
-                                price_str = service.get("price_str", "")
-                                price = service.get("price", 0)
-                                duration = service.get("duration", 0)
-                                master = service.get("master", "")
-                                
-                                # Формируем точную информацию об услуге
-                                if price_str and ("–" in price_str or "-" in price_str):
-                                    price_info = f"{price_str} ₽"
-                                elif price > 0:
-                                    price_info = f"{price} ₽"
-                                else:
-                                    price_info = "уточнить цену"
-                                
-                                found_service_info = f"\n\n⚠️⚠️⚠️ КРИТИЧЕСКИ ВАЖНО ⚠️⚠️⚠️\n"
-                                found_service_info += f"🔍 НАЙДЕНА УСЛУГА: {service.get('title')}\n"
-                                found_service_info += f"💰 ЦЕНА: {price_info} ← ИСПОЛЬЗУЙ ЭТУ ТОЧНУЮ ЦЕНУ ИЗ GOOGLE SHEETS!\n"
-                                found_service_info += f"⏱ ДЛИТЕЛЬНОСТЬ: {duration} минут\n"
-                                found_service_info += f"👤 МАСТЕР: {master}\n"
-                                found_service_info += f"\n❌ ЗАПРЕЩЕНО выдумывать цены! Используй ТОЛЬКО эту информацию!\n"
-                                
-                                log.info(f"✅ Найдена услуга детерминистически: {service.get('title')} - {price_info}")
-                                break
+                            # Вычисляем score совпадения
+                            score = 0
+                            
+                            # Точное совпадение - максимальный приоритет
+                            if service_title == text_lower:
+                                score = 100
+                            # Полное вхождение названия услуги в запрос
+                            elif service_title in text_lower:
+                                score = 80
+                            # Полное вхождение запроса в название услуги
+                            elif text_lower in service_title:
+                                score = 70
+                            # Совпадение всех слов
+                            elif service_words == text_words:
+                                score = 60
+                            # Совпадение 2+ слов
+                            elif len(service_words & text_words) >= 2:
+                                score = 40 + len(service_words & text_words) * 10
+                            # Частичное совпадение отдельных слов
+                            elif any(word in service_title for word in text_lower.split() if len(word) > 3):
+                                score = 20
+                            
+                            if score > best_score:
+                                best_score = score
+                                best_match = service
+                        
+                        # Используем лучший match, если score достаточно высокий
+                        if best_match and best_score >= 20:
+                            service = best_match
+                            price_str = service.get("price_str", "")
+                            price = service.get("price", 0)
+                            duration = service.get("duration", 0)
+                            master = service.get("master", "")
+                            
+                            # Формируем точную информацию об услуге
+                            if price_str and ("–" in price_str or "-" in price_str):
+                                price_info = f"{price_str} ₽"
+                            elif price > 0:
+                                price_info = f"{price} ₽"
+                            else:
+                                price_info = "уточнить цену"
+                            
+                            found_service_info = f"\n\n⚠️⚠️⚠️ КРИТИЧЕСКИ ВАЖНО ⚠️⚠️⚠️\n"
+                            found_service_info += f"🔍 НАЙДЕНА УСЛУГА: {service.get('title')}\n"
+                            found_service_info += f"💰 ЦЕНА: {price_info} ← ИСПОЛЬЗУЙ ЭТУ ТОЧНУЮ ЦЕНУ ИЗ GOOGLE SHEETS!\n"
+                            found_service_info += f"⏱ ДЛИТЕЛЬНОСТЬ: {duration} минут\n"
+                            found_service_info += f"👤 МАСТЕР: {master}\n"
+                            found_service_info += f"📊 SCORE: {best_score}\n"
+                            found_service_info += f"\n❌ ЗАПРЕЩЕНО выдумывать цены! Используй ТОЛЬКО эту информацию!\n"
+                            
+                            log.info(f"✅ Найдена услуга детерминистически: {service.get('title')} - {price_info} (score: {best_score})")
+                            log.info(f"   Детали: price={price}, price_str='{price_str}', duration={duration}, master='{master}'")
                 except Exception as e:
                     log.error(f"❌ Ошибка поиска услуги: {e}")
                     import traceback
