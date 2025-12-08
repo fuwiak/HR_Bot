@@ -259,7 +259,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-            return services
+        return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -302,37 +302,29 @@ def get_api_data_for_ai():
         women_services = [s for s in services if s.get('type') == 'women']
         
         if men_services:
+            data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
+            data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-            name = service.get("title", "Без названия")
-            price = service.get("price", 0)
-            price_str = service.get("price_str", "")
-            duration = service.get("duration", 0)
-            master = service.get("master", "")
-            master1 = service.get("master1", "")
-            master2 = service.get("master2", "")
-            
-            data_text += f"- {name}"
-            
-            # Отображаем цену (приоритет строковому формату с диапазоном) - ЯВНО и ЧЕТКО
-            if price_str and ("–" in price_str or "-" in price_str):
-                data_text += f" → ЦЕНА: {price_str} ₽"
-            elif price > 0:
-                data_text += f" → ЦЕНА: {price} ₽"
-                else:
-                data_text += f" → ЦЕНА: уточнить"
+                name = service.get("title", "Без названия")
+                price = service.get("price", 0)
+                price_str = service.get("price_str", "")
+                duration = service.get("duration", 0)
                 
-            if duration > 0:
-                data_text += f" ({duration} мин)"
-            
-            # Отображаем мастеров
-            master_display = master1
-            if master2:
-                master_display += f" или {master2}"
-            if master_display:
-                data_text += f" - мастер: {master_display}"
-            
-            data_text += "\n"
+                data_text += f"• {name}"
+                
+                # Отображаем цену (приоритет строковому формату с диапазоном) - ЯВНО и ЧЕТКО
+                if price_str and ("–" in price_str or "-" in price_str):
+                    data_text += f" → ЦЕНА: {price_str} ₽"
+                elif price > 0:
+                    data_text += f" → ЦЕНА: {price} ₽"
+                else:
+                    data_text += f" → ЦЕНА: уточнить"
+                    
+                if duration > 0:
+                    data_text += f" ({duration} мин)"
+                
+                data_text += "\n"
         
         data_text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         data_text += "👥 МАСТЕРА:\n"
