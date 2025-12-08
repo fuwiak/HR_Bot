@@ -376,7 +376,7 @@ async def openrouter_chat(messages, use_system_message=False, system_content="")
                     content = response_json["choices"][0]["message"]["content"]
                     log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
                     return content
-        else:
+                else:
                     log.error(f"❌ Неожиданный формат ответа OpenRouter: {response_json}")
                     return "Извините, произошла ошибка при обработке запроса."
                     
