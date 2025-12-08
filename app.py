@@ -157,8 +157,30 @@ def get_history(user_id):
 
 # ===================== NLP ============================
 def is_booking(text):
+    """Проверяет, является ли сообщение запросом на запись"""
     text_lower = text.lower()
+    
+    # Сначала проверяем ключевые слова
     matches = [k for k in BOOKING_KEYWORDS if k in text_lower]
+    
+    # Если ключевых слов нет, проверяем, есть ли название услуги из Google Sheets
+    if not matches:
+        try:
+            all_services = get_services()
+            for service in all_services:
+                service_title = service.get("title", "").lower()
+                # Проверяем точное или частичное совпадение названия услуги
+                if service_title in text_lower or text_lower in service_title:
+                    # Проверяем, что это не просто случайное совпадение
+                    service_words = set(service_title.split())
+                    text_words = set(text_lower.split())
+                    # Если совпало 2+ слова или точное совпадение - это запрос на запись
+                    if len(service_words & text_words) >= 2 or service_title == text_lower:
+                        log.info(f"🔍 BOOKING CHECK: '{text}' -> найдена услуга '{service.get('title')}' -> это запрос на запись")
+                        return True
+        except Exception as e:
+            log.debug(f"Ошибка при проверке услуг для is_booking: {e}")
+    
     log.info(f"🔍 BOOKING CHECK: '{text}' -> matches: {matches}")
     return len(matches) > 0
 
@@ -259,7 +281,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-        return services
+            return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -306,7 +328,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-                name = service.get("title", "Без названия")
+            name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
@@ -320,11 +342,11 @@ def get_api_data_for_ai():
                     data_text += f" → ЦЕНА: {price} ₽"
                 else:
                     data_text += f" → ЦЕНА: уточнить"
-                    
-                if duration > 0:
-                    data_text += f" ({duration} мин)"
                 
-                data_text += "\n"
+            if duration > 0:
+                data_text += f" ({duration} мин)"
+                
+            data_text += "\n"
         
         data_text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         data_text += "👥 МАСТЕРА:\n"
@@ -581,7 +603,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-            break
+                break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1608,10 +1630,10 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                            for service in all_services)
-                        
-                        if not service_exists:
+                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                               for service in all_services)
+                            
+                            if not service_exists:
                                 log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
                                 await update.message.reply_text(
                                     f"❌ *Услуга не найдена*\n\n"
