@@ -31,10 +31,16 @@ OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_API_URL = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
 
 # Webhook конфигурация для Railway (масштабируемость и concurrent updates)
-PORT = int(os.getenv("PORT", 8000))  # Railway автоматически предоставляет PORT
+PORT = int(os.getenv("PORT", 8080))  # Railway автоматически предоставляет PORT (по умолчанию 8080)
 # Railway предоставляет публичный домен через RAILWAY_PUBLIC_DOMAIN или можно указать вручную через WEBHOOK_URL
 RAILWAY_PUBLIC_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL", "") or (f"https://{RAILWAY_PUBLIC_DOMAIN}" if RAILWAY_PUBLIC_DOMAIN else "")
+# Очищаем домен от протокола и слэшей (поддерживаем оба формата: с https:// и без)
+if RAILWAY_PUBLIC_DOMAIN:
+    RAILWAY_PUBLIC_DOMAIN = RAILWAY_PUBLIC_DOMAIN.replace("https://", "").replace("http://", "").rstrip("/")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL", "")
+if not WEBHOOK_URL and RAILWAY_PUBLIC_DOMAIN:
+    # Формируем WEBHOOK_URL из домена (всегда используем HTTPS)
+    WEBHOOK_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}"
 USE_WEBHOOK = os.getenv("USE_WEBHOOK", "true").lower() == "true"  # По умолчанию используем webhook
 
 # ===================== VALIDATION =====================
