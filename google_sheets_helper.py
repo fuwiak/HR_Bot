@@ -249,11 +249,13 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                     log.info(f"   current_type: '{current_type}'")
                     log.info(f"   ОЖИДАЕТСЯ: price=1700, duration=60, master='Роман'")
                     if price != 1700:
-                        log.error(f"   ❌❌❌ ОШИБКА: price={price}, ожидается 1700!")
+                        log.error(f"   ❌❌❌ КРИТИЧЕСКАЯ ОШИБКА: price={price}, ожидается 1700! Проверьте row[4]!")
                     if duration != 60:
-                        log.error(f"   ❌❌❌ ОШИБКА: duration={duration}, ожидается 60!")
+                        log.error(f"   ❌❌❌ КРИТИЧЕСКАЯ ОШИБКА: duration={duration}, ожидается 60! Проверьте row[5]!")
                     if "роман" not in master1.lower():
-                        log.error(f"   ❌❌❌ ОШИБКА: master1='{master1}', ожидается 'Роман'!")
+                        log.error(f"   ❌❌❌ КРИТИЧЕСКАЯ ОШИБКА: master1='{master1}', ожидается 'Роман'! Проверьте row[2]!")
+                    else:
+                        log.info(f"   ✅✅✅ ВСЕ ПРАВИЛЬНО: price={price}₽, duration={duration} мин, master='{master1}'")
                 
                 service = {
                     "id": service_id,
