@@ -398,7 +398,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-        return services
+            return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -445,7 +445,7 @@ def get_api_data_for_ai():
             data_text += "👨 МУЖСКОЙ ЗАЛ (Мастер: Роман):\n"
             data_text += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             for service in men_services:
-                name = service.get("title", "Без названия")
+            name = service.get("title", "Без названия")
                 price = service.get("price", 0)
                 price_str = service.get("price_str", "")
                 duration = service.get("duration", 0)
@@ -745,7 +745,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-            break
+                break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1131,7 +1131,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             record_id_int = int(record_id)
             await delete_user_record(query, str(record_id_int))
         except ValueError:
-            await delete_user_record(query, record_id)
+        await delete_user_record(query, record_id)
     elif query.data.startswith("delete_booking_"):
         # Новый формат с booking_id из Google Sheets
         booking_id = query.data.replace("delete_booking_", "")
@@ -1452,7 +1452,7 @@ async def delete_user_record(query: CallbackQuery, booking_id: str):
                 [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
                 [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
             ]
-            await query.edit_message_text(
+        await query.edit_message_text(
                 f"✅ Запись успешно удалена!\n\n"
                 f"🆔 ID записи: `{booking_id}`",
                 parse_mode='Markdown',
@@ -1902,19 +1902,19 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                            for service in all_services)
-                        
-                        if not service_exists:
-                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                            await update.message.reply_text(
-                                f"❌ *Услуга не найдена*\n\n"
-                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                f"Пожалуйста, выберите услугу из списка доступных.",
-                                parse_mode='Markdown'
-                            )
-                            response_sent = True
-                            return
+                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                               for service in all_services)
+                            
+                            if not service_exists:
+                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                                await update.message.reply_text(
+                                    f"❌ *Услуга не найдена*\n\n"
+                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                    f"Пожалуйста, выберите услугу из списка доступных.",
+                                    parse_mode='Markdown'
+                                )
+                                response_sent = True
+                                return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
@@ -1968,80 +1968,75 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             history = get_recent_history(user_id, 50)
             parsed_data = parse_booking_message(text, history)
             
-            # Если в истории есть данные об услуге и мастере, пытаемся создать запись
-            if parsed_data.get("service") and parsed_data.get("master"):
-                # Пытаемся извлечь дату/время из ответа AI или использовать последнее сообщение
-                if not parsed_data.get("datetime"):
-                    # Парсим дату/время из ответа AI
-                    import re
-                    date_time_pattern = r'(\d{1,2})[./](\d{1,2})[./](\d{4})\s+(\d{1,2}):(\d{2})'
-                    match = re.search(date_time_pattern, answer)
-                    if match:
-                        day, month, year, hour, minute = match.groups()
-                        parsed_data["datetime"] = f"{day.zfill(2)}.{month.zfill(2)}.{year} {hour.zfill(2)}:{minute}"
-                    else:
-                        # Пробуем найти относительные даты в ответе
-                        if "завтра" in answer_lower:
-                            tomorrow = datetime.now() + timedelta(days=1)
-                            time_match = re.search(r'(\d{1,2}):?(\d{2})?', answer)
-                            if time_match:
-                                hour = time_match.group(1)
-                                minute = time_match.group(2) or "00"
-                                parsed_data["datetime"] = f"{tomorrow.strftime('%Y-%m-%d')} {hour.zfill(2)}:{minute.zfill(2)}"
+            log.info(f"🔍 Начальные данные из parse_booking_message: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
+            
+            # КРИТИЧЕСКОЕ: Всегда пытаемся извлечь данные из ответа AI, даже если parse_booking_message не нашел их
+            import re
+            
+            # Извлекаем мастера из ответа AI
+            if not parsed_data.get("master"):
+                masters = get_masters()
+                for master in masters:
+                    master_name = master.get("name", "")
+                    if master_name.lower() in answer_lower:
+                        parsed_data["master"] = master_name
+                        log.info(f"✅ Найден мастер из ответа AI: {master_name}")
+                        break
+            
+            # Извлекаем услугу из истории или ответа AI
+            if not parsed_data.get("service"):
+                # Сначала ищем в истории
+                services = get_services()
+                history_lower = history.lower()
+                for service in services:
+                    service_title = service.get("title", "").lower()
+                    if service_title in history_lower:
+                        parsed_data["service"] = service.get("title")
+                        log.info(f"✅ Найдена услуга из истории: {service.get('title')}")
+                        break
                 
-                # Если есть все данные, создаем запись
-                log.info(f"🔍 Проверка данных для создания записи: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
-                
-                # Улучшенный парсинг: извлекаем данные из ответа AI если их нет в parsed_data
-                if not parsed_data.get("service") or not parsed_data.get("master") or not parsed_data.get("datetime"):
-                    log.info("🔍 Данные неполные, пытаемся извлечь из ответа AI и истории...")
-                    
-                    # Извлекаем мастера из ответа AI
-                    if not parsed_data.get("master"):
-                        import re
-                        masters = get_masters()
-                        for master in masters:
-                            master_name = master.get("name", "")
-                            if master_name.lower() in answer_lower:
-                                parsed_data["master"] = master_name
-                                log.info(f"✅ Найден мастер из ответа AI: {master_name}")
-                                break
-                    
-                    # Извлекаем услугу из истории
-                    if not parsed_data.get("service"):
-                        # Ищем в истории последние упоминания услуг
-                        services = get_services()
-                        history_lower = history.lower()
-                        for service in services:
-                            service_title = service.get("title", "").lower()
-                            if service_title in history_lower:
-                                parsed_data["service"] = service.get("title")
-                                log.info(f"✅ Найдена услуга из истории: {service.get('title')}")
-                                break
-                    
-                    # Извлекаем дату/время из ответа AI если еще не найдено
-                    if not parsed_data.get("datetime"):
-                        import re
-                        # Пробуем найти относительные даты в ответе
-                        if "завтра" in answer_lower:
-                            tomorrow = datetime.now() + timedelta(days=1)
-                            time_match = re.search(r'(\d{1,2}):?(\d{2})?', answer)
-                            if time_match:
-                                hour = time_match.group(1)
-                                minute = time_match.group(2) or "00"
-                                parsed_data["datetime"] = f"{tomorrow.strftime('%d.%m.%Y')} {hour.zfill(2)}:{minute.zfill(2)}"
-                                log.info(f"✅ Найдена дата/время из ответа AI: {parsed_data['datetime']}")
-                        elif "сегодня" in answer_lower:
-                            today = datetime.now()
-                            time_match = re.search(r'(\d{1,2}):?(\d{2})?', answer)
-                            if time_match:
-                                hour = time_match.group(1)
-                                minute = time_match.group(2) or "00"
-                                parsed_data["datetime"] = f"{today.strftime('%d.%m.%Y')} {hour.zfill(2)}:{minute.zfill(2)}"
-                                log.info(f"✅ Найдена дата/время из ответа AI: {parsed_data['datetime']}")
-                
-                # Создаем запись если есть все необходимые данные
-                if parsed_data.get("service") and parsed_data.get("master") and parsed_data.get("datetime"):
+                # Если не нашли в истории, ищем в ответе AI
+                if not parsed_data.get("service"):
+                    for service in services:
+                        service_title = service.get("title", "").lower()
+                        if service_title in answer_lower:
+                            parsed_data["service"] = service.get("title")
+                            log.info(f"✅ Найдена услуга из ответа AI: {service.get('title')}")
+                            break
+            
+            # Извлекаем дату/время из ответа AI
+            if not parsed_data.get("datetime"):
+                # Парсим дату/время из ответа AI
+                date_time_pattern = r'(\d{1,2})[./](\d{1,2})[./](\d{4})\s+(\d{1,2}):(\d{2})'
+                match = re.search(date_time_pattern, answer)
+                if match:
+                    day, month, year, hour, minute = match.groups()
+                    parsed_data["datetime"] = f"{day.zfill(2)}.{month.zfill(2)}.{year} {hour.zfill(2)}:{minute}"
+                    log.info(f"✅ Найдена дата/время из ответа AI (формат DD.MM.YYYY): {parsed_data['datetime']}")
+                else:
+                    # Пробуем найти относительные даты в ответе
+                    if "завтра" in answer_lower:
+                        tomorrow = datetime.now() + timedelta(days=1)
+                        time_match = re.search(r'(\d{1,2}):?(\d{2})?', answer)
+                        if time_match:
+                            hour = time_match.group(1)
+                            minute = time_match.group(2) or "00"
+                            parsed_data["datetime"] = f"{tomorrow.strftime('%d.%m.%Y')} {hour.zfill(2)}:{minute.zfill(2)}"
+                            log.info(f"✅ Найдена дата/время из ответа AI (завтра): {parsed_data['datetime']}")
+                    elif "сегодня" in answer_lower:
+                        today = datetime.now()
+                        time_match = re.search(r'(\d{1,2}):?(\d{2})?', answer)
+                        if time_match:
+                            hour = time_match.group(1)
+                            minute = time_match.group(2) or "00"
+                            parsed_data["datetime"] = f"{today.strftime('%d.%m.%Y')} {hour.zfill(2)}:{minute.zfill(2)}"
+                            log.info(f"✅ Найдена дата/время из ответа AI (сегодня): {parsed_data['datetime']}")
+            
+            # Если есть все данные, создаем запись
+            log.info(f"🔍 Финальная проверка данных для создания записи: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
+            
+            # Создаем запись если есть все необходимые данные
+            if parsed_data.get("service") and parsed_data.get("master") and parsed_data.get("datetime"):
                     try:
                         user_phone = UserPhone.get(user_id, "")
                         client_name = update.message.from_user.first_name or "Клиент"
