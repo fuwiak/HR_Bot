@@ -184,16 +184,27 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                     continue
                 
                 # Колонка A: Мужской зал / Женский зал
+                # Если в колонке A есть текст, это заголовок секции - обновляем current_type
                 col_a = row[0].strip() if len(row) > 0 else ""
                 if col_a:
                     if "Мужской" in col_a or "мужской" in col_a:
                         current_type = "men"
+                        log.debug(f"📋 Найдена секция: Мужской зал (строка {row_idx})")
                     elif "Женский" in col_a or "женский" in col_a:
                         current_type = "women"
+                        log.debug(f"📋 Найдена секция: Женский зал (строка {row_idx})")
+                    # Если колонка A заполнена, но это не секция, пропускаем (это может быть подзаголовок)
+                    continue
                 
+                # Если колонка A пустая, проверяем есть ли услуга в колонке B
                 # Колонка B: Услуга название
                 service_name = row[1].strip() if len(row) > 1 else ""
-                if not service_name or not current_type:
+                if not service_name:
+                    continue
+                
+                # Если current_type не установлен, пропускаем (пока не нашли секцию)
+                if not current_type:
+                    log.debug(f"⚠️ Пропущена услуга '{service_name}' (строка {row_idx}) - секция не определена")
                     continue
                 
                 # Колонка C: Мастер 1
@@ -247,8 +258,18 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             _services_cache_time = datetime.now()
             log.info(f"✅ Получено {len(services)} услуг из Google Sheets")
             
+            # Логируем статистику по типам услуг
+            men_services = [s for s in services if s.get('type') == 'men']
+            women_services = [s for s in services if s.get('type') == 'women']
+            log.info(f"📊 Статистика: Мужской зал - {len(men_services)} услуг, Женский зал - {len(women_services)} услуг")
+            
             # Логируем первые несколько услуг для проверки
-            for s in services[:10]:
+            log.info("📋 Первые услуги из Мужского зала:")
+            for s in men_services[:5]:
+                log.info(f"  📋 {s.get('title')} - цена: '{s.get('price_str')}' ({s.get('price')}₽) - {s.get('duration')} мин - мастер: {s.get('master')}")
+            
+            log.info("📋 Первые услуги из Женского зала:")
+            for s in women_services[:5]:
                 log.info(f"  📋 {s.get('title')} - цена: '{s.get('price_str')}' ({s.get('price')}₽) - {s.get('duration')} мин - мастер: {s.get('master')}")
             
             # Проверяем конкретно "Бритье головы"
@@ -256,6 +277,8 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             if briтье_услуги:
                 for s in briтье_услуги:
                     log.info(f"  🔍 НАЙДЕНО 'Бритье головы': {s.get('title')} - цена: '{s.get('price_str')}' ({s.get('price')}₽)")
+            else:
+                log.warning("⚠️ Услуга 'Бритье головы' не найдена!")
             
             # Автоматически обновляем индекс в Qdrant
             try:
