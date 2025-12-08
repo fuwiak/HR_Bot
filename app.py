@@ -65,8 +65,13 @@ BOOKING_KEYWORDS = [
 BOOKING_PROMPT = """
 Ты дружелюбный помощник по записи в салон красоты. Общайся на "вы", кратко и по делу, используй эмодзи.
 
-ВАЖНО:
-- В салоне 2 мастера: Роман (мужской зал) и Анжела (женский зал)
+КРИТИЧЕСКИ ВАЖНО - СТРОГО СЛЕДУЙ ИНСТРУКЦИЯМ:
+- Используй ТОЛЬКО цены и данные из списка услуг ниже
+- НИКОГДА не выдумывай цены самостоятельно
+- Если услуга найдена в списке - используй ТОЧНУЮ цену из списка
+- Если услуга не найдена - скажи что услуга недоступна
+
+В салоне 2 мастера: Роман (мужской зал) и Анжела (женский зал)
 - Различай мужские и женские услуги для корректной записи
 - "Коротко подстричься" = "стрижка под машинку" (мужская услуга)
 
@@ -88,8 +93,10 @@ BOOKING_PROMPT = """
 История разговора:
 {{history}}
 
-Доступные услуги и мастера:
+Доступные услуги и мастера (используй ТОЛЬКО эти данные):
 {{api_data}}
+
+{{service_info}}
 
 Сообщение пользователя: {{message}}
 
@@ -222,7 +229,7 @@ def get_services(master_name: str = None) -> List[Dict]:
     try:
         services = get_services_from_sheets(master_name)
         log.info(f"✅ Найдено {len(services)} услуг")
-        return services
+            return services
     except Exception as e:
         log.error(f"❌ Ошибка получения услуг: {e}")
         return []
@@ -252,7 +259,7 @@ def get_api_data_for_ai():
         services = get_services()
         masters = get_masters()
         
-        data_text = "Доступные услуги:\n"
+        data_text = "Доступные услуги (ИСПОЛЬЗУЙ ТОЛЬКО ЭТИ ЦЕНЫ, НЕ ВЫДУМЫВАЙ!):\n"
         for service in services:
             name = service.get("title", "Без названия")
             price = service.get("price", 0)
@@ -264,11 +271,13 @@ def get_api_data_for_ai():
             
             data_text += f"- {name}"
             
-            # Отображаем цену (приоритет строковому формату с диапазоном)
+            # Отображаем цену (приоритет строковому формату с диапазоном) - ЯВНО и ЧЕТКО
             if price_str and ("–" in price_str or "-" in price_str):
-                data_text += f" ({price_str} ₽)"
+                data_text += f" → ЦЕНА: {price_str} ₽"
             elif price > 0:
-                data_text += f" ({price} ₽)"
+                data_text += f" → ЦЕНА: {price} ₽"
+            else:
+                data_text += f" → ЦЕНА: уточнить"
                 
             if duration > 0:
                 data_text += f" ({duration} мин)"
@@ -278,7 +287,7 @@ def get_api_data_for_ai():
             if master2:
                 master_display += f" или {master2}"
             if master_display:
-                data_text += f" - {master_display}"
+                data_text += f" - мастер: {master_display}"
             
             data_text += "\n"
         
@@ -293,20 +302,20 @@ def get_api_data_for_ai():
             
             # Добавляем услуги мастера
             master_services = get_services_for_master(name)
-            if master_services:
+                if master_services:
                 data_text += " - услуги: "
-                service_names = []
-                for service in master_services:
-                    service_name = service.get("title", "")
+                    service_names = []
+                    for service in master_services:
+                        service_name = service.get("title", "")
                     price_str = service.get("price_str", "")
                     price = service.get("price", 0)
-                    if service_name:
+                        if service_name:
                         if price_str and ("–" in price_str or "-" in price_str):
                             service_names.append(f"{service_name} ({price_str}₽)")
                         elif price > 0:
                             service_names.append(f"{service_name} ({price}₽)")
-                        else:
-                            service_names.append(service_name)
+                            else:
+                                service_names.append(service_name)
                 data_text += ", ".join(service_names)
             
             data_text += "\n"
@@ -550,7 +559,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-            break
+                break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1425,11 +1434,48 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 # Если не удалось распарсить, используем AI
                 api_data = get_api_data_for_ai()
-                log.info(f"📊 API DATA FOR AI: {api_data[:200]}...")  # Логируем только начало
+                log.info(f"📊 API DATA FOR AI: {api_data[:500]}...")  # Логируем больше для проверки
+                
+                # Детерминистически ищем услугу в данных перед отправкой в AI
+                found_service_info = ""
+                try:
+                    all_services = get_services()
+                    text_lower = text.lower()
+                    
+                    # Ищем точное или частичное совпадение
+                    for service in all_services:
+                        service_title = service.get("title", "").lower()
+                        if service_title in text_lower or any(word in service_title for word in text_lower.split() if len(word) > 3):
+                            price_str = service.get("price_str", "")
+                            price = service.get("price", 0)
+                            duration = service.get("duration", 0)
+                            master = service.get("master", "")
+                            
+                            # Формируем точную информацию об услуге
+                            if price_str and ("–" in price_str or "-" in price_str):
+                                price_info = f"{price_str} ₽"
+                            elif price > 0:
+                                price_info = f"{price} ₽"
+                            else:
+                                price_info = "уточнить цену"
+                            
+                            found_service_info = f"\n\n⚠️⚠️⚠️ КРИТИЧЕСКИ ВАЖНО ⚠️⚠️⚠️\n"
+                            found_service_info += f"🔍 НАЙДЕНА УСЛУГА: {service.get('title')}\n"
+                            found_service_info += f"💰 ЦЕНА: {price_info} ← ИСПОЛЬЗУЙ ЭТУ ТОЧНУЮ ЦЕНУ!\n"
+                            found_service_info += f"⏱ ДЛИТЕЛЬНОСТЬ: {duration} минут\n"
+                            found_service_info += f"👤 МАСТЕР: {master}\n"
+                            found_service_info += f"\n❌ ЗАПРЕЩЕНО выдумывать цены! Используй ТОЛЬКО эту информацию!\n"
+                            
+                            log.info(f"✅ Найдена услуга детерминистически: {service.get('title')} - {price_info}")
+                            break
+                except Exception as e:
+                    log.error(f"❌ Ошибка поиска услуги: {e}")
                 
                 # Формируем промпт правильно
-                msg = BOOKING_PROMPT.replace("{{api_data}}", api_data).replace("{{message}}", text).replace("{{history}}", history)
+                msg = BOOKING_PROMPT.replace("{{api_data}}", api_data).replace("{{message}}", text).replace("{{history}}", history).replace("{{service_info}}", found_service_info)
                 log.info(f"🤖 AI PROMPT длина: {len(msg)} символов")
+                if found_service_info:
+                    log.info(f"✅ Service info добавлена в промпт: {found_service_info[:100]}...")
                 
                 answer = openrouter_chat([{"role": "user", "content": msg}])
                 log.info(f"🤖 AI RESPONSE: {answer[:200]}...")  # Логируем только начало
@@ -1459,19 +1505,19 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         # ВАЛИДАЦИЯ: Проверяем, существует ли услуга в API
                         all_services = get_services_with_prices()
-                        service_exists = any(service_name.lower() in service.get("title", "").lower() 
-                                           for service in all_services)
+                            service_exists = any(service_name.lower() in service.get("title", "").lower() 
+                                               for service in all_services)
                             
-                        if not service_exists:
-                            log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
-                            await update.message.reply_text(
-                                f"❌ *Услуга не найдена*\n\n"
-                                f"Услуга '{service_name}' не существует в нашем каталоге.\n"
-                                f"Пожалуйста, выберите услугу из списка доступных.",
-                                parse_mode='Markdown'
-                            )
-                            response_sent = True
-                            return
+                            if not service_exists:
+                                log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
+                                await update.message.reply_text(
+                                    f"❌ *Услуга не найдена*\n\n"
+                                    f"Услуга '{service_name}' не существует в нашем каталоге.\n"
+                                    f"Пожалуйста, выберите услугу из списка доступных.",
+                                    parse_mode='Markdown'
+                                )
+                                response_sent = True
+                                return
                         
                         # Создаем реальную запись
                         booking_record = create_real_booking(
