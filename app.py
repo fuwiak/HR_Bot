@@ -1626,12 +1626,14 @@ def main():
         log.warning(f"⚠️ Qdrant библиотеки не установлены: {e}")
         log.warning("⚠️ Для работы векторного поиска установите: pip install qdrant-client sentence-transformers")
     
-    # Инициализация: индексируем услуги в Qdrant при старте
-    if QDRANT_AVAILABLE:
+    # Инициализация: индексируем услуги в Qdrant в фоновом режиме
+    def index_services_background():
+        """Индексировать услуги в Qdrant в фоновом потоке"""
         try:
-            log.info("🔄 Инициализация Qdrant: индексирование услуг из Google Sheets...")
+            log.info("🔄 Фоновая индексация Qdrant: чтение услуг из Google Sheets...")
             services = get_services()
             if services:
+                log.info(f"📋 Прочитано {len(services)} услуг из Google Sheets, начинаю индексацию в Qdrant...")
                 if index_services(services):
                     log.info(f"✅ Успешно проиндексировано {len(services)} услуг в Qdrant")
                 else:
@@ -1639,9 +1641,16 @@ def main():
             else:
                 log.warning("⚠️ Нет услуг для индексации в Qdrant")
         except Exception as e:
-            log.error(f"❌ Ошибка инициализации Qdrant: {e}")
+            log.error(f"❌ Ошибка индексации Qdrant в фоне: {e}")
             import traceback
             log.error(f"❌ Traceback: {traceback.format_exc()}")
+    
+    # Запускаем индексацию в фоновом потоке
+    if QDRANT_AVAILABLE:
+        import threading
+        index_thread = threading.Thread(target=index_services_background, daemon=True)
+        index_thread.start()
+        log.info("🔄 Запущена фоновая индексация Qdrant (бот запускается, не ждет завершения)")
     
     # Start Telegram bot
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()

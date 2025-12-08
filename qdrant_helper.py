@@ -209,23 +209,38 @@ def search_service(query: str, limit: int = 3) -> List[Dict]:
         return []
     
     try:
+        # Проверяем, что коллекция существует
+        collections = client.get_collections()
+        collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
+        if not collection_exists:
+            log.warning(f"⚠️ Коллекция '{COLLECTION_NAME}' не существует в Qdrant")
+            return []
+        
         # Генерируем эмбеддинг для запроса
         query_embedding = model.encode(query, normalize_embeddings=True).tolist()
         
-        # Ищем в Qdrant
-        search_results = client.search(
-            collection_name=COLLECTION_NAME,
-            query_vector=query_embedding,
+        # Ищем в Qdrant - используем правильный метод query_points
+        query_obj = Query(
+            vector=query_embedding,
             limit=limit
+        )
+        search_results = client.query_points(
+            collection_name=COLLECTION_NAME,
+            query=query_obj
         )
         
         results = []
-        for result in search_results:
+        # QueryResponse содержит points
+        points_list = search_results.points if hasattr(search_results, 'points') else []
+        
+        for result in points_list:
             # Преобразуем payload обратно в формат услуги
-            payload = result.payload
+            payload = result.payload if hasattr(result, 'payload') else {}
+            score = result.score if hasattr(result, 'score') else 0.0
+            
             service = {
-                "id": payload.get("id"),
-                "title": payload.get("title"),
+                "id": payload.get("id", 0),
+                "title": payload.get("title", ""),
                 "price": payload.get("price", 0),
                 "price_str": payload.get("price_str", ""),
                 "duration": payload.get("duration", 0),
@@ -234,7 +249,7 @@ def search_service(query: str, limit: int = 3) -> List[Dict]:
                 "master2": payload.get("master2", ""),
                 "type": payload.get("type", ""),
                 "additional_services": payload.get("additional_services", ""),
-                "score": result.score  # Схожесть (0-1)
+                "score": score  # Схожесть (0-1)
             }
             results.append(service)
         
