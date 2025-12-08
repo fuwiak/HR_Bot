@@ -2106,6 +2106,29 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             parsed_data["datetime"] = f"{today.strftime('%d.%m.%Y')} {hour.zfill(2)}:{minute.zfill(2)}"
                             log.info(f"✅ Найдена дата/время из ответа AI (сегодня): {parsed_data['datetime']}")
             
+            # КРИТИЧЕСКОЕ: Если услуга не найдена, но есть мастер и время, используем последнюю упомянутую услугу из истории
+            if not parsed_data.get("service") and parsed_data.get("master") and parsed_data.get("datetime"):
+                # Ищем последнюю упомянутую услугу в полной истории чата
+                services = get_services()
+                history_full = get_history(user_id)  # Полная история, не только последние 50 символов
+                history_full_lower = history_full.lower()
+                
+                # Ищем все упоминания услуг в истории и берем последнюю
+                last_mentioned_service = None
+                last_position = -1
+                for service in services:
+                    service_title = service.get("title", "").lower()
+                    position = history_full_lower.rfind(service_title)  # Ищем последнее вхождение
+                    if position > last_position:
+                        last_position = position
+                        last_mentioned_service = service.get("title")
+                
+                if last_mentioned_service:
+                    parsed_data["service"] = last_mentioned_service
+                    log.info(f"✅ Использована последняя упомянутая услуга из полной истории: {last_mentioned_service}")
+                else:
+                    log.warning(f"⚠️ Не удалось найти услугу даже в полной истории чата")
+            
             # Если есть все данные, создаем запись
             log.info(f"🔍 Финальная проверка данных для создания записи: service={parsed_data.get('service')}, master={parsed_data.get('master')}, datetime={parsed_data.get('datetime')}")
             
