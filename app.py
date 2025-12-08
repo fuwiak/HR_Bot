@@ -41,12 +41,13 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "x-ai/grok-4.1-fast:free")
 MEMORY_TURNS = 6
 
 # Валидация при старте
-if not OPENROUTER_API_URL.startswith("https://"):
-    log.warning(f"⚠️ Подозрительный URL OpenRouter: {OPENROUTER_API_URL}")
+if OPENROUTER_API_URL and not OPENROUTER_API_URL.startswith("https://"):
+    logging.warning(f"⚠️ Подозрительный URL OpenRouter: {OPENROUTER_API_URL}")
 
-# Google Sheets конфигурация (placeholder - будет реализовано)
+# Google Sheets конфигурация
 GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
-GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID")
+# Spreadsheet ID из URL: https://docs.google.com/spreadsheets/d/1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU
+GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU")
 USE_GOOGLE_SHEETS = bool(GOOGLE_SHEETS_CREDENTIALS_PATH and GOOGLE_SHEETS_SPREADSHEET_ID)
 
 BOOKING_KEYWORDS = [
@@ -255,16 +256,30 @@ def get_api_data_for_ai():
         for service in services:
             name = service.get("title", "Без названия")
             price = service.get("price", 0)
+            price_str = service.get("price_str", "")
             duration = service.get("duration", 0)
             master = service.get("master", "")
+            master1 = service.get("master1", "")
+            master2 = service.get("master2", "")
             
             data_text += f"- {name}"
-            if price > 0:
+            
+            # Отображаем цену (приоритет строковому формату с диапазоном)
+            if price_str and ("–" in price_str or "-" in price_str):
+                data_text += f" ({price_str} ₽)"
+            elif price > 0:
                 data_text += f" ({price} ₽)"
+                
             if duration > 0:
                 data_text += f" ({duration} мин)"
-            if master:
-                data_text += f" - {master}"
+            
+            # Отображаем мастеров
+            master_display = master1
+            if master2:
+                master_display += f" или {master2}"
+            if master_display:
+                data_text += f" - {master_display}"
+            
             data_text += "\n"
         
         data_text += "\nДоступные мастера:\n"
@@ -283,9 +298,12 @@ def get_api_data_for_ai():
                 service_names = []
                 for service in master_services:
                     service_name = service.get("title", "")
+                    price_str = service.get("price_str", "")
                     price = service.get("price", 0)
                     if service_name:
-                        if price > 0:
+                        if price_str and ("–" in price_str or "-" in price_str):
+                            service_names.append(f"{service_name} ({price_str}₽)")
+                        elif price > 0:
                             service_names.append(f"{service_name} ({price}₽)")
                         else:
                             service_names.append(service_name)
@@ -889,10 +907,9 @@ async def show_services_page(query: CallbackQuery):
         
         for i, service in enumerate(page_services, 1):
             name = service.get("title", "Без названия")
-            price_min = service.get("price_min", 0)
-            price_max = service.get("price_max", 0)
-            cost = service.get("cost", 0)
-            duration = service.get("length", 0)
+            price = service.get("price", 0)
+            price_str = service.get("price_str", "")
+            duration = service.get("duration", 0)
             
             # Красивое форматирование с эмодзи
             if "маникюр" in name.lower():
@@ -901,21 +918,22 @@ async def show_services_page(query: CallbackQuery):
                 emoji = "🦶"
             elif "массаж" in name.lower():
                 emoji = "💆"
+            elif "стрижка" in name.lower():
+                emoji = "✂️"
+            elif "окрашивание" in name.lower() or "тонирование" in name.lower():
+                emoji = "🎨"
+            elif "бритье" in name.lower():
+                emoji = "🪒"
             else:
                 emoji = "✨"
                 
             text += f"{emoji} *{name}*\n"
             
-            # Показываем реальные цены
-            if cost > 0:
-                text += f"   💰 {cost} ₽\n"
-            elif price_min > 0 and price_max > 0:
-                if price_min == price_max:
-                    text += f"   💰 {price_min} ₽\n"
-                else:
-                    text += f"   💰 {price_min}-{price_max} ₽\n"
-            elif price_min > 0:
-                text += f"   💰 от {price_min} ₽\n"
+            # Показываем цены (приоритет строковому формату с диапазоном)
+            if price_str and ("–" in price_str or "-" in price_str):
+                text += f"   💰 {price_str} ₽\n"
+            elif price > 0:
+                text += f"   💰 {price} ₽\n"
                 
             if duration > 0:
                 text += f"   ⏱ {duration} мин\n"
@@ -969,10 +987,9 @@ async def show_services(query: CallbackQuery):
         
         for i, service in enumerate(page_services, 1):
             name = service.get("title", "Без названия")
-            price_min = service.get("price_min", 0)
-            price_max = service.get("price_max", 0)
-            cost = service.get("cost", 0)
-            duration = service.get("length", 0)
+            price = service.get("price", 0)
+            price_str = service.get("price_str", "")
+            duration = service.get("duration", 0)
             
             # Красивое форматирование с эмодзи
             if "маникюр" in name.lower():
@@ -981,21 +998,22 @@ async def show_services(query: CallbackQuery):
                 emoji = "🦶"
             elif "массаж" in name.lower():
                 emoji = "💆"
+            elif "стрижка" in name.lower():
+                emoji = "✂️"
+            elif "окрашивание" in name.lower() or "тонирование" in name.lower():
+                emoji = "🎨"
+            elif "бритье" in name.lower():
+                emoji = "🪒"
             else:
                 emoji = "✨"
                 
             text += f"{emoji} *{name}*\n"
             
-            # Показываем реальные цены - проверяем все поля цен
-            if cost > 0:
-                text += f"   💰 {cost} ₽\n"
-            elif price_min > 0 and price_max > 0:
-                if price_min == price_max:
-                    text += f"   💰 {price_min} ₽\n"
-                else:
-                    text += f"   💰 {price_min}-{price_max} ₽\n"
-            elif price_min > 0:
-                text += f"   💰 от {price_min} ₽\n"
+            # Показываем цены (приоритет строковому формату с диапазоном)
+            if price_str and ("–" in price_str or "-" in price_str):
+                text += f"   💰 {price_str} ₽\n"
+            elif price > 0:
+                text += f"   💰 {price} ₽\n"
                 
             if duration > 0:
                 text += f"   ⏱ {duration} мин\n"
@@ -1062,23 +1080,17 @@ async def show_masters(query: CallbackQuery):
                 text += f"   💰 *Услуги:*\n"
                 for service in master_services:  # Показываем ВСЕ услуги мастера
                     service_name = service.get("title", "")
-                    cost = service.get("cost", 0)
-                    price_min = service.get("price_min", 0)
-                    price_max = service.get("price_max", 0)
+                    price = service.get("price", 0)
+                    price_str = service.get("price_str", "")
                     
                     if service_name:
                         text += f"      • {service_name}"
                         
-                        # Показываем реальные цены - проверяем все поля цен
-                        if cost > 0:
-                            text += f": {cost} ₽"
-                        elif price_min > 0 and price_max > 0:
-                            if price_min == price_max:
-                                text += f": {price_min} ₽"
-                            else:
-                                text += f": {price_min}-{price_max} ₽"
-                        elif price_min > 0:
-                            text += f": от {price_min} ₽"
+                        # Показываем цены (приоритет строковому формату с диапазоном)
+                        if price_str and ("–" in price_str or "-" in price_str):
+                            text += f": {price_str} ₽"
+                        elif price > 0:
+                            text += f": {price} ₽"
                         
                         text += "\n"
         
@@ -1189,9 +1201,12 @@ async def start_booking_process(query: CallbackQuery):
     text += "✨ *Доступные услуги:*\n"
     for service in services[:5]:
         name = service.get('title', 'Услуга')
-        price = service.get('price_min', 0)
-        if price > 0:
-            text += f"• {name} (от {price} ₽)\n"
+        price = service.get('price', 0)
+        price_str = service.get('price_str', '')
+        if price_str and ("–" in price_str or "-" in price_str):
+            text += f"• {name} ({price_str} ₽)\n"
+        elif price > 0:
+            text += f"• {name} ({price} ₽)\n"
         else:
             text += f"• {name}\n"
     
@@ -1410,7 +1425,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         all_services = get_services_with_prices()
                         service_exists = any(service_name.lower() in service.get("title", "").lower() 
                                            for service in all_services)
-                        
+                            
                         if not service_exists:
                             log.warning(f"❌ SERVICE NOT FOUND IN API: {service_name}")
                             await update.message.reply_text(
@@ -1457,7 +1472,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Отправляем ответ только если он не был отправлен ранее
     if answer and not response_sent:  # Проверяем что есть ответ для отправки
-        await update.message.reply_text(answer)
+            await update.message.reply_text(answer)
 
 # ===================== RUN BOT ========================
 def main():

@@ -29,17 +29,19 @@ OPENROUTER_API_URL=https://openrouter.ai/api/v1/chat/completions
 
 ### Google Sheets Credentials Path
 ```
-GOOGLE_SHEETS_CREDENTIALS_PATH=/path/to/credentials.json
+GOOGLE_SHEETS_CREDENTIALS_PATH=./credentials.json
 ```
 - Путь к файлу с credentials для Google Sheets API
 - Если не указано - используется placeholder режим
+- Подробная инструкция: см. `GOOGLE_SHEETS_SETUP.md`
 
 ### Google Sheets Spreadsheet ID
 ```
-GOOGLE_SHEETS_SPREADSHEET_ID=your_spreadsheet_id
+GOOGLE_SHEETS_SPREADSHEET_ID=1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU
 ```
-- ID Google таблицы для хранения записей
-- Если не указано - используется placeholder режим
+- ID Google таблицы (установлен по умолчанию из вашей ссылки)
+- Лист "Ценник" используется для чтения услуг
+- Лист "Запись" используется для записи записей (создается автоматически)
 
 ## Установка переменных в Railway
 
