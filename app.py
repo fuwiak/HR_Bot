@@ -772,7 +772,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-                break
+            break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
