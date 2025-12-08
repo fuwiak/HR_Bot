@@ -25,6 +25,7 @@ load_dotenv()  # <-- loads variables from .env file
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+# OpenRouter API URL - правильный формат
 OPENROUTER_API_URL = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
 
 # ===================== VALIDATION =====================
@@ -34,8 +35,14 @@ if not OPENROUTER_API_KEY:
     raise ValueError("Ошибка: Отсутствует OPENROUTER_API_KEY в .env")
 
 # ===================== CONFIG =========================
-OPENROUTER_MODEL = "x-ai/grok-4.1-fast:free"
+# Модель OpenRouter - можно переопределить через переменную окружения
+# Попробуйте также: "x-ai/grok-beta", "x-ai/grok-2-1212", "grok-beta"
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "x-ai/grok-4.1-fast:free")
 MEMORY_TURNS = 6
+
+# Валидация при старте
+if not OPENROUTER_API_URL.startswith("https://"):
+    log.warning(f"⚠️ Подозрительный URL OpenRouter: {OPENROUTER_API_URL}")
 
 # Google Sheets конфигурация (placeholder - будет реализовано)
 GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
@@ -154,17 +161,50 @@ def openrouter_chat(messages):
         "temperature": 0.7
     }
     try:
+        log.info(f"🌐 Отправка запроса к OpenRouter: {OPENROUTER_API_URL}, модель: {OPENROUTER_MODEL}")
         r = requests.post(OPENROUTER_API_URL, json=data, headers=headers, timeout=30)
+        
+        # Логируем статус ответа
+        log.info(f"📡 Статус ответа OpenRouter: {r.status_code}")
+        
+        if r.status_code == 404:
+            error_text = r.text
+            log.error(f"❌ 404 Not Found - проверьте URL и модель")
+            log.error(f"❌ URL: {OPENROUTER_API_URL}")
+            log.error(f"❌ Модель: {OPENROUTER_MODEL}")
+            log.error(f"❌ Ответ сервера: {error_text}")
+            
+            # Попытка использовать альтернативную модель если текущая недоступна
+            if "model" in error_text.lower() or "not found" in error_text.lower():
+                log.warning(f"⚠️ Модель {OPENROUTER_MODEL} недоступна. Проверьте список доступных моделей на https://openrouter.ai/models")
+                log.warning(f"⚠️ Попробуйте установить OPENROUTER_MODEL=x-ai/grok-beta или другую доступную модель")
+            
+            return "Извините, произошла ошибка подключения к сервису. Пожалуйста, попробуйте позже."
+        
         r.raise_for_status()
         response = r.json()
+        
         if "choices" in response and len(response["choices"]) > 0:
-            return response["choices"][0]["message"]["content"]
+            content = response["choices"][0]["message"]["content"]
+            log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
+            return content
         else:
-            log.error(f"Неожиданный формат ответа OpenRouter: {response}")
+            log.error(f"❌ Неожиданный формат ответа OpenRouter: {response}")
             return "Извините, произошла ошибка при обработке запроса."
-    except requests.exceptions.RequestException as e:
-        log.error(f"Ошибка запроса к OpenRouter API: {e}")
+    except requests.exceptions.HTTPError as e:
+        log.error(f"❌ HTTP ошибка при запросе к OpenRouter API: {e}")
+        log.error(f"❌ Статус: {e.response.status_code if hasattr(e, 'response') else 'N/A'}")
+        log.error(f"❌ Ответ: {e.response.text if hasattr(e, 'response') and e.response else 'N/A'}")
         return "Извините, временно недоступно. Попробуйте позже."
+    except requests.exceptions.RequestException as e:
+        log.error(f"❌ Ошибка запроса к OpenRouter API: {e}")
+        log.error(f"❌ Тип ошибки: {type(e).__name__}")
+        return "Извините, временно недоступно. Попробуйте позже."
+    except Exception as e:
+        log.error(f"❌ Неожиданная ошибка: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return "Извините, произошла ошибка. Попробуйте позже."
 
 # ===================== GOOGLE SHEETS INTEGRATION ===========
 from google_sheets_helper import (
@@ -1334,11 +1374,14 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 # Если не удалось распарсить, используем AI
                 api_data = get_api_data_for_ai()
-                log.info(f"📊 API DATA FOR AI: {api_data}")
+                log.info(f"📊 API DATA FOR AI: {api_data[:200]}...")  # Логируем только начало
+                
+                # Формируем промпт правильно
                 msg = BOOKING_PROMPT.replace("{{api_data}}", api_data).replace("{{message}}", text).replace("{{history}}", history)
-                log.info(f"🤖 AI PROMPT: {msg}")
+                log.info(f"🤖 AI PROMPT длина: {len(msg)} символов")
+                
                 answer = openrouter_chat([{"role": "user", "content": msg}])
-                log.info(f"🤖 AI RESPONSE: {answer}")
+                log.info(f"🤖 AI RESPONSE: {answer[:200]}...")  # Логируем только начало
             
             # Проверяем, содержит ли ответ команду для создания записи
             if "ЗАПИСЬ:" in answer:

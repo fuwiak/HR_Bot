@@ -217,3 +217,4 @@ def check_slot_available(master_name: str, date: str, time: str) -> bool:
     
     return True
 
+
