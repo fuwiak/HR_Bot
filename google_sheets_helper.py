@@ -183,7 +183,7 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 if not row or len(row) < 2:
                     continue
                 
-                # Колонка A: Мужской зал / Женский зал
+                # Колонка A: Мужской зал / Женский зал (может быть заголовок секции)
                 col_a = row[0].strip() if len(row) > 0 else ""
                 # Колонка B: Услуга название
                 service_name = row[1].strip() if len(row) > 1 else ""
