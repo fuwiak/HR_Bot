@@ -178,8 +178,19 @@ def is_booking(text):
     # 1. ПРОВЕРКА: Есть ли название услуги из Google Sheets (самый важный признак)
     try:
         all_services = get_services()
+        log.debug(f"🔍 Проверка '{text}' среди {len(all_services)} услуг из Google Sheets")
+        
+        if not all_services:
+            log.warning(f"⚠️ Список услуг пуст! Проверьте подключение к Google Sheets")
+        else:
+            # Логируем первые несколько услуг для отладки
+            log.debug(f"🔍 Первые услуги: {[s.get('title') for s in all_services[:5]]}")
+        
         for service in all_services:
-            service_title = service.get("title", "").lower()
+            service_title = service.get("title", "").lower().strip()
+            if not service_title:
+                continue
+                
             service_words = set(service_title.split())
             text_words = set(text_lower.split())
             
@@ -211,7 +222,9 @@ def is_booking(text):
                 log.info(f"🔍 BOOKING CHECK: '{text}' -> частичное совпадение услуги '{service.get('title')}'")
                 break
     except Exception as e:
-        log.debug(f"Ошибка при проверке услуг для is_booking: {e}")
+        log.error(f"❌ Ошибка при проверке услуг для is_booking: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
     
     # 2. ПРОВЕРКА: Упоминание мастеров
     try:

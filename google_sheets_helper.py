@@ -168,18 +168,22 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             spreadsheet = client.open_by_key(GOOGLE_SHEETS_SPREADSHEET_ID)
             worksheet = spreadsheet.worksheet("Ценник")
             
-            # Получаем все данные
+            # Получаем все данные - используем get_all_values() для получения всех строк
             all_values = worksheet.get_all_values()
             log.info(f"📋 Прочитано {len(all_values)} строк из листа 'Ценник'")
             if len(all_values) > 0:
                 log.info(f"📋 Первая строка (заголовок): {all_values[0]}")
+                # Логируем первые несколько строк для отладки
+                for i, row in enumerate(all_values[:5], 1):
+                    log.info(f"📋 Строка {i}: {row[:7]}")  # Первые 7 колонок
             
             services = []
             current_type = None
             service_id = 1
             
             # Парсим данные (пропускаем заголовок, если есть)
-            for row_idx, row in enumerate(all_values[1:], start=2):  # Начинаем со 2-й строки
+            # ВАЖНО: Строка 1 - это заголовок, строка 2+ - данные
+            for row_idx, row in enumerate(all_values[1:], start=2):  # Начинаем со 2-й строки (пропускаем заголовок)
                 if not row or len(row) < 2:
                     continue
                 
