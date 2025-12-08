@@ -1487,7 +1487,7 @@ async def delete_user_record(query: CallbackQuery, booking_id: str):
                 [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
                 [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
             ]
-        await query.edit_message_text(
+            await query.edit_message_text(
                 f"✅ Запись успешно удалена!\n\n"
                 f"🆔 ID записи: `{booking_id}`",
                 parse_mode='Markdown',
