@@ -223,6 +223,21 @@ from google_sheets_helper import (
     get_available_slots
 )
 
+# ===================== QDRANT VECTOR DATABASE ===========
+try:
+    from qdrant_helper import search_service, index_services, refresh_index
+    QDRANT_AVAILABLE = True
+    log.info("✅ Qdrant модуль загружен")
+except ImportError as e:
+    QDRANT_AVAILABLE = False
+    log.warning(f"⚠️ Qdrant модуль не доступен: {e}")
+    def search_service(query: str, limit: int = 3):
+        return []
+    def index_services(services):
+        return False
+    def refresh_index():
+        return False
+
 def get_services(master_name: str = None) -> List[Dict]:
     """Get available services, optionally filtered by master"""
     log.info(f"📋 Получение услуг (мастер: {master_name or 'все'})...")
@@ -302,20 +317,20 @@ def get_api_data_for_ai():
             
             # Добавляем услуги мастера
             master_services = get_services_for_master(name)
-            if master_services:
+                if master_services:
                 data_text += " - услуги: "
-                service_names = []
-                for service in master_services:
-                    service_name = service.get("title", "")
+                    service_names = []
+                    for service in master_services:
+                        service_name = service.get("title", "")
                     price_str = service.get("price_str", "")
                     price = service.get("price", 0)
-                    if service_name:
+                        if service_name:
                         if price_str and ("–" in price_str or "-" in price_str):
                             service_names.append(f"{service_name} ({price_str}₽)")
                         elif price > 0:
                             service_names.append(f"{service_name} ({price}₽)")
-                        else:
-                            service_names.append(service_name)
+                            else:
+                                service_names.append(service_name)
                 data_text += ", ".join(service_names)
             
             data_text += "\n"
@@ -559,7 +574,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         if master_name.lower() in message_lower:
             result["master"] = master_name
             log.info(f"✅ Найден мастер: {master_name}")
-            break
+                break
     
     # Используем продвинутый поиск мастеров как fallback
     if not result["master"]:
@@ -1436,40 +1451,84 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 api_data = get_api_data_for_ai()
                 log.info(f"📊 API DATA FOR AI: {api_data[:500]}...")  # Логируем больше для проверки
                 
-                # Детерминистически ищем услугу в данных перед отправкой в AI
+                # ВЕКТОРНЫЙ ПОИСК: Используем Qdrant для точного поиска услуги
                 found_service_info = ""
                 try:
-                    all_services = get_services()
-                    text_lower = text.lower()
+                    # Сначала пробуем векторный поиск в Qdrant
+                    if QDRANT_AVAILABLE:
+                        vector_results = search_service(text, limit=1)
+                        if vector_results and len(vector_results) > 0:
+                            service = vector_results[0]
+                            score = service.get("score", 0)
+                            
+                            # Используем результат только если score достаточно высокий (>= 0.5)
+                            if score >= 0.5:
+                                price_str = service.get("price_str", "")
+                                price = service.get("price", 0)
+                                duration = service.get("duration", 0)
+                                master = service.get("master", "")
+                                
+                                # Формируем точную информацию об услуге
+                                if price_str and ("–" in price_str or "-" in price_str):
+                                    price_info = f"{price_str} ₽"
+                                elif price > 0:
+                                    price_info = f"{price} ₽"
+                                else:
+                                    price_info = "уточнить цену"
+                                
+                                found_service_info = f"\n\n⚠️⚠️⚠️ КРИТИЧЕСКИ ВАЖНО - ВЕКТОРНЫЙ ПОИСК ⚠️⚠️⚠️\n"
+                                found_service_info += f"🔍 НАЙДЕНА УСЛУГА: {service.get('title')}\n"
+                                found_service_info += f"💰 ЦЕНА: {price_info} ← ИСПОЛЬЗУЙ ЭТУ ТОЧНУЮ ЦЕНУ ИЗ GOOGLE SHEETS!\n"
+                                found_service_info += f"⏱ ДЛИТЕЛЬНОСТЬ: {duration} минут\n"
+                                found_service_info += f"👤 МАСТЕР: {master}\n"
+                                found_service_info += f"📊 СХОЖЕСТЬ: {score:.2%}\n"
+                                found_service_info += f"\n❌ ЗАПРЕЩЕНО выдумывать цены! Используй ТОЛЬКО эту информацию из Google Sheets!\n"
+                                
+                                log.info(f"✅ Найдена услуга через Qdrant: {service.get('title')} - {price_info} (score: {score:.3f})")
                     
-                    # Ищем точное или частичное совпадение
-                    for service in all_services:
-                        service_title = service.get("title", "").lower()
-                        if service_title in text_lower or any(word in service_title for word in text_lower.split() if len(word) > 3):
-                            price_str = service.get("price_str", "")
-                            price = service.get("price", 0)
-                            duration = service.get("duration", 0)
-                            master = service.get("master", "")
+                    # Fallback: обычный поиск если Qdrant не нашел
+                    if not found_service_info:
+                        all_services = get_services()
+                        text_lower = text.lower()
+                        
+                        # Ищем точное или частичное совпадение
+                        for service in all_services:
+                            service_title = service.get("title", "").lower()
+                            service_words = set(service_title.split())
+                            text_words = set(text_lower.split())
                             
-                            # Формируем точную информацию об услуге
-                            if price_str and ("–" in price_str or "-" in price_str):
-                                price_info = f"{price_str} ₽"
-                            elif price > 0:
-                                price_info = f"{price} ₽"
-                            else:
-                                price_info = "уточнить цену"
-                            
-                            found_service_info = f"\n\n⚠️⚠️⚠️ КРИТИЧЕСКИ ВАЖНО ⚠️⚠️⚠️\n"
-                            found_service_info += f"🔍 НАЙДЕНА УСЛУГА: {service.get('title')}\n"
-                            found_service_info += f"💰 ЦЕНА: {price_info} ← ИСПОЛЬЗУЙ ЭТУ ТОЧНУЮ ЦЕНУ!\n"
-                            found_service_info += f"⏱ ДЛИТЕЛЬНОСТЬ: {duration} минут\n"
-                            found_service_info += f"👤 МАСТЕР: {master}\n"
-                            found_service_info += f"\n❌ ЗАПРЕЩЕНО выдумывать цены! Используй ТОЛЬКО эту информацию!\n"
-                            
-                            log.info(f"✅ Найдена услуга детерминистически: {service.get('title')} - {price_info}")
-                            break
+                            # Проверяем разные варианты совпадения
+                            if (service_title in text_lower or 
+                                text_lower in service_title or
+                                any(word in service_title for word in text_lower.split() if len(word) > 3) or
+                                len(service_words & text_words) >= 2):  # Если совпало 2+ слова
+                                
+                                price_str = service.get("price_str", "")
+                                price = service.get("price", 0)
+                                duration = service.get("duration", 0)
+                                master = service.get("master", "")
+                                
+                                # Формируем точную информацию об услуге
+                                if price_str and ("–" in price_str or "-" in price_str):
+                                    price_info = f"{price_str} ₽"
+                                elif price > 0:
+                                    price_info = f"{price} ₽"
+                                else:
+                                    price_info = "уточнить цену"
+                                
+                                found_service_info = f"\n\n⚠️⚠️⚠️ КРИТИЧЕСКИ ВАЖНО ⚠️⚠️⚠️\n"
+                                found_service_info += f"🔍 НАЙДЕНА УСЛУГА: {service.get('title')}\n"
+                                found_service_info += f"💰 ЦЕНА: {price_info} ← ИСПОЛЬЗУЙ ЭТУ ТОЧНУЮ ЦЕНУ ИЗ GOOGLE SHEETS!\n"
+                                found_service_info += f"⏱ ДЛИТЕЛЬНОСТЬ: {duration} минут\n"
+                                found_service_info += f"👤 МАСТЕР: {master}\n"
+                                found_service_info += f"\n❌ ЗАПРЕЩЕНО выдумывать цены! Используй ТОЛЬКО эту информацию!\n"
+                                
+                                log.info(f"✅ Найдена услуга детерминистически: {service.get('title')} - {price_info}")
+                                break
                 except Exception as e:
                     log.error(f"❌ Ошибка поиска услуги: {e}")
+                    import traceback
+                    log.error(f"❌ Traceback: {traceback.format_exc()}")
                 
                 # Формируем промпт правильно
                 msg = BOOKING_PROMPT.replace("{{api_data}}", api_data).replace("{{message}}", text).replace("{{history}}", history).replace("{{service_info}}", found_service_info)
@@ -1558,6 +1617,23 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ===================== RUN BOT ========================
 def main():
+    # Инициализация: индексируем услуги в Qdrant при старте
+    if QDRANT_AVAILABLE:
+        try:
+            log.info("🔄 Инициализация Qdrant: индексирование услуг из Google Sheets...")
+            services = get_services()
+            if services:
+                if index_services(services):
+                    log.info(f"✅ Успешно проиндексировано {len(services)} услуг в Qdrant")
+                else:
+                    log.warning("⚠️ Не удалось проиндексировать услуги в Qdrant")
+            else:
+                log.warning("⚠️ Нет услуг для индексации в Qdrant")
+        except Exception as e:
+            log.error(f"❌ Ошибка инициализации Qdrant: {e}")
+            import traceback
+            log.error(f"❌ Traceback: {traceback.format_exc()}")
+    
     # Start Telegram bot
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     

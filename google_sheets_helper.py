@@ -237,10 +237,16 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 log.error(error_msg)
                 raise Exception(error_msg)
             
+            if not services:
+                error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Не найдено ни одной услуги в Google Sheets (лист 'Ценник')!"
+                log.error(error_msg)
+                raise Exception(error_msg)
+            
             # Обновляем кэш
             _services_cache = services
             _services_cache_time = datetime.now()
             log.info(f"✅ Получено {len(services)} услуг из Google Sheets")
+            
             # Логируем первые несколько услуг для проверки
             for s in services[:10]:
                 log.info(f"  📋 {s.get('title')} - цена: '{s.get('price_str')}' ({s.get('price')}₽) - {s.get('duration')} мин - мастер: {s.get('master')}")
@@ -250,6 +256,14 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             if briтье_услуги:
                 for s in briтье_услуги:
                     log.info(f"  🔍 НАЙДЕНО 'Бритье головы': {s.get('title')} - цена: '{s.get('price_str')}' ({s.get('price')}₽)")
+            
+            # Автоматически обновляем индекс в Qdrant
+            try:
+                from qdrant_helper import index_services as qdrant_index
+                if qdrant_index(services):
+                    log.info("✅ Индекс Qdrant обновлен автоматически")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось обновить индекс Qdrant: {e}")
             
             if master_name:
                 filtered_services = [s for s in services if master_name.lower() in (s.get("master1", "") + " " + s.get("master2", "")).lower()]
