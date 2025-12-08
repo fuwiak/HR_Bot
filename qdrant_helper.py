@@ -9,7 +9,16 @@ from typing import List, Dict, Optional
 from datetime import datetime
 import hashlib
 
-log = logging.getLogger()
+# Получаем логгер, но не используем до настройки логирования в основном приложении
+def get_logger():
+    """Получить логгер, инициализируя его если нужно"""
+    logger = logging.getLogger(__name__)
+    if not logger.handlers:
+        # Если логирование еще не настроено, настраиваем базовую конфигурацию
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    return logger
+
+log = get_logger()
 
 # Попытка импорта Qdrant
 try:
