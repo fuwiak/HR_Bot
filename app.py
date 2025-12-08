@@ -291,7 +291,7 @@ def get_api_data_for_ai():
                 data_text += f" → ЦЕНА: {price_str} ₽"
             elif price > 0:
                 data_text += f" → ЦЕНА: {price} ₽"
-                else:
+            else:
                 data_text += f" → ЦЕНА: уточнить"
                 
             if duration > 0:
