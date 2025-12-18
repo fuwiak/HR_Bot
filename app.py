@@ -3143,11 +3143,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         log.info(f"📤 Получен документ от пользователя {username} (ID: {user_id}): {file_name}")
         
-        # Отправляем статус
+        # Отправляем статус (без Markdown для избежания ошибок с названиями файлов)
         status_msg = await update.message.reply_text(
-            f"⏳ Загружаю документ `{file_name}`...\n"
-            f"Размер: {document.file_size / 1024:.1f} КБ",
-            parse_mode='Markdown'
+            f"⏳ Загружаю документ: {file_name}\n"
+            f"Размер: {document.file_size / 1024:.1f} КБ"
         )
         
         # Скачиваем файл
@@ -3163,9 +3162,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Обновляем статус
         await status_msg.edit_text(
-            f"⏳ Обрабатываю документ `{file_name}`...\n"
-            f"Извлекаю текст и создаю чанки...",
-            parse_mode='Markdown'
+            f"⏳ Обрабатываю документ: {file_name}\n"
+            f"Извлекаю текст и создаю чанки..."
         )
         
         # Обрабатываем документ
@@ -3190,8 +3188,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Загружаем в Qdrant
         await status_msg.edit_text(
             f"⏳ Загружаю в базу знаний...\n"
-            f"Индексирую чанки в Qdrant Cloud...",
-            parse_mode='Markdown'
+            f"Индексирую чанки в Qdrant Cloud..."
         )
         
         result = await upload_to_qdrant(
@@ -3210,20 +3207,18 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if result['success']:
             await status_msg.edit_text(
-                f"✅ *Документ загружен в базу знаний!*\n\n"
-                f"📄 Файл: `{file_name}`\n"
+                f"✅ Документ загружен в базу знаний!\n\n"
+                f"📄 Файл: {file_name}\n"
                 f"📊 Создано чанков: {result['chunks_count']}\n"
-                f"🆔 ID документа: `{result['doc_id']}`\n\n"
+                f"🆔 ID документа: {result['doc_id']}\n\n"
                 f"Теперь вы можете задавать вопросы по этому документу:\n"
                 f"• Просто напишите вопрос в чате\n"
-                f"• Или используйте `/rag_search [запрос]`",
-                parse_mode='Markdown'
+                f"• Или используйте /rag_search [запрос]"
             )
             log.info(f"✅ Документ {file_name} успешно загружен (ID: {result['doc_id']})")
         else:
             await status_msg.edit_text(
-                f"❌ Ошибка загрузки документа:\n{result['error']}",
-                parse_mode='Markdown'
+                f"❌ Ошибка загрузки документа:\n{result['error']}"
             )
             log.error(f"❌ Ошибка загрузки {file_name}: {result['error']}")
             
