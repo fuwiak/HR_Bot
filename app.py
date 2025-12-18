@@ -3279,7 +3279,7 @@ async def upload_to_qdrant(text_content: str, file_name: str, user_id: int, user
     """Загрузка документа в Qdrant с чанкингом"""
     try:
         from qdrant_loader import QdrantLoader
-        from qdrant_helper import get_embedding
+        from qdrant_helper import generate_embedding_async
         import uuid
         
         # Создаем уникальный ID для документа
@@ -3329,14 +3329,17 @@ async def upload_to_qdrant(text_content: str, file_name: str, user_id: int, user
         points = []
         for doc in documents:
             # Получаем эмбеддинг для чанка
-            embedding = await get_embedding(doc["text"])
+            embedding = await generate_embedding_async(doc["text"])
             if embedding is None:
                 log.warning(f"⚠️ Не удалось получить эмбеддинг для чанка {doc['id']}")
                 continue
             
             from qdrant_client.models import PointStruct
+            # Создаем числовой ID из hash строки
+            point_id = abs(hash(doc["id"])) % (10 ** 10)
+            
             point = PointStruct(
-                id=doc["id"],
+                id=point_id,
                 vector=embedding,
                 payload={
                     "text": doc["text"],
@@ -3346,7 +3349,8 @@ async def upload_to_qdrant(text_content: str, file_name: str, user_id: int, user
                     "uploaded_by": doc["metadata"]["uploaded_by"],
                     "user_id": doc["metadata"]["user_id"],
                     "category": doc["metadata"]["category"],
-                    "title": doc["metadata"]["title"]
+                    "title": doc["metadata"]["title"],
+                    "chunk_id": doc["id"]  # Сохраняем строковый ID в payload
                 }
             )
             points.append(point)
