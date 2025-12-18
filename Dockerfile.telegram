@@ -30,9 +30,12 @@ COPY *.py ./
 COPY templates/ ./templates/
 COPY config.yaml .
 COPY dashboard_static/ ./dashboard_static/ 2>/dev/null || true
+# НЕ копируем start.sh - используем прямой запуск Python
+# start.sh используется только в основном Dockerfile для docker-compose
 
 # Expose port for Telegram webhook
 EXPOSE 8080
 
-# Run only Telegram bot
-CMD ["python", "app.py"]
+# Run only Telegram bot (прямой запуск, без start.sh)
+# Это важно для Railway - избегаем проблем с trap в sh
+CMD ["python", "-u", "app.py"]
