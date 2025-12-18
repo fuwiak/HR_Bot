@@ -2351,8 +2351,62 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         answer += f"\n\n❌ *Ошибка при создании записи:* {str(e)}"
     else:
-        msg = CHAT_PROMPT.replace("{{history}}", get_history(user_id)).replace("{{message}}", text)
-        answer = await openrouter_chat([{"role": "user", "content": msg}])
+        # Проверяем, является ли это общим вопросом (не связанным с HR/бизнесом)
+        general_question_keywords = [
+            "how are you", "как дела", "как поживаешь", "привет", "hello", "hi",
+            "что нового", "what's new", "как жизнь", "how's life"
+        ]
+        is_general_question = any(keyword in text.lower() for keyword in general_question_keywords)
+        
+        if is_general_question:
+            # Отвечаем на общие вопросы с напоминанием о HR контексте
+            answer = (
+                "Привет! У меня всё отлично, спасибо! 😊\n\n"
+                "Напоминаю, что я AI-ассистент Анастасии Новосёловой, специализируюсь на:\n"
+                "• Подборе персонала (рекрутинг)\n"
+                "• Автоматизации HR-процессов\n"
+                "• Бизнес-анализе и консалтинге\n\n"
+                "Чем могу помочь в рамках HR консалтинга? 💼"
+            )
+            log.info("💬 Общий вопрос обработан с напоминанием о HR контексте")
+        else:
+            # Обычная обработка через RAG и LLM
+            # Обычная обработка через RAG и LLM
+            msg = CONSULTING_PROMPT.replace("{{history}}", get_history(user_id)).replace("{{message}}", text)
+            
+            # Пытаемся использовать RAG для контекста
+            rag_context = ""
+            try:
+                if QDRANT_AVAILABLE:
+                    from rag_chain import RAGChain
+                    rag_chain = RAGChain()
+                    rag_result = await rag_chain.query(text, use_rag=True, top_k=3)
+                    if rag_result.get("context_docs"):
+                        context_text = "\n".join([doc.get("content", "")[:200] for doc in rag_result["context_docs"][:3]])
+                        rag_context = f"Релевантная информация из базы знаний:\n{context_text}\n\n"
+            except Exception as e:
+                log.warning(f"⚠️ Ошибка RAG поиска: {e}")
+            
+            msg = msg.replace("{{rag_context}}", rag_context)
+            
+            # Используем generate_with_fallback для надежности
+            try:
+                from llm_helper import generate_with_fallback
+                answer = await generate_with_fallback([{"role": "user", "content": msg}], use_system_message=True, system_content="Ты AI-ассистент HR консультанта. Отвечай профессионально и по делу.")
+            except Exception as e:
+                log.error(f"❌ Ошибка вызова generate_with_fallback: {e}")
+                answer = None
+            
+            # Если LLM недоступен, используем fallback ответ
+            if not answer or answer.strip() == "":
+                answer = (
+                    "Извините, сейчас у меня технические проблемы с подключением к AI.\n\n"
+                    "Но я могу помочь вам с вопросами по:\n"
+                    "• Подбору персонала\n"
+                    "• HR-процессам\n"
+                    "• Бизнес-консалтингу\n\n"
+                    "Попробуйте переформулировать вопрос или обратитесь позже."
+                )
 
     add_memory(user_id, "assistant", answer)
     

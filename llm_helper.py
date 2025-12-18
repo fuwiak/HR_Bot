@@ -44,11 +44,19 @@ async def deepseek_chat(
         log.error("❌ OPENROUTER_API_KEY не установлен")
         return None
     
+    # Очищаем API ключ от пробелов и переносов строк
+    api_key_clean = OPENROUTER_API_KEY.strip().replace('\n', '').replace('\r', '') if OPENROUTER_API_KEY else None
+    
+    if not api_key_clean:
+        log.error("❌ OPENROUTER_API_KEY пустой или не установлен")
+        return None
+    
+    app_url = os.getenv("APP_URL", "https://hr2137-bot.railway.app").strip()
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {api_key_clean}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/HR2137_bot",
-        "X-Title": "HR2137_bot"
+        "HTTP-Referer": app_url,
+        "X-Title": "HR2137 Bot RAG"
     }
     
     # Если есть system message, добавляем его первым
@@ -154,7 +162,14 @@ async def gigachat_chat(
     try:
         log.info(f"🌐 [GigaChat] Отправка запроса к GigaChat API")
         
-        async with aiohttp.ClientSession() as session:
+        # Отключаем проверку SSL для GigaChat (самоподписанный сертификат)
+        import ssl
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(
                 GIGACHAT_API_URL,
                 json=data,
