@@ -280,71 +280,164 @@ async def create_task(
         log.error(f"❌ Traceback: {traceback.format_exc()}")
         return None
 
-async def update_task_status(task_id: str, status: str) -> bool:
-    """Обновить статус задачи"""
-    if not WEEEK_API_KEY:
-        return False
+async def get_tasks(
+    day: Optional[str] = None,
+    user_id: Optional[str] = None,
+    project_id: Optional[int] = None,
+    completed: Optional[bool] = None,
+    board_id: Optional[int] = None,
+    board_column_id: Optional[int] = None,
+    task_type: Optional[str] = None,
+    priority: Optional[int] = None,
+    tags: Optional[List[str]] = None,
+    search: Optional[str] = None,
+    per_page: int = 50,
+    offset: int = 0,
+    sort_by: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    all_tasks: bool = False
+) -> Dict[str, any]:
+    """
+    Получить задачи из WEEEK
+    API: GET /tm/tasks
     
-    url = f"{WEEEK_API_URL}/tasks/{task_id}"
+    Args:
+        day: Дата в формате dd.mm.yyyy
+        user_id: ID пользователя
+        project_id: ID проекта
+        completed: Показать только завершенные (True/False)
+        board_id: ID доски
+        board_column_id: ID колонки доски
+        task_type: Тип задачи (action, meet, call)
+        priority: Приоритет (0=Low, 1=Medium, 2=High, 3=Hold)
+        tags: Список ID тегов
+        search: Текст для поиска в названии и описании
+        per_page: Количество задач на страницу
+        offset: Смещение для пагинации
+        sort_by: Сортировка (name, type, priority, duration, overdue, created, date)
+        start_date: Начальная дата в формате dd.mm.yyyy (требуется с endDate)
+        end_date: Конечная дата в формате dd.mm.yyyy (требуется с startDate)
+        all_tasks: Показать все задачи включая удаленные и завершенные
+    
+    Returns:
+        Dict с ключами: success, tasks (список), hasMore (bool)
+    """
+    if not WEEEK_API_KEY:
+        log.error("❌ WEEEK_API_KEY не установлен")
+        return {"success": False, "tasks": [], "hasMore": False}
+    
+    url = f"{WEEEK_API_URL}/tm/tasks"
     headers = get_headers()
     
-    data = {"status": status}
+    # Формируем параметры запроса
+    params = {
+        "perPage": per_page,
+        "offset": offset
+    }
+    
+    if day:
+        params["day"] = day
+    if user_id:
+        params["userId"] = user_id
+    if project_id:
+        params["projectId"] = project_id
+    if completed is not None:
+        params["completed"] = str(completed).lower()
+    if board_id:
+        params["boardId"] = board_id
+    if board_column_id:
+        params["boardColumnId"] = board_column_id
+    if task_type:
+        params["type"] = task_type
+    if priority is not None:
+        params["priority"] = priority
+    if tags:
+        params["tags"] = tags
+    if search:
+        params["search"] = search
+    if sort_by:
+        params["sortBy"] = sort_by
+    if start_date and end_date:
+        params["startDate"] = start_date
+        params["endDate"] = end_date
+    if all_tasks:
+        params["all"] = "true"
     
     try:
+        log.info(f"📤 [WEEEK] Запрос задач с параметрами: {params}")
+        
         async with aiohttp.ClientSession() as session:
-            async with session.patch(url, json=data, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                return response.status < 400
+            async with session.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                response_text = await response.text()
+                
+                if response.status >= 400:
+                    log.error(f"❌ [WEEEK] Ошибка получения задач: {response.status}")
+                    log.error(f"❌ Response: {response_text[:500]}")
+                    return {"success": False, "tasks": [], "hasMore": False}
+                
+                result = await response.json() if response_text else {}
+                
+                # API возвращает {"success": true, "tasks": [...], "hasMore": false}
+                if isinstance(result, dict):
+                    tasks = result.get("tasks", [])
+                    has_more = result.get("hasMore", False)
+                    log.info(f"✅ [WEEEK] Получено задач: {len(tasks)}, hasMore: {has_more}")
+                    return {
+                        "success": True,
+                        "tasks": tasks,
+                        "hasMore": has_more
+                    }
+                else:
+                    log.error(f"❌ Неожиданный формат ответа: {type(result)}")
+                    return {"success": False, "tasks": [], "hasMore": False}
+                
     except Exception as e:
-        log.error(f"❌ [WEEEK] Ошибка обновления статуса задачи: {e}")
-        return False
-
-# ===================== DEADLINES AND REMINDERS =====================
+        log.error(f"❌ [WEEEK] Ошибка получения задач: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return {"success": False, "tasks": [], "hasMore": False}
 
 async def get_project_deadlines(days_ahead: int = 7) -> List[Dict]:
     """
-    Получить список задач с дедлайнами в ближайшие дни
+    Получить задачи с ближайшими дедлайнами (упрощенная версия)
+    Использует get_tasks() с фильтром по датам
     
     Args:
         days_ahead: Количество дней вперед для проверки
     
     Returns:
-        Список задач с приближающимися дедлайнами
+        Список задач с дедлайнами
     """
-    if not WEEEK_API_KEY or not WEEEK_WORKSPACE_ID:
-        return []
+    # Вычисляем даты в формате dd.mm.yyyy
+    start_date = datetime.now().strftime("%d.%m.%Y")
+    end_date = (datetime.now() + timedelta(days=days_ahead)).strftime("%d.%m.%Y")
     
-    # Здесь нужно использовать реальный API endpoint для получения задач
-    # Это примерная реализация, нужно адаптировать под реальный API WEEEK
-    url = f"{WEEEK_API_URL}/tasks"
-    headers = get_headers()
-    params = {
-        "workspace_id": WEEEK_WORKSPACE_ID,
-        "due_date_from": datetime.now().isoformat(),
-        "due_date_to": (datetime.now() + timedelta(days=days_ahead)).isoformat()
-    }
+    log.info(f"📅 [WEEEK] Получаю задачи с дедлайнами: {start_date} - {end_date}")
     
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                if response.status >= 400:
-                    return []
-                
-                result = await response.json()
-                tasks = result.get("tasks", result.get("data", []))
-                
-                upcoming_tasks = []
-                for task in tasks:
-                    if task.get("due_date"):
-                        upcoming_tasks.append({
-                            "id": task.get("id"),
-                            "name": task.get("name"),
-                            "project_id": task.get("project_id"),
-                            "due_date": task.get("due_date"),
-                            "status": task.get("status")
-                        })
-                
-                return upcoming_tasks
-    except Exception as e:
-        log.error(f"❌ [WEEEK] Ошибка получения дедлайнов: {e}")
+    result = await get_tasks(
+        completed=False,
+        start_date=start_date,
+        end_date=end_date,
+        per_page=100
+    )
+    
+    if result["success"]:
+        tasks = result["tasks"]
+        log.info(f"✅ [WEEEK] Найдено задач с дедлайнами: {len(tasks)}")
+        
+        # Форматируем для обратной совместимости
+        formatted_tasks = []
+        for task in tasks:
+            formatted_tasks.append({
+                "id": task.get("id"),
+                "name": task.get("title", task.get("name", "Без названия")),
+                "project_id": task.get("projectId"),
+                "due_date": task.get("dueDate", task.get("day")),
+                "status": "completed" if task.get("completed") else "active"
+            })
+        
+        return formatted_tasks
+    else:
         return []
 
