@@ -37,22 +37,29 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 EMBEDDING_API_KEY = OPENROUTER_API_KEY or OPENAI_API_KEY  # Приоритет OpenRouter
 
+# ВАЖНО: Коллекция в Qdrant создана с размерностью 1536
+# Поэтому всегда используем модель с этой размерностью или дополняем вектор
+TARGET_DIMENSION = 1536  # Размерность коллекции в Qdrant
+
 # Определяем URL и модель в зависимости от того, какой API ключ используется
-if OPENROUTER_API_KEY:
-    # Используем OpenRouter с Qwen3-Embedding-8B (основная модель, поддерживает русский)
-    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")  # Основная модель через OpenRouter
-    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1024"))  # Размерность для Qwen3-Embedding-8B
-elif OPENAI_API_KEY:
-    # Используем OpenAI напрямую (fallback)
+if OPENAI_API_KEY:
+    # Используем OpenAI напрямую (приоритет, т.к. коллекция на 1536)
     EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://api.openai.com/v1/embeddings")
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1536"))  # Размерность для text-embedding-3-small
-else:
-    # Значения по умолчанию (если ключи не установлены)
+    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))
+    log.info(f"🔧 Используется OpenAI API для эмбеддингов (модель: {EMBEDDING_MODEL}, размерность: {EMBEDDING_DIMENSION})")
+elif OPENROUTER_API_KEY:
+    # Используем OpenRouter с Qwen3-Embedding-8B (нужно дополнять до 1536)
     EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")
-    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
+    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))  # Целевая размерность
+    log.warning(f"⚠️ Используется OpenRouter (модель: {EMBEDDING_MODEL}, нативная размерность: 1024)")
+    log.warning(f"⚠️ Вектора будут дополнены до {TARGET_DIMENSION} для совместимости с Qdrant")
+else:
+    # Значения по умолчанию
+    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://api.openai.com/v1/embeddings")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))
 
 # Конфигурация
 # По умолчанию используем Qdrant Cloud (если есть API ключ) или локальный сервер
@@ -144,19 +151,26 @@ async def generate_embedding_async(text: str) -> Optional[List[float]]:
                 if "data" in result and len(result["data"]) > 0:
                     embedding = result["data"][0]["embedding"]
                     embedding_size = len(embedding)
-                    log.debug(f"✅ Эмбеддинг сгенерирован через API (размерность: {embedding_size})")
                     
-                    # Проверяем размерность и обрезаем если нужно
+                    # КРИТИЧНО: Всегда приводим к целевой размерности
                     if embedding_size != _embedding_dimension:
-                        log.warning(f"⚠️ Размерность эмбеддинга ({embedding_size}) не совпадает с ожидаемой ({_embedding_dimension})")
+                        log.warning(f"⚠️ Размерность эмбеддинга ({embedding_size}) != целевой ({_embedding_dimension})")
                         if embedding_size > _embedding_dimension:
                             # Обрезаем до нужной размерности
                             embedding = embedding[:_embedding_dimension]
-                            log.info(f"✂️ Эмбеддинг обрезан до {_embedding_dimension} измерений")
+                            log.info(f"✂️ Эмбеддинг обрезан: {embedding_size} → {_embedding_dimension}")
                         else:
                             # Дополняем нулями если меньше
-                            embedding = embedding + [0.0] * (_embedding_dimension - embedding_size)
-                            log.info(f"📌 Эмбеддинг дополнен до {_embedding_dimension} измерений")
+                            padding_size = _embedding_dimension - embedding_size
+                            embedding = embedding + [0.0] * padding_size
+                            log.info(f"📌 Эмбеддинг дополнен: {embedding_size} → {_embedding_dimension} (+{padding_size} нулей)")
+                    else:
+                        log.debug(f"✅ Эмбеддинг сгенерирован (размерность: {embedding_size})")
+                    
+                    # Финальная проверка
+                    if len(embedding) != _embedding_dimension:
+                        log.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА: размерность {len(embedding)} != {_embedding_dimension}")
+                        return None
                     
                     return embedding
                 else:
