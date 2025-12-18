@@ -414,3 +414,4 @@ async def test_telegram_bot_commands_integration():
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
 
+

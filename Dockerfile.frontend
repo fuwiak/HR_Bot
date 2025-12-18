@@ -47,3 +47,4 @@ ENV HOSTNAME="0.0.0.0"
 
 # Next.js standalone mode - запускаем server.js
 CMD ["node", "server.js"]
+

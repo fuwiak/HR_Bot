@@ -193,3 +193,4 @@ def start_background_tasks(telegram_bot, enable_hrtime: bool = True, enable_emai
     
     return tasks
 
+

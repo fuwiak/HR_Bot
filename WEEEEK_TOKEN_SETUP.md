@@ -67,3 +67,4 @@ WEEEK_API_KEY = os.getenv("WEEEEK_TOKEN") or os.getenv("WEEEK_API_KEY")
 - Старое имя переменной `WEEEK_API_KEY` также поддерживается для обратной совместимости
 - Но рекомендуется использовать новое имя `WEEEEK_TOKEN` как указано в документации
 
+

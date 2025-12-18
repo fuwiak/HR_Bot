@@ -633,3 +633,4 @@ async def start_deadline_monitor(telegram_bot, check_interval_hours: int = 24):
             log.error(f"❌ [Сценарий 4] Ошибка в фоновой задаче мониторинга: {e}")
             await asyncio.sleep(3600)  # При ошибке ждем час перед повторной попыткой
 
+

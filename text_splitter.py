@@ -186,3 +186,4 @@ class RecursiveCharacterTextSplitter:
             for chunk in chunks:
                 documents.append({"page_content": chunk})
         return documents
+
