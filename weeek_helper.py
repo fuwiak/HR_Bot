@@ -1,6 +1,7 @@
 """
 WEEEK Integration Module
 Интеграция с WEEEK API для управления проектами и задачами
+API Documentation: https://api.weeek.net/public/v1
 """
 import os
 import logging
@@ -13,9 +14,19 @@ log = logging.getLogger()
 
 # ===================== CONFIGURATION =====================
 # Поддерживаем оба варианта для обратной совместимости
-WEEEK_API_KEY = os.getenv("WEEEEK_TOKEN") or os.getenv("WEEEK_API_KEY")
+WEEEK_API_KEY = os.getenv("WEEEEK_TOKEN") or os.getenv("WEEEK_API_KEY") or os.getenv("WEEEK_TOKEN")
 WEEEK_API_URL = os.getenv("WEEEK_API_URL", "https://api.weeek.net/public/v1")
 WEEEK_WORKSPACE_ID = os.getenv("WEEEK_WORKSPACE_ID")
+
+log.info(f"🔧 WEEEK API URL: {WEEEK_API_URL}")
+if WEEEK_API_KEY:
+    log.info(f"✅ WEEEK API KEY установлен (длина: {len(WEEEK_API_KEY)})")
+else:
+    log.warning("⚠️ WEEEK API KEY не установлен!")
+if WEEEK_WORKSPACE_ID:
+    log.info(f"✅ WEEEK WORKSPACE ID: {WEEEK_WORKSPACE_ID}")
+else:
+    log.warning("⚠️ WEEEK WORKSPACE ID не установлен!")
 
 # ===================== HELPER FUNCTIONS =====================
 
@@ -135,16 +146,17 @@ async def get_project(project_id: str) -> Optional[Dict]:
 
 async def get_projects() -> List[Dict]:
     """
-    Получить список всех проектов в workspace
+    Получить список всех проектов
+    API: GET /ws/projects
     
     Returns:
         Список словарей с данными проектов
     """
-    if not WEEEK_API_KEY or not WEEEK_WORKSPACE_ID:
-        log.error("❌ WEEEK_API_KEY или WEEEK_WORKSPACE_ID не установлены")
+    if not WEEEK_API_KEY:
+        log.error("❌ WEEEK_API_KEY не установлен")
         return []
     
-    url = f"{WEEEK_API_URL}/workspaces/{WEEEK_WORKSPACE_ID}/projects"
+    url = f"{WEEEK_API_URL}/ws/projects"
     headers = get_headers()
     
     try:
@@ -152,15 +164,27 @@ async def get_projects() -> List[Dict]:
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 if response.status >= 400:
                     error_text = await response.text()
-                    log.error(f"❌ [WEEEK] Ошибка получения списка проектов: {response.status} - {error_text}")
+                    log.error(f"❌ [WEEEK] Ошибка получения проектов: {response.status}")
+                    log.error(f"❌ Response: {error_text[:500]}")
                     return []
                 
                 result = await response.json()
-                projects = result if isinstance(result, list) else result.get("projects", [])
+                
+                # API возвращает {"success": true, "projects": [...]}
+                if isinstance(result, dict) and "projects" in result:
+                    projects = result["projects"]
+                elif isinstance(result, list):
+                    projects = result
+                else:
+                    log.error(f"❌ Неожиданный формат ответа: {type(result)}")
+                    return []
+                
                 log.info(f"✅ [WEEEK] Получено проектов: {len(projects)}")
                 return projects
     except Exception as e:
-        log.error(f"❌ [WEEEK] Ошибка получения списка проектов: {e}")
+        log.error(f"❌ [WEEEK] Ошибка получения проектов: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
         return []
 
 # ===================== TASK OPERATIONS =====================
@@ -169,19 +193,24 @@ async def create_task(
     project_id: str,
     title: str,
     description: str = "",
-    due_date: Optional[str] = None,
-    assignee_id: Optional[str] = None,
+    day: Optional[str] = None,
+    user_id: Optional[str] = None,
+    priority: Optional[int] = None,
+    task_type: str = "action",
     name: Optional[str] = None  # Для обратной совместимости
 ) -> Optional[Dict]:
     """
-    Создать задачу в проекте
+    Создать задачу
+    API: POST /tm/tasks
     
     Args:
         project_id: ID проекта
-        title: Название задачи (или name для обратной совместимости)
+        title: Название задачи
         description: Описание задачи
-        due_date: Дата дедлайна (ISO format)
-        assignee_id: ID исполнителя
+        day: Дата в формате dd.mm.yyyy
+        user_id: ID исполнителя
+        priority: Приоритет (0=Low, 1=Medium, 2=High, 3=Hold)
+        task_type: Тип задачи (action, meet, call)
         name: Альтернативное название (для обратной совместимости)
     
     Returns:
@@ -194,33 +223,57 @@ async def create_task(
     # Используем title или name для обратной совместимости
     task_title = title or name
     if not task_title:
-        log.error("❌ Не указано название задачи (title или name)")
+        log.error("❌ Не указано название задачи")
         return None
     
-    url = f"{WEEEK_API_URL}/projects/{project_id}/tasks"
+    url = f"{WEEEK_API_URL}/tm/tasks"
     headers = get_headers()
     
+    # Обязательные поля по документации API
     data = {
+        "locations": [
+            {
+                "projectId": int(project_id)
+            }
+        ],
         "title": task_title,
-        "description": description
+        "type": task_type
     }
     
-    if due_date:
-        data["due_date"] = due_date
-    if assignee_id:
-        data["assignee_id"] = assignee_id
+    # Опциональные поля
+    if description:
+        data["description"] = description
+    if day:
+        data["day"] = day
+    if user_id:
+        data["userId"] = user_id
+    if priority is not None:
+        data["priority"] = priority
     
     try:
+        log.info(f"📤 [WEEEK] Создаю задачу: {task_title} в проекте {project_id}")
+        log.debug(f"📤 Данные запроса: {data}")
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=data, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                response_text = await response.text()
+                
                 if response.status >= 400:
-                    error_text = await response.text()
-                    log.error(f"❌ [WEEEK] Ошибка создания задачи: {response.status} - {error_text}")
+                    log.error(f"❌ [WEEEK] Ошибка создания задачи: {response.status}")
+                    log.error(f"❌ Response: {response_text[:500]}")
                     return None
                 
-                result = await response.json()
-                log.info(f"✅ [WEEEK] Задача создана: {task_title} в проекте {project_id}")
-                return result
+                result = await response.json() if response_text else {}
+                
+                # API возвращает {"success": true, "task": {...}}
+                if isinstance(result, dict) and "task" in result:
+                    task = result["task"]
+                    log.info(f"✅ [WEEEK] Задача создана: {task_title} (ID: {task.get('id')})")
+                    return task
+                else:
+                    log.warning(f"⚠️ Неожиданный формат ответа, но статус 200")
+                    return result
+                
     except Exception as e:
         log.error(f"❌ [WEEEK] Ошибка создания задачи: {e}")
         import traceback
