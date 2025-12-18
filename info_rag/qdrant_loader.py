@@ -13,8 +13,16 @@ from qdrant_client.models import (
     CollectionStatus, Filter, FieldCondition, MatchValue,
     Query, NamedVector
 )
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+# Используем легкую реализацию text splitter без langchain
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError:
+    # Fallback на легкую реализацию без зависимостей
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from text_splitter import RecursiveCharacterTextSplitter
+# from langchain_huggingface import HuggingFaceEmbeddings  # Не используется, используем API эмбеддинги
 import uuid
 import re
 from collections import defaultdict

@@ -12,7 +12,12 @@ from qdrant_client.models import (
     Distance, VectorParams, PointStruct,
     CollectionStatus, Filter, FieldCondition, MatchValue
 )
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+# Используем легкую реализацию text splitter без langchain
+try:
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+except ImportError:
+    # Fallback на легкую реализацию без зависимостей
+    from text_splitter import RecursiveCharacterTextSplitter
 # Используем API эмбеддинги через qdrant_helper (OpenAI text-embedding-3-small)
 # from langchain_huggingface import HuggingFaceEmbeddings
 import uuid
