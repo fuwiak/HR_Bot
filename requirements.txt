@@ -9,6 +9,7 @@ python-dotenv==1.1.1
 python-telegram-bot[webhooks]==21.6
 requests==2.32.3
 aiohttp>=3.9.0
+aiosmtplib>=3.0.0  # Для async отправки email
 fuzzywuzzy==0.18.0
 python-levenshtein==0.27.1
 sniffio==1.3.1

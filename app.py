@@ -1198,12 +1198,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
         await query.edit_message_text(
             "📖 *Команды бота:*\n\n"
+            "**Основные:**\n"
             "`/start` - главное меню\n"
-            "`/menu` - главное меню\n"
+            "`/menu` - главное меню\n\n"
+            "**База знаний (RAG):**\n"
             "`/rag_search [запрос]` - поиск в базе знаний\n"
-            "`/demo_proposal [запрос]` - генерация КП\n"
-            "`/status` - статус проектов\n"
-            "`/summary [проект]` - суммаризация проекта",
+            "`/rag_stats` - статистика базы\n"
+            "`/rag_docs` - список документов\n\n"
+            "**WEEEK проекты:**\n"
+            "`/weeek_projects` - список проектов\n"
+            "`/weeek_task [проект] | [задача]` - создать задачу\n"
+            "`/status` - статус проектов\n\n"
+            "**Email:**\n"
+            "`/email_check` - проверить новые письма\n"
+            "`/email_draft [текст]` - черновик ответа\n\n"
+            "**Генерация:**\n"
+            "`/demo_proposal [запрос]` - КП\n"
+            "`/hypothesis [описание]` - гипотезы\n"
+            "`/report [проект]` - отчёт\n"
+            "`/summary [проект]` - суммаризация",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -2851,6 +2864,237 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.error(f"❌ Ошибка суммаризации: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
+async def weeek_create_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /weeek_task - создание задачи в Weeek"""
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ Укажите название проекта и задачу.\n"
+            "Использование: `/weeek_task [проект] | [задача]`\n\n"
+            "Пример: `/weeek_task Подбор HR | Согласовать КП`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    try:
+        from weeek_helper import create_task, get_projects
+        
+        # Парсим аргументы (формат: проект | задача)
+        full_text = " ".join(context.args)
+        if "|" in full_text:
+            parts = full_text.split("|", 1)
+            project_name = parts[0].strip()
+            task_name = parts[1].strip()
+        else:
+            await update.message.reply_text(
+                "❌ Неправильный формат. Используйте: `/weeek_task [проект] | [задача]`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        await update.message.reply_text(f"⏳ Создаю задачу '{task_name}' в проекте '{project_name}'...")
+        
+        # Получаем список проектов для поиска ID
+        projects = await get_projects()
+        project_id = None
+        for project in projects:
+            if project_name.lower() in project.get("name", "").lower():
+                project_id = project.get("id")
+                break
+        
+        if not project_id:
+            await update.message.reply_text(
+                f"❌ Проект '{project_name}' не найден в WEEEK.\n"
+                f"Используйте `/weeek_projects` для просмотра списка проектов.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        task = await create_task(
+            project_id=project_id,
+            title=task_name,
+            description=f"Создано через Telegram бот"
+        )
+        
+        if task:
+            await update.message.reply_text(
+                f"✅ *Задача создана в WEEEK!*\n\n"
+                f"Проект: {project_name}\n"
+                f"Задача: {task_name}",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text("❌ Не удалось создать задачу в WEEEK")
+    except Exception as e:
+        log.error(f"❌ Ошибка создания задачи в Weeek: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def weeek_projects_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /weeek_projects - список проектов в Weeek"""
+    try:
+        from weeek_helper import get_projects
+        
+        await update.message.reply_text("⏳ Получаю список проектов из WEEEK...")
+        
+        projects = await get_projects()
+        
+        if projects:
+            text = f"📋 *Проекты в WEEEK* (всего: {len(projects)})\n\n"
+            for i, project in enumerate(projects[:20], 1):
+                name = project.get("name", "Без названия")
+                status = project.get("status", "Не указан")
+                text += f"{i}. *{name}*\n"
+                text += f"   Статус: {status}\n\n"
+            
+            await update.message.reply_text(text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text("❌ Проектов не найдено или WEEEK недоступен")
+    except Exception as e:
+        log.error(f"❌ Ошибка получения проектов: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /email_check - проверка новых писем"""
+    try:
+        from email_helper import check_new_emails
+        
+        await update.message.reply_text("⏳ Проверяю новые письма...")
+        
+        emails = await check_new_emails(since_days=1, limit=5)
+        
+        if emails:
+            text = f"📧 *Новые письма* (последние {len(emails)})\n\n"
+            for i, email_data in enumerate(emails, 1):
+                from_addr = email_data.get("from", "Неизвестно")
+                subject = email_data.get("subject", "Без темы")
+                date = email_data.get("date", "")
+                text += f"{i}. *От:* {from_addr}\n"
+                text += f"   *Тема:* {subject}\n"
+                text += f"   *Дата:* {date}\n\n"
+            
+            await update.message.reply_text(text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text("📧 Новых писем нет или email недоступен")
+    except Exception as e:
+        log.error(f"❌ Ошибка проверки email: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def email_draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /email_draft - подготовка ответа на письмо"""
+    request_text = " ".join(context.args) if context.args else ""
+    
+    if not request_text:
+        await update.message.reply_text(
+            "❌ Укажите тему письма или запрос клиента.\n"
+            "Использование: `/email_draft [текст запроса]`\n\n"
+            "Пример: `/email_draft нужна помощь с подбором персонала`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    try:
+        from lead_processor import generate_proposal
+        
+        await update.message.reply_text("⏳ Готовлю черновик ответа на письмо...")
+        
+        # Генерируем ответ используя generate_proposal
+        draft = await generate_proposal(request_text, lead_contact={})
+        
+        text = f"📧 *Черновик ответа на письмо:*\n\n{draft}\n\n"
+        text += "💡 Отредактируйте черновик и отправьте через WEEEK или почтовый клиент."
+        
+        # Разбиваем длинное сообщение если нужно
+        if len(text) > 4000:
+            parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
+            for part in parts:
+                await update.message.reply_text(part, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(text, parse_mode='Markdown')
+    except Exception as e:
+        log.error(f"❌ Ошибка подготовки черновика: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def hypothesis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /hypothesis - генерация гипотез для проекта"""
+    project_context = " ".join(context.args) if context.args else ""
+    
+    if not project_context:
+        await update.message.reply_text(
+            "❌ Укажите контекст проекта.\n"
+            "Использование: `/hypothesis [описание проекта/задачи]`\n\n"
+            "Пример: `/hypothesis автоматизация HR процессов в IT компании`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    try:
+        from lead_processor import generate_hypothesis
+        
+        await update.message.reply_text("⏳ Генерирую гипотезы...")
+        
+        hypothesis = await generate_hypothesis(project_context)
+        
+        text = f"💡 *Гипотезы для проекта:*\n\n{hypothesis}"
+        
+        # Разбиваем длинное сообщение если нужно
+        if len(text) > 4000:
+            parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
+            for part in parts:
+                await update.message.reply_text(part, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(text, parse_mode='Markdown')
+    except Exception as e:
+        log.error(f"❌ Ошибка генерации гипотез: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /report - генерация отчёта по проекту"""
+    project_name = " ".join(context.args) if context.args else ""
+    
+    if not project_name:
+        await update.message.reply_text(
+            "❌ Укажите название проекта.\n"
+            "Использование: `/report [название проекта]`\n\n"
+            "Пример: `/report Подбор HR-менеджера`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    try:
+        from summary_helper import generate_project_report
+        
+        await update.message.reply_text(f"⏳ Генерирую отчёт по проекту '{project_name}'...")
+        
+        # Получаем информацию о проекте из WEEEK
+        from weeek_helper import get_projects
+        projects = await get_projects()
+        project_data = None
+        for project in projects:
+            if project_name.lower() in project.get("name", "").lower():
+                project_data = project
+                break
+        
+        if not project_data:
+            await update.message.reply_text(f"❌ Проект '{project_name}' не найден в WEEEK")
+            return
+        
+        # Пример данных для отчета (в будущем можно получать из WEEEK)
+        conversations = [{"role": "user", "content": f"Работа над проектом {project_name}"}]
+        
+        report = await generate_project_report(conversations, project_name=project_name)
+        
+        text = f"📊 *Отчёт по проекту '{project_name}':*\n\n{report}"
+        
+        # Разбиваем длинное сообщение если нужно
+        if len(text) > 4000:
+            parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
+            for part in parts:
+                await update.message.reply_text(part, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(text, parse_mode='Markdown')
+    except Exception as e:
+        log.error(f"❌ Ошибка генерации отчёта: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
 # ===================== RUN BOT ========================
 def main():
     # Проверяем доступность Qdrant библиотек еще раз при старте
@@ -2902,6 +3146,18 @@ def main():
     app.add_handler(CommandHandler("demo_proposal", demo_proposal_command))
     app.add_handler(CommandHandler("summary", summary_command))
     app.add_handler(CommandHandler("status", status_command))
+    
+    # WEEEK commands
+    app.add_handler(CommandHandler("weeek_task", weeek_create_task_command))
+    app.add_handler(CommandHandler("weeek_projects", weeek_projects_command))
+    
+    # Email commands
+    app.add_handler(CommandHandler("email_check", email_check_command))
+    app.add_handler(CommandHandler("email_draft", email_draft_command))
+    
+    # Additional commands
+    app.add_handler(CommandHandler("hypothesis", hypothesis_command))
+    app.add_handler(CommandHandler("report", report_command))
     
     # Callback query handler for inline buttons
     app.add_handler(CallbackQueryHandler(button_callback))
