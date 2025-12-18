@@ -80,7 +80,8 @@ logs/
 .dockerignore
 
 # Railway
-.railway/
+.railway/*
+!.railway/*.toml
 
 # Temporary files
 *.tmp

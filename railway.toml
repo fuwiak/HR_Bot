@@ -1,6 +1,12 @@
+# Railway конфигурация по умолчанию
+# Для нескольких сервисов используйте отдельные конфигурации в .railway/
+# или настройте Dockerfile Path в Dashboard для каждого сервиса
+
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+# По умолчанию используется Dockerfile.telegram для Telegram Bot сервиса
+# Для других сервисов настройте в Dashboard: Settings → Build → Dockerfile Path
+dockerfilePath = "Dockerfile.telegram"
 
 [deploy]
 numReplicas = 1

@@ -1,0 +1,11 @@
+# Railway конфигурация для Telegram Bot сервиса
+# Этот файл используется Railway CLI для автоматической настройки
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.telegram"
+
+[deploy]
+numReplicas = 1
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
