@@ -143,7 +143,21 @@ async def generate_embedding_async(text: str) -> Optional[List[float]]:
                 result = await response.json()
                 if "data" in result and len(result["data"]) > 0:
                     embedding = result["data"][0]["embedding"]
-                    log.debug(f"✅ Эмбеддинг сгенерирован через API (размерность: {len(embedding)})")
+                    embedding_size = len(embedding)
+                    log.debug(f"✅ Эмбеддинг сгенерирован через API (размерность: {embedding_size})")
+                    
+                    # Проверяем размерность и обрезаем если нужно
+                    if embedding_size != _embedding_dimension:
+                        log.warning(f"⚠️ Размерность эмбеддинга ({embedding_size}) не совпадает с ожидаемой ({_embedding_dimension})")
+                        if embedding_size > _embedding_dimension:
+                            # Обрезаем до нужной размерности
+                            embedding = embedding[:_embedding_dimension]
+                            log.info(f"✂️ Эмбеддинг обрезан до {_embedding_dimension} измерений")
+                        else:
+                            # Дополняем нулями если меньше
+                            embedding = embedding + [0.0] * (_embedding_dimension - embedding_size)
+                            log.info(f"📌 Эмбеддинг дополнен до {_embedding_dimension} измерений")
+                    
                     return embedding
                 else:
                     log.error(f"❌ Неожиданный формат ответа от API: {result}")

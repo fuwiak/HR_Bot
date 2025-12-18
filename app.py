@@ -3326,34 +3326,53 @@ async def upload_to_qdrant(text_content: str, file_name: str, user_id: int, user
             documents.append(doc)
         
         # Загружаем в Qdrant через loader
+        # Обрабатываем чанки батчами для ускорения
+        from qdrant_client.models import PointStruct
+        
         points = []
-        for doc in documents:
-            # Получаем эмбеддинг для чанка
-            embedding = await generate_embedding_async(doc["text"])
-            if embedding is None:
-                log.warning(f"⚠️ Не удалось получить эмбеддинг для чанка {doc['id']}")
-                continue
+        batch_size = 10  # Обрабатываем по 10 чанков за раз
+        
+        for batch_start in range(0, len(documents), batch_size):
+            batch_end = min(batch_start + batch_size, len(documents))
+            batch_docs = documents[batch_start:batch_end]
             
-            from qdrant_client.models import PointStruct
-            # Создаем числовой ID из hash строки
-            point_id = abs(hash(doc["id"])) % (10 ** 10)
+            log.info(f"📊 Обрабатываю чанки {batch_start + 1}-{batch_end} из {len(documents)}")
             
-            point = PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload={
-                    "text": doc["text"],
-                    "source": doc["metadata"]["source"],
-                    "doc_id": doc["metadata"]["doc_id"],
-                    "chunk_index": doc["metadata"]["chunk_index"],
-                    "uploaded_by": doc["metadata"]["uploaded_by"],
-                    "user_id": doc["metadata"]["user_id"],
-                    "category": doc["metadata"]["category"],
-                    "title": doc["metadata"]["title"],
-                    "chunk_id": doc["id"]  # Сохраняем строковый ID в payload
-                }
-            )
-            points.append(point)
+            # Генерируем эмбеддинги для батча
+            batch_tasks = []
+            for doc in batch_docs:
+                batch_tasks.append(generate_embedding_async(doc["text"]))
+            
+            # Ждем все эмбеддинги батча параллельно
+            batch_embeddings = await asyncio.gather(*batch_tasks, return_exceptions=True)
+            
+            # Создаем точки для батча
+            for doc, embedding in zip(batch_docs, batch_embeddings):
+                if isinstance(embedding, Exception) or embedding is None:
+                    log.warning(f"⚠️ Не удалось получить эмбеддинг для чанка {doc['id']}")
+                    continue
+                
+                # Создаем числовой ID из hash строки
+                point_id = abs(hash(doc["id"])) % (10 ** 10)
+                
+                point = PointStruct(
+                    id=point_id,
+                    vector=embedding,
+                    payload={
+                        "text": doc["text"],
+                        "source": doc["metadata"]["source"],
+                        "doc_id": doc["metadata"]["doc_id"],
+                        "chunk_index": doc["metadata"]["chunk_index"],
+                        "uploaded_by": doc["metadata"]["uploaded_by"],
+                        "user_id": doc["metadata"]["user_id"],
+                        "category": doc["metadata"]["category"],
+                        "title": doc["metadata"]["title"],
+                        "chunk_id": doc["id"]  # Сохраняем строковый ID в payload
+                    }
+                )
+                points.append(point)
+            
+            log.info(f"✅ Обработано {len(batch_embeddings)} эмбеддингов в батче")
         
         # Загружаем в Qdrant
         if points:
