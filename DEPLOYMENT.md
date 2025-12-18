@@ -1,6 +1,6 @@
 # Deployment Guide for Railway
 
-This guide explains how to deploy the RomanBot to Railway using Docker.
+This guide explains how to deploy the HR2137_bot to Railway using Docker.
 
 ## Prerequisites
 
@@ -120,12 +120,12 @@ For local testing before deploying to Railway:
 
 1. **Build the image**
    ```bash
-   docker build -t romanbot .
+   docker build -t hr2137_bot .
    ```
 
 2. **Run the container**
    ```bash
-   docker run --env-file .env --name romanbot romanbot
+   docker run --env-file .env --name hr2137_bot hr2137_bot
    ```
 
 ## Verifying Deployment

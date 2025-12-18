@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kaspersky RAG Dashboard | Retro Terminal</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="terminal">
+        <!-- Header -->
+        <div class="terminal-header">
+            <div class="terminal-title">
+                <span class="blink">█</span> KASPERSKY RAG DASHBOARD v1.0
+            </div>
+            <div class="terminal-time" id="current-time"></div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="terminal-body">
+            <!-- Navigation Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="overview">📊 ОБЗОР</button>
+                <button class="tab-btn" data-tab="vectordb">🗄️ ВЕКТОРНАЯ БД</button>
+                <button class="tab-btn" data-tab="metrics">📈 МЕТРИКИ</button>
+                <button class="tab-btn" data-tab="workflow">⚙️ WORKFLOW</button>
+                <button class="tab-btn" data-tab="files">📁 ФАЙЛЫ</button>
+                <button class="tab-btn" data-tab="test">🧪 ТЕСТ</button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content active" id="overview">
+                <div class="panel">
+                    <h2 class="panel-title">СИСТЕМНЫЙ СТАТУС</h2>
+                    <div class="status-grid">
+                        <div class="status-card">
+                            <div class="status-label">Векторная БД</div>
+                            <div class="status-value" id="vectordb-status">Загрузка...</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-label">Документов</div>
+                            <div class="status-value" id="vectordb-count">-</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-label">Последняя оценка</div>
+                            <div class="status-value" id="last-eval-time">-</div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-label">Precision@K</div>
+                            <div class="status-value" id="precision-k">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2 class="panel-title">БЫСТРЫЕ ДЕЙСТВИЯ</h2>
+                    <div class="button-grid">
+                        <button class="retro-btn" onclick="runEvaluation()">▶ ЗАПУСТИТЬ ОЦЕНКУ</button>
+                        <button class="retro-btn" onclick="loadPDF()">📄 ЗАГРУЗИТЬ PDF</button>
+                        <button class="retro-btn" onclick="scrapeWebsites()">🌐 СКРАПИТЬ САЙТЫ</button>
+                        <button class="retro-btn" onclick="refreshData()">🔄 ОБНОВИТЬ</button>
+                        <button class="retro-btn" onclick="switchTab('test')">🧪 ТЕСТОВЫЙ ЗАПРОС</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vector DB Tab -->
+            <div class="tab-content" id="vectordb">
+                <div class="panel">
+                    <h2 class="panel-title">ИНФОРМАЦИЯ О ВЕКТОРНОЙ БД</h2>
+                    <div class="info-table">
+                        <div class="info-row">
+                            <span class="info-label">Коллекция:</span>
+                            <span class="info-value" id="collection-name">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Документов:</span>
+                            <span class="info-value" id="points-count">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Векторов:</span>
+                            <span class="info-value" id="vectors-count">-</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Статус:</span>
+                            <span class="info-value" id="collection-status">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2 class="panel-title">ИСТОЧНИКИ ДАННЫХ</h2>
+                    <div class="sources-list" id="sources-list">
+                        <div class="loading">Загрузка источников...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics Tab -->
+            <div class="tab-content" id="metrics">
+                <div class="panel">
+                    <h2 class="panel-title">ТЕКУЩИЕ МЕТРИКИ RAG</h2>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-label">Precision@K (Регуляторные)</div>
+                            <div class="metric-value" id="metric-precision-regulated">-</div>
+                            <div class="metric-target">Цель: ≥0.85</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Precision@K (Общие)</div>
+                            <div class="metric-value" id="metric-precision-general">-</div>
+                            <div class="metric-target">Цель: ≥0.75</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">MRR</div>
+                            <div class="metric-value" id="metric-mrr">-</div>
+                            <div class="metric-target">Цель: ≥0.9</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Groundedness</div>
+                            <div class="metric-value" id="metric-groundedness">-</div>
+                            <div class="metric-target">Цель: ≥0.9</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Halucination Rate</div>
+                            <div class="metric-value" id="metric-halucination">-</div>
+                            <div class="metric-target">Цель: ≤10%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h2 class="panel-title">ИСТОРИЯ МЕТРИК</h2>
+                    <div class="history-chart" id="history-chart">
+                        <div class="loading">Загрузка истории...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow Tab -->
+            <div class="tab-content" id="workflow">
+                <div class="panel">
+                    <h2 class="panel-title">УПРАВЛЕНИЕ WORKFLOW</h2>
+                    <div class="workflow-section">
+                        <h3>1. Загрузка данных</h3>
+                        <div class="workflow-item">
+                            <button class="retro-btn" onclick="loadPDF()">Загрузить PDF</button>
+                            <button class="retro-btn" onclick="loadExcel()">Загрузить Excel</button>
+                        </div>
+                    </div>
+                    <div class="workflow-section">
+                        <h3>2. Оценка качества</h3>
+                        <div class="workflow-item">
+                            <button class="retro-btn primary" onclick="runEvaluation()">Запустить оценку RAG</button>
+                            <div class="workflow-info">
+                                Оценка использует Ground-Truth QA набор для проверки метрик
+                            </div>
+                        </div>
+                    </div>
+                    <div class="workflow-section">
+                        <h3>3. Анализ результатов</h3>
+                        <div class="workflow-item">
+                            <button class="retro-btn" onclick="switchTab('metrics')">Просмотр метрик</button>
+                            <button class="retro-btn" onclick="exportResults()">Экспорт результатов</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Files Tab -->
+            <div class="tab-content" id="files">
+                <div class="panel">
+                    <h2 class="panel-title">УПРАВЛЕНИЕ ФАЙЛАМИ</h2>
+                    <div class="file-upload-area" id="file-upload-area">
+                        <input type="file" id="file-input" accept=".pdf,.xlsx,.xls" style="display: none;" onchange="handleFileSelect(event)">
+                        <div class="upload-box" onclick="document.getElementById('file-input').click()">
+                            <div class="upload-icon">📁</div>
+                            <div class="upload-text">Нажмите для выбора файла</div>
+                            <div class="upload-hint">Поддерживаются: PDF, Excel</div>
+                        </div>
+                    </div>
+                    <div class="files-list" id="files-list">
+                        <div class="loading">Загрузка списка файлов...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Tab -->
+            <div class="tab-content" id="test">
+                <div class="panel">
+                    <h2 class="panel-title">ТЕСТОВЫЙ ЗАПРОС К RAG</h2>
+                    <div class="test-query-form">
+                        <input type="text" class="retro-input" id="test-query-input" placeholder="Введите вопрос для тестирования...">
+                        <button class="retro-btn primary" onclick="testQuery()">▶ ВЫПОЛНИТЬ</button>
+                    </div>
+                    <div class="test-result" id="test-result">
+                        <div class="result-placeholder">Результаты появятся здесь...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="terminal-footer">
+            <span class="footer-text">Kaspersky RAG System | Status: <span id="system-status">ONLINE</span></span>
+        </div>
+    </div>
+
+    <!-- Выдвигающаяся панель параметров (правый нижний угол) -->
+    <div class="params-panel" id="params-panel">
+        <div class="params-panel-header" onclick="toggleParamsPanel()">
+            <span class="params-panel-title">⚙️ ПАРАМЕТРЫ RAG</span>
+            <span class="params-panel-toggle" id="params-toggle">▼</span>
+        </div>
+        <div class="params-panel-content" id="params-content">
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Размер чанка (chunk_size)</span>
+                    <span class="param-value" id="chunk-size-value">500</span>
+                </label>
+                <input type="range" class="param-slider" id="chunk-size" min="100" max="2000" value="500" step="50">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Перекрытие чанков (chunk_overlap)</span>
+                    <span class="param-value" id="chunk-overlap-value">50</span>
+                </label>
+                <input type="range" class="param-slider" id="chunk-overlap" min="0" max="500" value="50" step="10">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Количество документов (top_k)</span>
+                    <span class="param-value" id="top-k-value">10</span>
+                </label>
+                <input type="range" class="param-slider" id="top-k" min="1" max="50" value="10" step="1">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Минимальный score (min_score)</span>
+                    <span class="param-value" id="min-score-value">0.3</span>
+                </label>
+                <input type="range" class="param-slider" id="min-score" min="0" max="1" value="0.3" step="0.05">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Температура LLM (temperature)</span>
+                    <span class="param-value" id="temperature-value">0.7</span>
+                </label>
+                <input type="range" class="param-slider" id="temperature" min="0" max="2" value="0.7" step="0.1">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Макс. токенов (max_tokens)</span>
+                    <span class="param-value" id="max-tokens-value">2048</span>
+                </label>
+                <input type="range" class="param-slider" id="max-tokens" min="256" max="4096" value="2048" step="256">
+            </div>
+            <div class="param-actions">
+                <button class="retro-btn primary" onclick="applyParameters()">▶ ПРИМЕНИТЬ</button>
+                <button class="retro-btn" onclick="resetParameters()">🔄 СБРОС</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Аудио контекст для звуков -->
+    <audio id="click-sound" preload="auto">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp3pVECBBZru3xpmE=" type="audio/wav">
+    </audio>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
+

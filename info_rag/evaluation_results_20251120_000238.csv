@@ -1,0 +1,11 @@
+Question,Category,Precision@K,MRR,Groundedness,Halucination Rate,Matched Sources,Total Expected Sources
+Какая цена Kaspersky Endpoint Security Cloud?,regulated,0.000,0.000,0.000,1.000,0,2
+Сколько стоит Kaspersky Total Security?,regulated,0.000,0.000,0.000,1.000,0,1
+Что такое Kaspersky Endpoint Security Cloud?,general,1.000,1.000,0.000,1.000,2,3
+Какие продукты доступны для малого бизнеса?,regulated,0.500,1.000,0.000,1.000,1,2
+Как работает лицензирование Kaspersky Endpoint Security Cloud?,general,1.000,1.000,0.000,1.000,2,3
+Какая цена Kaspersky Standard?,regulated,0.000,0.000,0.000,1.000,0,1
+Что включает Kaspersky Total Security?,general,1.000,1.000,0.000,1.000,2,2
+Какая цена Kaspersky Small Office Security?,regulated,0.000,0.000,0.000,1.000,0,1
+Какие функции безопасности предоставляет Kaspersky?,general,1.000,1.000,0.000,1.000,2,2
+Какая цена Kaspersky Endpoint Security?,regulated,0.000,0.000,0.000,1.000,0,1

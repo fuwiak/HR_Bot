@@ -1,0 +1,899 @@
+{% extends "base.html" %}
+
+{% block title %}RAG Dashboard{% endblock %}
+
+{% block extra_styles %}
+<style>
+        /* Retro Terminal Style для RAG Dashboard */
+        .rag-dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .dashboard-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .dashboard-header h1 {
+            margin: 0;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .dashboard-header .status {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e4e6eb;
+            padding-bottom: 0;
+        }
+        
+        .tab-btn {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #65676b;
+            transition: all 0.2s;
+        }
+        
+        .tab-btn:hover {
+            background: #f0f2f5;
+            color: #1877f2;
+        }
+        
+        .tab-btn.active {
+            color: #1877f2;
+            border-bottom-color: #1877f2;
+        }
+        
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Panels */
+        .panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #1c1e21;
+            border-bottom: 2px solid #e4e6eb;
+            padding-bottom: 10px;
+        }
+        
+        /* Status Grid */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+        }
+        
+        .status-card {
+            background: #f0f2f5;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .status-label {
+            font-size: 12px;
+            color: #65676b;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+        
+        .status-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1877f2;
+        }
+        
+        /* Buttons */
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            background: #1877f2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background: #166fe5;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-secondary {
+            background: #42b883;
+        }
+        
+        .btn-secondary:hover {
+            background: #369870;
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+        }
+        
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+        
+        /* Info Table */
+        .info-table {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            background: #f0f2f5;
+            border-radius: 6px;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #65676b;
+        }
+        
+        .info-value {
+            color: #1c1e21;
+            font-weight: 500;
+        }
+        
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .metric-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .metric-target {
+            font-size: 11px;
+            opacity: 0.8;
+        }
+        
+        /* Test Query Form */
+        .test-query-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .test-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e4e6eb;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .test-input:focus {
+            outline: none;
+            border-color: #1877f2;
+        }
+        
+        .test-result {
+            background: #f0f2f5;
+            padding: 20px;
+            border-radius: 8px;
+            min-height: 200px;
+        }
+        
+        .result-placeholder {
+            color: #65676b;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        /* File Upload */
+        .file-upload-area {
+            margin-bottom: 20px;
+        }
+        
+        .upload-box {
+            border: 2px dashed #e4e6eb;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .upload-box:hover {
+            border-color: #1877f2;
+            background: #f0f2f5;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .upload-text {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1c1e21;
+            margin-bottom: 5px;
+        }
+        
+        .upload-hint {
+            font-size: 12px;
+            color: #65676b;
+        }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #65676b;
+        }
+        
+        .spinner {
+            border: 3px solid #f0f2f5;
+            border-top: 3px solid #1877f2;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Sources List */
+        .sources-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .source-item {
+            padding: 12px;
+            background: #f0f2f5;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .source-url {
+            font-family: monospace;
+            font-size: 12px;
+            color: #1877f2;
+            word-break: break-all;
+        }
+        
+        .source-chunks {
+            font-size: 12px;
+            color: #65676b;
+        }
+        
+        /* Parameters Panel */
+        .params-panel {
+            position: fixed;
+            bottom: 0;
+            right: 20px;
+            width: 350px;
+            background: white;
+            border-radius: 8px 8px 0 0;
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-height: 80vh;
+            transition: transform 0.3s;
+        }
+        
+        .params-panel.collapsed {
+            transform: translateY(calc(100% - 50px));
+        }
+        
+        .params-panel-header {
+            background: #1877f2;
+            color: white;
+            padding: 15px;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .params-panel-content {
+            padding: 20px;
+            max-height: calc(80vh - 60px);
+            overflow-y: auto;
+        }
+        
+        .param-group {
+            margin-bottom: 20px;
+        }
+        
+        .param-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .param-value {
+            font-weight: 600;
+            color: #1877f2;
+        }
+        
+        .param-slider {
+            width: 100%;
+        }
+        
+        .param-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="rag-dashboard">
+        <!-- Header -->
+        <div class="dashboard-header">
+            <h1>
+                <span>📚</span>
+                HR2137 RAG Dashboard v1.0
+            </h1>
+            <div class="status">Система управления базой знаний | Status: <span id="system-status">ONLINE</span></div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="overview">📊 ОБЗОР</button>
+            <button class="tab-btn" data-tab="vectordb">🗄️ ВЕКТОРНАЯ БД</button>
+            <button class="tab-btn" data-tab="metrics">📈 МЕТРИКИ</button>
+            <button class="tab-btn" data-tab="workflow">⚙️ WORKFLOW</button>
+            <button class="tab-btn" data-tab="files">📁 ФАЙЛЫ</button>
+            <button class="tab-btn" data-tab="test">🧪 ТЕСТ</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content active" id="overview">
+            <div class="panel">
+                <h2 class="panel-title">СИСТЕМНЫЙ СТАТУС</h2>
+                <div class="status-grid">
+                    <div class="status-card">
+                        <div class="status-label">Векторная БД</div>
+                        <div class="status-value" id="vectordb-status">Загрузка...</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">Документов</div>
+                        <div class="status-value" id="vectordb-count">-</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">Последняя оценка</div>
+                        <div class="status-value" id="last-eval-time">-</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-label">Precision@K</div>
+                        <div class="status-value" id="precision-k">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2 class="panel-title">БЫСТРЫЕ ДЕЙСТВИЯ</h2>
+                <div class="button-grid">
+                    <button class="btn btn-secondary" onclick="runEvaluation()">▶ ЗАПУСТИТЬ ОЦЕНКУ</button>
+                    <button class="btn btn-secondary" onclick="loadPDF()">📄 ЗАГРУЗИТЬ PDF</button>
+                    <button class="btn btn-secondary" onclick="scrapeWebsites()">🌐 СКРАПИТЬ САЙТЫ</button>
+                    <button class="btn" onclick="refreshData()">🔄 ОБНОВИТЬ</button>
+                    <button class="btn" onclick="switchTab('test')">🧪 ТЕСТОВЫЙ ЗАПРОС</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vector DB Tab -->
+        <div class="tab-content" id="vectordb">
+            <div class="panel">
+                <h2 class="panel-title">ИНФОРМАЦИЯ О ВЕКТОРНОЙ БД</h2>
+                <div class="info-table">
+                    <div class="info-row">
+                        <span class="info-label">Коллекция:</span>
+                        <span class="info-value" id="collection-name">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Документов:</span>
+                        <span class="info-value" id="points-count">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Векторов:</span>
+                        <span class="info-value" id="vectors-count">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Статус:</span>
+                        <span class="info-value" id="collection-status">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2 class="panel-title">ИСТОЧНИКИ ДАННЫХ</h2>
+                <div class="sources-list" id="sources-list">
+                    <div class="loading">Загрузка источников...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Metrics Tab -->
+        <div class="tab-content" id="metrics">
+            <div class="panel">
+                <h2 class="panel-title">ТЕКУЩИЕ МЕТРИКИ RAG</h2>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Precision@K (Общие)</div>
+                        <div class="metric-value" id="metric-precision-general">-</div>
+                        <div class="metric-target">Цель: ≥0.75</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">MRR</div>
+                        <div class="metric-value" id="metric-mrr">-</div>
+                        <div class="metric-target">Цель: ≥0.9</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Groundedness</div>
+                        <div class="metric-value" id="metric-groundedness">-</div>
+                        <div class="metric-target">Цель: ≥0.9</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Halucination Rate</div>
+                        <div class="metric-value" id="metric-halucination">-</div>
+                        <div class="metric-target">Цель: ≤10%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Workflow Tab -->
+        <div class="tab-content" id="workflow">
+            <div class="panel">
+                <h2 class="panel-title">УПРАВЛЕНИЕ WORKFLOW</h2>
+                <div style="display: grid; gap: 30px;">
+                    <div>
+                        <h3 style="margin-bottom: 15px;">1. Загрузка данных</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn btn-secondary" onclick="loadPDF()">Загрузить PDF</button>
+                            <button class="btn btn-secondary" onclick="loadExcel()">Загрузить Excel</button>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="margin-bottom: 15px;">2. Оценка качества</h3>
+                        <div>
+                            <button class="btn btn-secondary" onclick="runEvaluation()">Запустить оценку RAG</button>
+                            <div style="margin-top: 10px; font-size: 13px; color: #65676b;">
+                                Оценка использует Ground-Truth QA набор для проверки метрик
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="margin-bottom: 15px;">3. Анализ результатов</h3>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn" onclick="switchTab('metrics')">Просмотр метрик</button>
+                            <button class="btn" onclick="exportResults()">Экспорт результатов</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Files Tab -->
+        <div class="tab-content" id="files">
+            <div class="panel">
+                <h2 class="panel-title">УПРАВЛЕНИЕ ФАЙЛАМИ</h2>
+                <div class="file-upload-area">
+                    <input type="file" id="file-input" accept=".pdf,.xlsx,.xls" style="display: none;" onchange="handleFileSelect(event)">
+                    <div class="upload-box" onclick="document.getElementById('file-input').click()">
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">Нажмите для выбора файла</div>
+                        <div class="upload-hint">Поддерживаются: PDF, Excel</div>
+                    </div>
+                </div>
+                <div id="files-list">
+                    <div class="loading">Загрузка списка файлов...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Tab -->
+        <div class="tab-content" id="test">
+            <div class="panel">
+                <h2 class="panel-title">ТЕСТОВЫЙ ЗАПРОС К RAG</h2>
+                <div class="test-query-form">
+                    <input type="text" class="test-input" id="test-query-input" placeholder="Введите вопрос для тестирования..." onkeypress="if(event.key==='Enter') testQuery()">
+                    <button class="btn" onclick="testQuery()">▶ ВЫПОЛНИТЬ</button>
+                </div>
+                <div class="test-result" id="test-result">
+                    <div class="result-placeholder">Результаты появятся здесь...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parameters Panel -->
+    <div class="params-panel collapsed" id="params-panel">
+        <div class="params-panel-header" onclick="toggleParamsPanel()">
+            <span>⚙️ ПАРАМЕТРЫ RAG</span>
+            <span id="params-toggle">▲</span>
+        </div>
+        <div class="params-panel-content" id="params-content">
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Размер чанка (chunk_size)</span>
+                    <span class="param-value" id="chunk-size-value">500</span>
+                </label>
+                <input type="range" class="param-slider" id="chunk-size" min="100" max="2000" value="500" step="50" oninput="document.getElementById('chunk-size-value').textContent = this.value">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Перекрытие чанков (chunk_overlap)</span>
+                    <span class="param-value" id="chunk-overlap-value">50</span>
+                </label>
+                <input type="range" class="param-slider" id="chunk-overlap" min="0" max="500" value="50" step="10" oninput="document.getElementById('chunk-overlap-value').textContent = this.value">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Количество документов (top_k)</span>
+                    <span class="param-value" id="top-k-value">10</span>
+                </label>
+                <input type="range" class="param-slider" id="top-k" min="1" max="50" value="10" step="1" oninput="document.getElementById('top-k-value').textContent = this.value">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Минимальный score (min_score)</span>
+                    <span class="param-value" id="min-score-value">0.3</span>
+                </label>
+                <input type="range" class="param-slider" id="min-score" min="0" max="1" value="0.3" step="0.05" oninput="document.getElementById('min-score-value').textContent = this.value">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Температура LLM (temperature)</span>
+                    <span class="param-value" id="temperature-value">0.7</span>
+                </label>
+                <input type="range" class="param-slider" id="temperature" min="0" max="2" value="0.7" step="0.1" oninput="document.getElementById('temperature-value').textContent = this.value">
+            </div>
+            <div class="param-group">
+                <label class="param-label">
+                    <span>Макс. токенов (max_tokens)</span>
+                    <span class="param-value" id="max-tokens-value">2048</span>
+                </label>
+                <input type="range" class="param-slider" id="max-tokens" min="256" max="4096" value="2048" step="256" oninput="document.getElementById('max-tokens-value').textContent = this.value">
+            </div>
+            <div class="param-actions">
+                <button class="btn" onclick="applyParameters()">▶ ПРИМЕНИТЬ</button>
+                <button class="btn btn-secondary" onclick="resetParameters()">🔄 СБРОС</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+        // Tab switching
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+        
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+        
+        // Load stats on page load
+        async function refreshData() {
+            await Promise.all([
+                loadVectorDBInfo(),
+                loadMetrics(),
+                loadSources()
+            ]);
+        }
+        
+        async function loadVectorDBInfo() {
+            try {
+                const response = await fetch('/rag/stats');
+                const data = await response.json();
+                
+                document.getElementById('vectordb-status').textContent = data.status || 'OK';
+                document.getElementById('vectordb-count').textContent = data.points_count || 0;
+                document.getElementById('collection-name').textContent = data.collection_name || '-';
+                document.getElementById('points-count').textContent = data.points_count || 0;
+                document.getElementById('vectors-count').textContent = data.vectors_count || 0;
+                document.getElementById('collection-status').textContent = data.status || '-';
+            } catch (error) {
+                console.error('Error loading vector DB info:', error);
+                document.getElementById('vectordb-status').textContent = 'Ошибка';
+            }
+        }
+        
+        async function loadMetrics() {
+            try {
+                const response = await fetch('/rag/metrics/latest');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.metrics) {
+                        const m = data.metrics;
+                        document.getElementById('metric-precision-general').textContent = (m.precision_at_k_overall || 0).toFixed(2);
+                        document.getElementById('metric-mrr').textContent = (m.mrr_overall || 0).toFixed(2);
+                        document.getElementById('metric-groundedness').textContent = (m.groundedness_overall || 0).toFixed(2);
+                        document.getElementById('metric-halucination').textContent = ((m.halucination_rate_overall || 0) * 100).toFixed(1) + '%';
+                        document.getElementById('precision-k').textContent = (m.precision_at_k_overall || 0).toFixed(2);
+                        if (m.timestamp) {
+                            document.getElementById('last-eval-time').textContent = new Date(m.timestamp).toLocaleString('ru-RU');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading metrics:', error);
+            }
+        }
+        
+        async function loadSources() {
+            try {
+                const response = await fetch('/rag/stats');
+                const data = await response.json();
+                // TODO: Add endpoint for sources list
+                document.getElementById('sources-list').innerHTML = '<div class="loading">Источники загружены</div>';
+            } catch (error) {
+                console.error('Error loading sources:', error);
+            }
+        }
+        
+        async function testQuery() {
+            const input = document.getElementById('test-query-input');
+            const query = input.value.trim();
+            if (!query) return;
+            
+            const resultDiv = document.getElementById('test-result');
+            resultDiv.innerHTML = '<div class="loading"><div class="spinner"></div>Выполнение запроса...</div>';
+            
+            try {
+                const response = await fetch(`/rag/test?query=${encodeURIComponent(query)}&top_k=5`);
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    resultDiv.innerHTML = `
+                        <div style="margin-bottom: 15px;">
+                            <strong>Вопрос:</strong> ${data.query}
+                        </div>
+                        <div style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 6px;">
+                            <strong>Ответ:</strong><br>
+                            ${data.answer.replace(/\n/g, '<br>')}
+                        </div>
+                        <div style="font-size: 12px; color: #65676b;">
+                            Источников: ${data.context_count} | Модель: ${data.model} (${data.provider})
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<div style="color: #e74c3c;">Ошибка: ${data.message || 'Неизвестная ошибка'}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div style="color: #e74c3c;">Ошибка запроса: ${error.message}</div>`;
+            }
+        }
+        
+        async function runEvaluation() {
+            if (!confirm('Запустить оценку RAG системы? Это может занять некоторое время.')) return;
+            
+            try {
+                const response = await fetch('/rag/workflow/evaluate', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert(`Оценка завершена!\nPrecision@K: ${data.summary.precision_at_k_overall.toFixed(2)}\nMRR: ${data.summary.mrr_overall.toFixed(2)}`);
+                    loadMetrics();
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            }
+        }
+        
+        function loadPDF() {
+            document.getElementById('file-input').click();
+        }
+        
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/rag/workflow/load-pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert(`Файл загружен!\nЧанков: ${data.chunks_count}`);
+                    refreshData();
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            }
+        }
+        
+        async function scrapeWebsites() {
+            if (!confirm('Запустить скрапинг сайтов из whitelist?')) return;
+            
+            try {
+                const response = await fetch('/rag/workflow/scrape', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert(`Скрапинг завершен!\nЗагружено страниц: ${data.pages_loaded}`);
+                    refreshData();
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            }
+        }
+        
+        function loadExcel() {
+            alert('Функция загрузки Excel будет добавлена в следующей версии');
+        }
+        
+        function exportResults() {
+            alert('Функция экспорта результатов будет добавлена в следующей версии');
+        }
+        
+        function toggleParamsPanel() {
+            const panel = document.getElementById('params-panel');
+            const toggle = document.getElementById('params-toggle');
+            panel.classList.toggle('collapsed');
+            toggle.textContent = panel.classList.contains('collapsed') ? '▲' : '▼';
+        }
+        
+        async function applyParameters() {
+            const params = {
+                chunk_size: parseInt(document.getElementById('chunk-size').value),
+                chunk_overlap: parseInt(document.getElementById('chunk-overlap').value),
+                top_k: parseInt(document.getElementById('top-k').value),
+                min_score: parseFloat(document.getElementById('min-score').value),
+                temperature: parseFloat(document.getElementById('temperature').value),
+                max_tokens: parseInt(document.getElementById('max-tokens').value)
+            };
+            
+            try {
+                const response = await fetch('/rag/parameters', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(params)
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    alert('Параметры применены!');
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                alert('Ошибка: ' + error.message);
+            }
+        }
+        
+        async function resetParameters() {
+            try {
+                const response = await fetch('/rag/parameters');
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.parameters) {
+                    const p = data.parameters;
+                    document.getElementById('chunk-size').value = p.chunk_size || 500;
+                    document.getElementById('chunk-overlap').value = p.chunk_overlap || 50;
+                    document.getElementById('top-k').value = p.top_k || 10;
+                    document.getElementById('min-score').value = p.min_score || 0.3;
+                    document.getElementById('temperature').value = p.temperature || 0.7;
+                    document.getElementById('max-tokens').value = p.max_tokens || 2048;
+                    
+                    // Update values
+                    document.getElementById('chunk-size').dispatchEvent(new Event('input'));
+                    document.getElementById('chunk-overlap').dispatchEvent(new Event('input'));
+                    document.getElementById('top-k').dispatchEvent(new Event('input'));
+                    document.getElementById('min-score').dispatchEvent(new Event('input'));
+                    document.getElementById('temperature').dispatchEvent(new Event('input'));
+                    document.getElementById('max-tokens').dispatchEvent(new Event('input'));
+                }
+            } catch (error) {
+                console.error('Error loading parameters:', error);
+            }
+        }
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshData();
+            resetParameters();
+        });
+    </script>
+{% endblock %}
+

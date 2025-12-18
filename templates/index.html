@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="content-card">
+    <h1>Добро пожаловать!</h1>
+    <p class="subtitle">Демонстрационный интерфейс AI-ассистента для консалтинговой практики</p>
+    
+    <div class="grid">
+        <!-- Email Demo -->
+        <div class="card" id="email-demo">
+            <h2>📧 Демонстрация Email</h2>
+            <p>Отправка тестового email для демонстрации обработки запросов</p>
+            <form id="emailForm">
+                <div class="form-group">
+                    <label>Получатель:</label>
+                    <input type="email" name="recipient" required placeholder="email@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Тема:</label>
+                    <input type="text" name="subject" required placeholder="Тема письма">
+                </div>
+                <div class="form-group">
+                    <label>Сообщение:</label>
+                    <textarea name="body" required placeholder="Текст сообщения..."></textarea>
+                </div>
+                <button type="submit" class="btn">Отправить</button>
+            </form>
+            <div id="emailResult" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- Proposal Demo -->
+        <div class="card" id="proposal-demo">
+            <h2>📝 Генерация КП</h2>
+            <p>Генерация коммерческого предложения по запросу клиента</p>
+            <form id="proposalForm">
+                <div class="form-group">
+                    <label>Запрос клиента:</label>
+                    <textarea name="request" required placeholder="Введите запрос клиента..."></textarea>
+                </div>
+                <button type="submit" class="btn">Сгенерировать КП</button>
+            </form>
+            <div id="proposalResult" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- RAG Search -->
+        <div class="card" id="rag-search">
+            <h2>🔍 Поиск в RAG</h2>
+            <p>Семантический поиск в базе знаний</p>
+            <form id="ragSearchForm">
+                <div class="form-group">
+                    <label>Поисковый запрос:</label>
+                    <input type="text" name="query" required placeholder="Введите запрос...">
+                </div>
+                <button type="submit" class="btn">Искать</button>
+            </form>
+            <div id="ragSearchResult" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- RAG Stats -->
+        <div class="card" id="rag-stats">
+            <h2>📊 Статистика RAG</h2>
+            <p>Информация о базе знаний</p>
+            <button onclick="loadRAGStats()" class="btn">Загрузить статистику</button>
+            <div id="ragStatsResult" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- RAG Docs -->
+        <div class="card" id="rag-docs">
+            <h2>📚 Документы в базе</h2>
+            <p>Список всех документов в RAG базе знаний</p>
+            <button onclick="loadRAGDocs()" class="btn">Загрузить документы</button>
+            <div id="ragDocsResult" class="result" style="display:none;"></div>
+        </div>
+        
+        <!-- RAG Dashboard -->
+        <div class="card" id="rag-dashboard" style="grid-column: 1 / -1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+            <h2 style="color: white;">📊 RAG Dashboard - Полное управление базой знаний</h2>
+            <p style="color: rgba(255,255,255,0.9);">Управление векторной БД, метрики, оценка качества, загрузка файлов, тестирование запросов</p>
+            <div style="display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap;">
+                <a href="/rag" class="btn" style="background: white; color: #667eea; font-weight: 600; padding: 12px 24px; text-decoration: none;">▶ Открыть RAG Dashboard</a>
+                <span style="display: flex; align-items: center; gap: 8px; font-size: 14px; opacity: 0.9;">
+                    <span>⚙️</span>
+                    <span>Оценка • Метрики • Workflow • Файлы • Тесты</span>
+                </span>
+            </div>
+        </div>
+        
+        <!-- Architecture -->
+        <div class="card">
+            <h2>🏗️ Архитектура</h2>
+            <p>Визуализация архитектуры системы</p>
+            <a href="/architecture" class="btn">Просмотр архитектуры</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Smooth scroll для якорных ссылок
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                // Update URL without scrolling
+                window.history.pushState(null, null, this.getAttribute('href'));
+            }
+        });
+    });
+
+    // Email form
+    document.getElementById('emailForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData);
+        
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="loading"></span> Отправка...';
+        
+        try {
+            const response = await fetch('/demo/email', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams(data)
+            });
+            const result = await response.json();
+            const resultDiv = document.getElementById('emailResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>✅ Успешно отправлено!</h3><pre>${JSON.stringify(result, null, 2)}</pre>`;
+            e.target.reset();
+        } catch (error) {
+            const resultDiv = document.getElementById('emailResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>❌ Ошибка</h3><pre>${error.message}</pre>`;
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    });
+    
+    // Proposal form
+    document.getElementById('proposalForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = {request: formData.get('request')};
+        
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="loading"></span> Генерация...';
+        
+        try {
+            const response = await fetch('/demo/proposal', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+            const resultDiv = document.getElementById('proposalResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>✅ КП сгенерировано!</h3><pre>${JSON.stringify(result, null, 2)}</pre>`;
+        } catch (error) {
+            const resultDiv = document.getElementById('proposalResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>❌ Ошибка</h3><pre>${error.message}</pre>`;
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    });
+    
+    // RAG Search form
+    document.getElementById('ragSearchForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const query = new FormData(e.target).get('query');
+        
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="loading"></span> Поиск...';
+        
+        try {
+            const response = await fetch(`/rag/search?query=${encodeURIComponent(query)}&limit=5`);
+            const result = await response.json();
+            const resultDiv = document.getElementById('ragSearchResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>🔍 Найдено результатов:</h3><pre>${JSON.stringify(result, null, 2)}</pre>`;
+        } catch (error) {
+            const resultDiv = document.getElementById('ragSearchResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>❌ Ошибка</h3><pre>${error.message}</pre>`;
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+        }
+    });
+    
+    async function loadRAGStats() {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading"></span> Загрузка...';
+        
+        try {
+            const response = await fetch('/rag/stats');
+            const result = await response.json();
+            const resultDiv = document.getElementById('ragStatsResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>📊 Статистика базы знаний:</h3><pre>${JSON.stringify(result, null, 2)}</pre>`;
+        } catch (error) {
+            const resultDiv = document.getElementById('ragStatsResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>❌ Ошибка</h3><pre>${error.message}</pre>`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+    
+    async function loadRAGDocs() {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="loading"></span> Загрузка...';
+        
+        try {
+            const response = await fetch('/rag/docs?limit=20');
+            const result = await response.json();
+            const resultDiv = document.getElementById('ragDocsResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>📚 Документы в базе (${result.total}):</h3><pre>${JSON.stringify(result, null, 2)}</pre>`;
+        } catch (error) {
+            const resultDiv = document.getElementById('ragDocsResult');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<h3>❌ Ошибка</h3><pre>${error.message}</pre>`;
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+</script>
+{% endblock %}

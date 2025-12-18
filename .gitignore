@@ -95,6 +95,14 @@ Thumbs.db
 # Project specific
 google_sheets_credentials.json
 
+# Files with real credentials - DO NOT COMMIT
+ENV_VARIABLES.md
+RAILWAY_SETUP.md
+RAILWAY_VARIABLES.md
+RAILWAY_VARIABLES_QUICK.md
+
+
+
 
 
 

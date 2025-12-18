@@ -1,0 +1,66 @@
+# Конфигурация Telegram-бота с RAG
+
+# Whitelist источников для RAG
+whitelist:
+  - https://www.kaspersky.ru/
+  - https://support.kaspersky.ru/
+  - https://my.kaspersky.ru/
+  - https://b2b-compare.kaspersky.ru/
+  - file://media/PriceListRUSSIA_09_10_2025.xlsx  # Excel прайс-лист как источник
+  - file://media/Kaspersky Premium - aнтивирус с защитой от кражи данных _ Лаборатория Касперского.pdf  # PDF о Kaspersky Premium
+
+# Продукты теперь загружаются только из Excel/RAG
+# Все данные должны быть в векторной БД (Qdrant) или Excel файле
+# products: []  # Удалено - все из RAG/Excel
+
+
+# LLM параметры
+llm:
+  # Основная модель (пробуется первой)
+  primary:
+    provider: "groq"  # Или "openrouter", поддерживаются оба
+    model: "openai/gpt-oss-120b"  # Основная модель
+    temperature: 0.7
+    max_tokens: 2048
+    timeout: 30
+  
+  # Цепочка fallback моделей (пробуются по порядку при ошибке/низкой уверенности)
+  fallback_chain:
+    - provider: "groq"  # Или "openrouter"
+      model: "openai/gpt-oss-20b"  # Fallback 1
+      temperature: 0.7
+      max_tokens: 2048
+      timeout: 30
+    - provider: "openrouter"  # Fallback 2
+      model: "llama-3.3-70b-versatile"
+      temperature: 0.7
+      max_tokens: 2048
+      timeout: 30
+    
+  confidence_threshold: 0.7  # Порог уверенности для переключения на fallback
+
+# RAG параметры
+rag:
+  collection_name: "kaspersky_docs"
+  top_k: 10  # Увеличено с 5 до 10 для большего охвата
+  min_score: 0.3  # Понижено с 0.7 до 0.3 для более широкого поиска
+  chunk_size: 500
+  chunk_overlap: 50
+  
+  # Hybrid search (BM25 + Dense)
+  search_strategy: "hybrid"  # "dense", "bm25", или "hybrid"
+  
+  # Веса для hybrid search (сумма должна быть ~1.0)
+  hybrid_weights:
+    dense: 0.5      # Увеличено с 0.4 для баланса
+    bm25: 0.5       # Уменьшено с 0.6 для баланса
+  
+  # Для запросов с ценами/прайс-листа - более точный поиск
+  pricing_search:
+    enabled: true
+    strategy: "hybrid"  # "hybrid" для более точного поиска
+    bm25_weight: 0.7    # Выше вес BM25 для точных совпадений
+    dense_weight: 0.3
+    min_score: 0.4      # Понижено с 0.8 до 0.4 для поиска цен
+    top_k: 15           # Увеличено с 10 до 15 для большего охвата
+

@@ -52,8 +52,8 @@ YCLIENTS_USER_TOKEN=" > .env
 docker-compose up --build
 
 # Or use Docker directly
-docker build -t romanbot .
-docker run --env-file .env romanbot
+docker build -t hr2137_bot .
+docker run --env-file .env hr2137_bot
 ```
 
 ## Important Notes
@@ -112,6 +112,8 @@ railway up
 
 - See **DEPLOYMENT.md** for detailed deployment instructions
 - See **ENV_VARIABLES.md** for environment variables documentation
+
+
 
 
 

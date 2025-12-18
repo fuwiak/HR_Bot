@@ -1,13 +1,16 @@
 """
-Qdrant векторная база данных для точного поиска услуг из Google Sheets
-Используется для семантического поиска услуг, чтобы избежать выдумывания цен AI
+Qdrant векторная база данных для RAG (Retrieval-Augmented Generation)
+Используется для семантического поиска по базе знаний консультанта
+Эмбеддинги генерируются через OpenRouter API (qwen/qwen3-embedding-8b) - поддерживает русский и другие языки
 """
 import os
 import json
 import logging
-from typing import List, Dict, Optional
+import asyncio
+from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
 import hashlib
+import aiohttp
 
 # Получаем логгер, но не используем до настройки логирования в основном приложении
 def get_logger():
@@ -24,21 +27,48 @@ log = get_logger()
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.models import Distance, VectorParams, PointStruct
-    from sentence_transformers import SentenceTransformer
     QDRANT_AVAILABLE = True
 except ImportError:
     QDRANT_AVAILABLE = False
-    log.warning("⚠️ Qdrant библиотеки не установлены. Установите: pip install qdrant-client sentence-transformers")
+    log.warning("⚠️ Qdrant библиотеки не установлены. Установите: pip install qdrant-client")
+
+# Конфигурация для эмбеддингов через OpenRouter (Qwen3-Embedding-8B) или OpenAI
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+EMBEDDING_API_KEY = OPENROUTER_API_KEY or OPENAI_API_KEY  # Приоритет OpenRouter
+
+# Определяем URL и модель в зависимости от того, какой API ключ используется
+if OPENROUTER_API_KEY:
+    # Используем OpenRouter с Qwen3-Embedding-8B (основная модель, поддерживает русский)
+    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")  # Основная модель через OpenRouter
+    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1024"))  # Размерность для Qwen3-Embedding-8B
+elif OPENAI_API_KEY:
+    # Используем OpenAI напрямую (fallback)
+    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://api.openai.com/v1/embeddings")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1536"))  # Размерность для text-embedding-3-small
+else:
+    # Значения по умолчанию (если ключи не установлены)
+    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")
+    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "1024"))
 
 # Конфигурация
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+# По умолчанию используем Qdrant Cloud (если есть API ключ) или локальный сервер
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", None)
-COLLECTION_NAME = "romanbot_services"
+if QDRANT_API_KEY:
+    # Если есть API ключ, используем Qdrant Cloud
+    QDRANT_URL = os.getenv("QDRANT_URL", "https://239a4026-d673-4b8b-bfab-a99c7044e6b1.us-east4-0.gcp.cloud.qdrant.io")
+else:
+    # Если нет API ключа, используем локальный сервер (для разработки)
+    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+COLLECTION_NAME = "hr2137_bot_knowledge_base"
 
 # Глобальные переменные
 _qdrant_client = None
-_embedding_model = None
 _collection_initialized = False
+_embedding_dimension = EMBEDDING_DIMENSION
 
 def get_qdrant_client():
     """Получить клиент Qdrant"""
@@ -58,36 +88,107 @@ def get_qdrant_client():
         # Проверяем подключение
         _qdrant_client.get_collections()
         log.info(f"✅ Qdrant клиент успешно подключен: {QDRANT_URL}")
+        if QDRANT_API_KEY:
+            log.info("✅ Используется Qdrant Cloud")
         return _qdrant_client
     except Exception as e:
         log.error(f"❌ Ошибка подключения к Qdrant ({QDRANT_URL}): {e}")
-        log.error(f"❌ Убедитесь, что Qdrant сервер запущен. Запустите: docker run -p 6333:6333 qdrant/qdrant")
+        if QDRANT_API_KEY:
+            log.error(f"❌ Проверьте QDRANT_URL и QDRANT_API_KEY в переменных окружения")
+            log.error(f"❌ Qdrant Cloud URL должен быть: https://...us-east4-0.gcp.cloud.qdrant.io")
+        else:
+            log.error(f"❌ Для локальной разработки: docker run -p 6333:6333 qdrant/qdrant")
+            log.error(f"❌ Или используйте Qdrant Cloud: установите QDRANT_URL и QDRANT_API_KEY")
         return None
 
-def get_embedding_model():
-    """Получить модель для эмбеддингов"""
-    global _embedding_model
+async def generate_embedding_async(text: str) -> Optional[List[float]]:
+    """
+    Генерирует эмбеддинг для текста через OpenAI API (асинхронно)
     
-    if not QDRANT_AVAILABLE:
+    Args:
+        text: Текст для генерации эмбеддинга
+    
+    Returns:
+        Список чисел (эмбеддинг) или None при ошибке
+    """
+    if not EMBEDDING_API_KEY:
+        log.error("❌ OPENAI_API_KEY или OPENROUTER_API_KEY не установлен для эмбеддингов")
         return None
     
-    if _embedding_model is not None:
-        return _embedding_model
+    url = EMBEDDING_API_URL
+    headers = {
+        "Authorization": f"Bearer {EMBEDDING_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Если используем OpenRouter, добавляем заголовки
+    if "openrouter" in url.lower():
+        app_url = os.getenv("APP_URL", "https://github.com/HR2137_bot").strip()
+        headers["HTTP-Referer"] = app_url
+        headers["X-Title"] = "HR2137_bot"
+    
+    data = {
+        "model": EMBEDDING_MODEL,
+        "input": text[:8000]  # Ограничение для API
+    }
     
     try:
-        # Используем русскоязычную модель для лучшего качества
-        log.info("🔄 Загрузка модели для эмбеддингов (это может занять 1-2 минуты при первом запуске)...")
-        _embedding_model = SentenceTransformer('intfloat/multilingual-e5-base')
-        log.info("✅ Модель для эмбеддингов загружена")
-        return _embedding_model
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=data, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status >= 400:
+                    error_text = await response.text()
+                    log.error(f"❌ Ошибка API эмбеддингов {response.status}: {error_text}")
+                    return None
+                
+                result = await response.json()
+                if "data" in result and len(result["data"]) > 0:
+                    embedding = result["data"][0]["embedding"]
+                    log.debug(f"✅ Эмбеддинг сгенерирован через API (размерность: {len(embedding)})")
+                    return embedding
+                else:
+                    log.error(f"❌ Неожиданный формат ответа от API: {result}")
+                    return None
+    except asyncio.TimeoutError:
+        log.error("❌ Таймаут при генерации эмбеддинга")
+        return None
     except Exception as e:
-        log.error(f"❌ Ошибка загрузки модели эмбеддингов: {e}")
-        log.error(f"❌ Убедитесь, что sentence-transformers установлен: pip install sentence-transformers")
+        log.error(f"❌ Ошибка генерации эмбеддинга: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return None
+
+def generate_embedding(text: str) -> Optional[List[float]]:
+    """
+    Генерирует эмбеддинг для текста через OpenAI API (синхронная обертка)
+    
+    Args:
+        text: Текст для генерации эмбеддинга
+    
+    Returns:
+        Список чисел (эмбеддинг) или None при ошибке
+    """
+    try:
+        # Пытаемся использовать существующий event loop
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Если loop уже запущен, создаем новый в потоке
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, generate_embedding_async(text))
+                    return future.result(timeout=30)
+            else:
+                return loop.run_until_complete(generate_embedding_async(text))
+        except RuntimeError:
+            # Нет event loop, создаем новый
+            return asyncio.run(generate_embedding_async(text))
+    except Exception as e:
+        log.error(f"❌ Ошибка синхронной обертки: {e}")
         return None
 
 def ensure_collection():
     """Создать коллекцию в Qdrant если её нет"""
-    global _collection_initialized
+    global _collection_initialized, _embedding_dimension
     
     client = get_qdrant_client()
     if not client:
@@ -99,23 +200,27 @@ def ensure_collection():
         collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
         
         if not collection_exists:
-            # Создаем коллекцию
-            model = get_embedding_model()
-            if not model:
-                log.error("❌ Не удалось загрузить модель для определения размерности вектора")
-                return False
-            
-            vector_size = model.get_sentence_embedding_dimension()
+            # Создаем коллекцию с фиксированной размерностью
             client.create_collection(
                 collection_name=COLLECTION_NAME,
-                vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE),
+                vectors_config=VectorParams(size=_embedding_dimension, distance=Distance.COSINE),
             )
-            log.info(f"✅ Создана коллекция '{COLLECTION_NAME}' в Qdrant")
+            log.info(f"✅ Создана коллекция '{COLLECTION_NAME}' в Qdrant (размерность: {_embedding_dimension})")
+        else:
+            log.debug(f"ℹ️ Коллекция '{COLLECTION_NAME}' уже существует")
         
         _collection_initialized = True
         return True
     except Exception as e:
+        # Проверяем, если это ошибка о том, что коллекция уже существует - это нормально
+        error_str = str(e)
+        if "already exists" in error_str or "409" in error_str or "Conflict" in error_str:
+            log.debug(f"ℹ️ Коллекция '{COLLECTION_NAME}' уже существует (это нормально)")
+            _collection_initialized = True
+            return True
         log.error(f"❌ Ошибка создания коллекции в Qdrant: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
 
 def generate_service_id(service: Dict) -> str:
@@ -124,21 +229,25 @@ def generate_service_id(service: Dict) -> str:
     return hashlib.md5(service_str.encode()).hexdigest()
 
 def index_services(services: List[Dict]) -> bool:
+    """
+    Индексировать услуги в Qdrant (старая функция, оставлена для обратной совместимости)
+    В новой версии эта функция будет использоваться для индексации документов базы знаний
+    """
     """Индексировать услуги в Qdrant"""
     if not QDRANT_AVAILABLE:
-        log.warning("⚠️ Qdrant библиотеки не установлены. Установите: pip install qdrant-client sentence-transformers")
+        log.warning("⚠️ Qdrant библиотеки не установлены. Установите: pip install qdrant-client")
         return False
     
     client = get_qdrant_client()
-    model = get_embedding_model()
     
     if not client:
         log.error(f"❌ Qdrant клиент не доступен. Проверьте подключение к {QDRANT_URL}")
         log.error(f"❌ Запустите Qdrant: docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant")
         return False
     
-    if not model:
-        log.error("❌ Модель эмбеддингов не доступна. Проверьте установку sentence-transformers")
+    # Проверяем доступность API эмбеддингов
+    if not EMBEDDING_API_KEY:
+        log.error("❌ API ключ для эмбеддингов не установлен. Установите OPENAI_API_KEY или OPENROUTER_API_KEY")
         return False
     
     if not ensure_collection():
@@ -152,8 +261,11 @@ def index_services(services: List[Dict]) -> bool:
             # Создаем текстовое представление услуги для поиска
             service_text = f"{service.get('title', '')} {service.get('master', '')} {service.get('price_str', '')} {service.get('duration', 0)}"
             
-            # Генерируем эмбеддинг
-            embedding = model.encode(service_text, normalize_embeddings=True).tolist()
+            # Генерируем эмбеддинг через API
+            embedding = generate_embedding(service_text)
+            if embedding is None:
+                log.warning(f"⚠️ Не удалось сгенерировать эмбеддинг для услуги: {service.get('title', '')}")
+                continue
             
             # Создаем payload с полной информацией об услуге
             payload = {
@@ -180,9 +292,20 @@ def index_services(services: List[Dict]) -> bool:
                 payload=payload
             ))
         
+        # Проверяем, что есть точки для вставки
+        if not points:
+            log.warning("⚠️ Нет точек для индексации (все эмбеддинги не удалось сгенерировать)")
+            return False
+        
         # Удаляем старые данные и вставляем новые
-        client.delete_collection(COLLECTION_NAME)
-        ensure_collection()
+        try:
+            client.delete_collection(COLLECTION_NAME)
+        except Exception as e:
+            log.debug(f"ℹ️ Коллекция не существовала или уже удалена: {e}")
+        
+        if not ensure_collection():
+            log.error("❌ Не удалось создать/проверить коллекцию")
+            return False
         
         # Вставляем новые точки
         client.upsert(
@@ -200,11 +323,13 @@ def index_services(services: List[Dict]) -> bool:
         return False
 
 def search_service(query: str, limit: int = 3) -> List[Dict]:
-    """Поиск услуги по семантическому запросу в Qdrant"""
+    """
+    Поиск в базе знаний по семантическому запросу в Qdrant
+    (обновлено для работы с базой знаний консультанта)
+    """
     client = get_qdrant_client()
-    model = get_embedding_model()
     
-    if not client or not model:
+    if not client:
         log.warning("⚠️ Qdrant недоступен, используем обычный поиск")
         return []
     
@@ -216,8 +341,11 @@ def search_service(query: str, limit: int = 3) -> List[Dict]:
             log.warning(f"⚠️ Коллекция '{COLLECTION_NAME}' не существует в Qdrant")
             return []
         
-        # Генерируем эмбеддинг для запроса
-        query_embedding = model.encode(query, normalize_embeddings=True).tolist()
+        # Генерируем эмбеддинг для запроса через API
+        query_embedding = generate_embedding(query)
+        if query_embedding is None:
+            log.warning("⚠️ Не удалось сгенерировать эмбеддинг для запроса")
+            return []
         
         # Ищем в Qdrant - используем правильный метод query_points
         # query может быть list[float] напрямую
@@ -264,15 +392,119 @@ def search_service(query: str, limit: int = 3) -> List[Dict]:
         log.error(f"❌ Traceback: {traceback.format_exc()}")
         return []
 
-def refresh_index():
-    """Обновить индекс услуг из Google Sheets"""
+# ===================== ASYNC FUNCTIONS FOR DEMONSTRATION =====================
+
+async def search_with_preview(query: str, limit: int = 5) -> Dict:
+    """
+    Поиск в RAG базе с предпросмотром результатов (для демонстрации)
+    
+    Args:
+        query: Поисковый запрос
+        limit: Количество результатов
+    
+    Returns:
+        Словарь с результатами поиска и метаданными
+    """
+    results = await asyncio.to_thread(search_service, query, limit)
+    
+    return {
+        "query": query,
+        "total_results": len(results),
+        "results": results,
+        "timestamp": datetime.now().isoformat()
+    }
+
+async def get_collection_stats() -> Dict:
+    """
+    Получить статистику коллекции в Qdrant (для демонстрации)
+    
+    Returns:
+        Словарь со статистикой базы знаний
+    """
+    client = get_qdrant_client()
+    if not client:
+        return {
+            "error": "Qdrant клиент недоступен",
+            "collection_name": COLLECTION_NAME
+        }
+    
     try:
-        from google_sheets_helper import get_services
-        services = get_services()
-        if services:
-            return index_services(services)
-        return False
+        collections = client.get_collections()
+        collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
+        
+        if not collection_exists:
+            return {
+                "collection_name": COLLECTION_NAME,
+                "exists": False,
+                "points_count": 0,
+                "vector_size": _embedding_dimension
+            }
+        
+        # Получаем информацию о коллекции
+        collection_info = client.get_collection(COLLECTION_NAME)
+        points_count = collection_info.points_count if hasattr(collection_info, 'points_count') else 0
+        
+        return {
+            "collection_name": COLLECTION_NAME,
+            "exists": True,
+            "points_count": points_count,
+            "vector_size": _embedding_dimension,
+            "distance": "COSINE",
+            "status": "ready"
+        }
     except Exception as e:
-        log.error(f"❌ Ошибка обновления индекса: {e}")
-        return False
+        log.error(f"❌ Ошибка получения статистики коллекции: {e}")
+        return {
+            "error": str(e),
+            "collection_name": COLLECTION_NAME
+        }
+
+async def list_documents(limit: int = 50) -> List[Dict]:
+    """
+    Получить список документов из базы знаний (для демонстрации)
+    
+    Args:
+        limit: Максимальное количество документов
+    
+    Returns:
+        Список документов с метаданными
+    """
+    client = get_qdrant_client()
+    if not client:
+        return []
+    
+    try:
+        collections = client.get_collections()
+        collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
+        
+        if not collection_exists:
+            return []
+        
+        # Получаем точки из коллекции (scroll)
+        scroll_result = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=limit,
+            with_payload=True,
+            with_vectors=False
+        )
+        
+        documents = []
+        points = scroll_result[0] if isinstance(scroll_result, tuple) else []
+        
+        for point in points:
+            payload = point.payload if hasattr(point, 'payload') else {}
+            documents.append({
+                "id": str(point.id) if hasattr(point, 'id') else None,
+                "title": payload.get("title", payload.get("document_title", "Без названия")),
+                "category": payload.get("category", payload.get("type", "Неизвестно")),
+                "snippet": payload.get("text", payload.get("content", ""))[:200] + "..." if len(payload.get("text", payload.get("content", ""))) > 200 else payload.get("text", payload.get("content", "")),
+                "indexed_at": payload.get("indexed_at", "Неизвестно")
+            })
+        
+        return documents
+    except Exception as e:
+        log.error(f"❌ Ошибка получения списка документов: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return []
 

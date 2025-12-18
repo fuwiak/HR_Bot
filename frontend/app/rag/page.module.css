@@ -1,0 +1,336 @@
+.ragDashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.dashboardHeader {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.dashboardHeader h1 {
+  margin: 0;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status {
+  font-size: 14px;
+  opacity: 0.9;
+  margin-top: 5px;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e4e6eb;
+  padding-bottom: 0;
+}
+
+.tabBtn {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: #65676b;
+  transition: all 0.2s;
+}
+
+.tabBtn:hover {
+  background: #f0f2f5;
+  color: #1877f2;
+}
+
+.tabBtn.active {
+  color: #1877f2;
+  border-bottom-color: #1877f2;
+}
+
+.tabContent {
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.panel {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.panelTitle {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #1c1e21;
+  border-bottom: 2px solid #e4e6eb;
+  padding-bottom: 10px;
+}
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.statusCard {
+  background: #f0f2f5;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.statusLabel {
+  font-size: 12px;
+  color: #65676b;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.statusValue {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1877f2;
+}
+
+.buttonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.btn {
+  padding: 12px 24px;
+  background: #1877f2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: #166fe5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.btnSecondary {
+  background: #42b883;
+}
+
+.btnSecondary:hover {
+  background: #369870;
+}
+
+.infoTable {
+  display: grid;
+  gap: 15px;
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background: #f0f2f5;
+  border-radius: 6px;
+}
+
+.infoLabel {
+  font-weight: 600;
+  color: #65676b;
+}
+
+.infoValue {
+  color: #1c1e21;
+  font-weight: 500;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.metricCard {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.metricLabel {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-bottom: 10px;
+}
+
+.metricValue {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.metricTarget {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.testQueryForm {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.testInput {
+  flex: 1;
+  padding: 12px;
+  border: 2px solid #e4e6eb;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.testInput:focus {
+  outline: none;
+  border-color: #1877f2;
+}
+
+.testResult {
+  background: #f0f2f5;
+  padding: 20px;
+  border-radius: 8px;
+  min-height: 200px;
+}
+
+.resultPlaceholder {
+  color: #65676b;
+  text-align: center;
+  padding: 40px;
+}
+
+.fileUploadArea {
+  margin-bottom: 20px;
+}
+
+.uploadBox {
+  border: 2px dashed #e4e6eb;
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.uploadBox:hover {
+  border-color: #1877f2;
+  background: #f0f2f5;
+}
+
+.uploadIcon {
+  font-size: 48px;
+  margin-bottom: 10px;
+}
+
+.uploadText {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1c1e21;
+  margin-bottom: 5px;
+}
+
+.uploadHint {
+  font-size: 12px;
+  color: #65676b;
+}
+
+.paramsPanel {
+  position: fixed;
+  bottom: 0;
+  right: 20px;
+  width: 350px;
+  background: white;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.1);
+  z-index: 1000;
+  max-height: 80vh;
+  transition: transform 0.3s;
+}
+
+.paramsPanel.collapsed {
+  transform: translateY(calc(100% - 50px));
+}
+
+.paramsPanelHeader {
+  background: #1877f2;
+  color: white;
+  padding: 15px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.paramsPanelContent {
+  padding: 20px;
+  max-height: calc(80vh - 60px);
+  overflow-y: auto;
+}
+
+.paramGroup {
+  margin-bottom: 20px;
+}
+
+.paramLabel {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.paramValue {
+  font-weight: 600;
+  color: #1877f2;
+}
+
+.paramSlider {
+  width: 100%;
+}
+
+.paramActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+
+
+
+
+
+
+

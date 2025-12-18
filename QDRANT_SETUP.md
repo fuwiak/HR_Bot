@@ -85,7 +85,7 @@ QDRANT_API_KEY=your_api_key
 ```
 ✅ Qdrant клиент успешно подключен: http://localhost:6333
 ✅ Модель для эмбеддингов загружена
-✅ Создана коллекция 'romanbot_services' в Qdrant
+✅ Создана коллекция 'hr2137_bot_services' в Qdrant
 ✅ Индексировано X услуг в Qdrant
 ```
 

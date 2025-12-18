@@ -1,0 +1,56 @@
+# Railway Services Configuration
+# Этот файл описывает структуру сервисов для Railway
+# Railway не использует этот файл напрямую, но он служит документацией
+
+# ===================== СЕРВИС 1: Telegram Bot =====================
+[service.telegram-bot]
+name = "Telegram Bot"
+description = "Основной Telegram бот с webhook поддержкой"
+dockerfile = "Dockerfile.telegram"
+port = 8080
+
+# Переменные окружения
+[service.telegram-bot.env]
+TELEGRAM_TOKEN = "required"
+OPENROUTER_API_KEY = "required"
+USE_WEBHOOK = "true"
+PORT = "8080"
+
+# ===================== СЕРВИС 2: Backend API =====================
+[service.backend]
+name = "Backend API"
+description = "FastAPI backend с веб-интерфейсом и RAG Dashboard"
+dockerfile = "Dockerfile.backend"
+port = 8081
+
+# Переменные окружения
+[service.backend.env]
+WEB_INTERFACE_PORT = "8081"
+PORT = "8081"
+SECRET_KEY = "required"
+
+# ===================== СЕРВИС 3: Frontend =====================
+[service.frontend]
+name = "Frontend"
+description = "Next.js frontend приложение"
+dockerfile = "Dockerfile.frontend"
+root_directory = "/"
+port = 3000
+
+# Переменные окружения
+[service.frontend.env]
+PORT = "3000"
+NODE_ENV = "production"
+NEXT_PUBLIC_API_URL = "https://backend-service.up.railway.app"
+BACKEND_URL = "https://backend-service.up.railway.app"
+
+# ===================== ОБЩИЕ ПЕРЕМЕННЫЕ =====================
+# Эти переменные можно добавить в Project Variables (доступны всем сервисам)
+[shared.env]
+QDRANT_URL = "optional"
+QDRANT_API_KEY = "optional"
+OPENROUTER_API_KEY = "optional"
+WEEEEK_TOKEN = "optional"
+HRTIME_API_KEY = "optional"
+YANDEX_EMAIL = "optional"
+YANDEX_PASSWORD = "optional"

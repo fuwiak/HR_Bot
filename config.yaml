@@ -1,0 +1,58 @@
+# Конфигурация HR2137 Bot с RAG
+# Эмбеддинги генерируются через OpenRouter API (qwen/qwen3-embedding-8b) - поддерживает русский и 100+ языков
+
+# Whitelist источников для RAG (HR консалтинг)
+whitelist:
+  - https://disk.yandex.ru/d/-BtoZgh5VMdsPQ  # Яндекс Диск с документами
+  - file://media/  # Локальные файлы из папки media
+
+# LLM параметры
+llm:
+  # Основная модель (пробуется первой)
+  primary:
+    provider: "openrouter"  # OpenRouter для DeepSeek
+    model: "deepseek/deepseek-chat"  # Основная модель
+    temperature: 0.7
+    max_tokens: 2048
+    timeout: 30
+  
+  # Цепочка fallback моделей (пробуются по порядку при ошибке/низкой уверенности)
+  fallback_chain:
+    - provider: "openrouter"  # Fallback 1
+      model: "deepseek/deepseek-chat"
+      temperature: 0.7
+      max_tokens: 2048
+      timeout: 30
+    - provider: "gigachat"  # Fallback 2 (российское решение)
+      model: "GigaChat:latest"
+      temperature: 0.7
+      max_tokens: 2048
+      timeout: 30
+    
+  confidence_threshold: 0.7  # Порог уверенности для переключения на fallback
+
+# RAG параметры
+rag:
+  collection_name: "hr2137_bot_knowledge_base"
+  top_k: 10  # Количество результатов для поиска
+  min_score: 0.3  # Минимальный score для релевантности
+  chunk_size: 500
+  chunk_overlap: 50
+  
+  # Hybrid search (BM25 + Dense)
+  search_strategy: "hybrid"  # "dense", "bm25", или "hybrid"
+  
+  # Веса для hybrid search (сумма должна быть ~1.0)
+  hybrid_weights:
+    dense: 0.5      # Вес для dense search (семантический)
+    bm25: 0.5       # Вес для BM25 (ключевые слова)
+  
+  # Для запросов с ценами/коммерческими предложениями - более точный поиск
+  pricing_search:
+    enabled: true
+    strategy: "hybrid"  # "hybrid" для более точного поиска
+    bm25_weight: 0.7    # Выше вес BM25 для точных совпадений
+    dense_weight: 0.3
+    min_score: 0.4      # Минимальный score для поиска цен/КП
+    top_k: 15           # Больше результатов для поиска
+

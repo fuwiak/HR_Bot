@@ -138,3 +138,5 @@ await app.bot.set_webhook(
 
 Таймаут для HTTP запросов к OpenRouter: 30 секунд (можно изменить в `openrouter_chat` функции).
 
+
+

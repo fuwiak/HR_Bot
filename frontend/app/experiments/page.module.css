@@ -1,0 +1,145 @@
+.contentCard {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.contentCard h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1c1e21;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #65676b;
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e4e6eb;
+  border-radius: 8px;
+  padding: 20px;
+  transition: all 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.card h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1c1e21;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card p {
+  color: #65676b;
+  font-size: 15px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.formGroup {
+  margin-bottom: 16px;
+}
+
+.formGroup label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1c1e21;
+  margin-bottom: 6px;
+}
+
+.formGroup input,
+.formGroup textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ccd0d5;
+  border-radius: 6px;
+  font-size: 15px;
+  font-family: inherit;
+  background: #f0f2f5;
+  transition: border-color 0.2s;
+}
+
+.formGroup input:focus,
+.formGroup textarea:focus {
+  outline: none;
+  border-color: #1877f2;
+  background: #fff;
+}
+
+.formGroup textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.btn {
+  display: inline-block;
+  padding: 10px 20px;
+  background: #1877f2;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 15px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: #166fe5;
+  transform: scale(1.02);
+}
+
+.result {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f0f2f5;
+  border-radius: 8px;
+  border-left: 3px solid #1877f2;
+}
+
+.result pre {
+  background: #fff;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+  border: 1px solid #e4e6eb;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
+
+
+
+
+

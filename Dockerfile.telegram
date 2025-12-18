@@ -1,0 +1,38 @@
+# Dockerfile для Telegram Bot сервиса
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copy application code (копируем все Python файлы и необходимые директории)
+COPY app.py .
+COPY *.py ./
+COPY templates/ ./templates/
+COPY config.yaml .
+COPY dashboard_static/ ./dashboard_static/ 2>/dev/null || true
+
+# Expose port for Telegram webhook
+EXPOSE 8080
+
+# Run only Telegram bot
+CMD ["python", "app.py"]

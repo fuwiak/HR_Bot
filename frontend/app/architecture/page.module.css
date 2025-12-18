@@ -1,0 +1,96 @@
+.contentCard {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.contentCard h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1c1e21;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #65676b;
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+.mermaidContainer {
+  background: #f0f2f5;
+  padding: 24px;
+  border-radius: 8px;
+  margin: 16px 0;
+  overflow-x: auto;
+  border: 1px solid #e4e6eb;
+}
+
+.mermaid {
+  background: white;
+  padding: 20px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  white-space: pre;
+  line-height: 1.5;
+}
+
+.techStack {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.techCard {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e4e6eb;
+  border-left: 4px solid #1877f2;
+  transition: all 0.2s;
+}
+
+.techCard:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.techCard h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1877f2;
+  margin-bottom: 12px;
+}
+
+.techCard ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.techCard li {
+  padding: 6px 0;
+  color: #65676b;
+  font-size: 14px;
+  line-height: 1.5;
+  border-bottom: 1px solid #f0f2f5;
+  position: relative;
+  padding-left: 18px;
+}
+
+.techCard li:before {
+  content: "▸ ";
+  color: #1877f2;
+  font-weight: bold;
+  position: absolute;
+  left: 0;
+}
+
+.techCard li:last-child {
+  border-bottom: none;
+}
+

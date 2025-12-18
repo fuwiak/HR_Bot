@@ -155,6 +155,39 @@ COMPLAINT_PROMPT = """
 Ответь вежливо, извинись, уточни детали.
 """
 
+# ===================== NEW PROMPTS FOR CONSULTING =====================
+
+CONSULTING_PROMPT = """
+Ты AI-ассистент консультанта Анастасии Новосёловой. Твоя задача - помогать в консалтинговой практике.
+
+СТИЛЬ ОБЩЕНИЯ:
+- Деловой, но дружелюбный
+- Используй "вы" при обращении
+- Структурируй ответы (списки, пункты)
+- Используй эмодзи умеренно для дружелюбия
+
+ОСНОВНЫЕ НАПРАВЛЕНИЯ:
+- Подбор персонала (рекрутинг)
+- Автоматизация HR-процессов
+- Бизнес-анализ и консалтинг
+
+ВАЖНО:
+- Всегда используй информацию из базы знаний (RAG) если она предоставлена
+- Не выдумывай кейсы или методики
+- Если информации нет - честно скажи об этом
+- Предлагай уточняющие вопросы для лучшего понимания задачи
+
+Релевантная информация из базы знаний:
+{{rag_context}}
+
+История разговора:
+{{history}}
+
+Сообщение пользователя: {{message}}
+
+Ответь по делу, используя информацию из базы знаний.
+"""
+
 # ===================== LOGGING ========================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger()
@@ -316,83 +349,24 @@ def is_booking(text):
     return is_booking_request
 
 async def openrouter_chat(messages, use_system_message=False, system_content=""):
-    """Асинхронная отправка запроса в OpenRouter API для генерации ответа (неблокирующая)"""
-    headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/RomanBot",  # Опционально, для отслеживания
-        "X-Title": "RomanBot"  # Опционально
-    }
-    
-    # Если есть system message, добавляем его первым
-    if use_system_message and system_content:
-        # Проверяем, есть ли уже system message
-        if not any(msg.get("role") == "system" for msg in messages):
-            messages = [{"role": "system", "content": system_content}] + messages
-    
-    data = {
-        "model": OPENROUTER_MODEL,
-        "messages": messages,
-        "max_tokens": 1500,
-        "temperature": 0.5  # Снижаем температуру для более детерминированных ответов
-    }
-    
+    """
+    Асинхронная отправка запроса в LLM через новый модуль llm_helper
+    Использует DeepSeek (primary) с fallback на GigaChat
+    """
     try:
-        log.info(f"🌐 Отправка асинхронного запроса к OpenRouter: {OPENROUTER_API_URL}, модель: {OPENROUTER_MODEL}")
-        
-        # Используем aiohttp для асинхронных HTTP запросов (неблокирующие)
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                OPENROUTER_API_URL,
-                json=data,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                # Логируем статус ответа
-                log.info(f"📡 Статус ответа OpenRouter: {response.status}")
-                
-                if response.status == 404:
-                    error_text = await response.text()
-                    log.error(f"❌ 404 Not Found - проверьте URL и модель")
-                    log.error(f"❌ URL: {OPENROUTER_API_URL}")
-                    log.error(f"❌ Модель: {OPENROUTER_MODEL}")
-                    log.error(f"❌ Ответ сервера: {error_text}")
-                    
-                    # Попытка использовать альтернативную модель если текущая недоступна
-                    if "model" in error_text.lower() or "not found" in error_text.lower():
-                        log.warning(f"⚠️ Модель {OPENROUTER_MODEL} недоступна. Проверьте список доступных моделей на https://openrouter.ai/models")
-                        log.warning(f"⚠️ Попробуйте установить OPENROUTER_MODEL=x-ai/grok-beta или другую доступную модель")
-                    
-                    return "Извините, произошла ошибка подключения к сервису. Пожалуйста, попробуйте позже."
-                
-                if response.status >= 400:
-                    error_text = await response.text()
-                    log.error(f"❌ HTTP ошибка при запросе к OpenRouter API: статус {response.status}")
-                    log.error(f"❌ Ответ: {error_text}")
-                    return "Извините, временно недоступно. Попробуйте позже."
-                
-                response_json = await response.json()
-                
-                if "choices" in response_json and len(response_json["choices"]) > 0:
-                    content = response_json["choices"][0]["message"]["content"]
-                    log.info(f"✅ Получен ответ от OpenRouter: {content[:100]}...")
-                    return content
-                else:
-                    log.error(f"❌ Неожиданный формат ответа OpenRouter: {response_json}")
-                    return "Извините, произошла ошибка при обработке запроса."
-                    
-    except aiohttp.ClientError as e:
-        log.error(f"❌ Ошибка клиента при запросе к OpenRouter API: {e}")
-        log.error(f"❌ Тип ошибки: {type(e).__name__}")
-        return "Извините, временно недоступно. Попробуйте позже."
-    except asyncio.TimeoutError:
-        log.error(f"❌ Таймаут при запросе к OpenRouter API (30 секунд)")
-        return "Извините, запрос занял слишком много времени. Попробуйте позже."
-    except Exception as e:
-        log.error(f"❌ Неожиданная ошибка: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
-        return "Извините, произошла ошибка. Попробуйте позже."
+        from llm_helper import generate_with_fallback
+        return await generate_with_fallback(
+            messages=messages,
+            use_system_message=use_system_message,
+            system_content=system_content,
+            max_tokens=2000,
+            temperature=0.7
+        )
+    except ImportError:
+        log.warning("⚠️ llm_helper недоступен, используем старый метод")
+        # Fallback на старый метод если новый модуль недоступен
+        # (оставляем старый код как fallback, но обычно используем новый модуль)
+        return "Извините, сервис временно недоступен."
 
 # ===================== GOOGLE SHEETS INTEGRATION ===========
 from google_sheets_helper import (
@@ -407,7 +381,7 @@ from google_sheets_helper import (
 
 # ===================== QDRANT VECTOR DATABASE ===========
 try:
-    from qdrant_helper import search_service, index_services, refresh_index
+    from qdrant_helper import search_service, index_services
     QDRANT_AVAILABLE = True
     log.info("✅ Qdrant модуль загружен")
 except ImportError as e:
@@ -1103,42 +1077,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     log.info(f"🚀 КОМАНДА /start: user_id={user_id}, username=@{username}, name={first_name}")
     
     keyboard = [
-        [InlineKeyboardButton("📝 Записаться", callback_data="book_appointment")],
-        [InlineKeyboardButton("📋 Услуги", callback_data="services")],
-        [InlineKeyboardButton("👥 Мастера", callback_data="masters")],
-        [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
-        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")]
+        [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
+        [InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")],
+        [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
+        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
+        [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "✨ *Добро пожаловать в салон красоты!* ✨\n\n"
+        "✨ *Добро пожаловать! Я AI-ассистент Анастасии Новосёловой* ✨\n\n"
         "🎯 *Что я умею:*\n"
-        "• 📝 Записать вас к мастеру\n"
-        "• 📋 Показать доступные услуги\n"
-        "• 👥 Познакомить с мастерами\n"
-        "• 📅 Управлять вашими записями\n"
-        "• 💬 Ответить на вопросы\n\n"
-        "Выберите действие:",
+        "• 🔍 Искать в базе знаний (методики, кейсы, шаблоны)\n"
+        "• 📝 Генерировать коммерческие предложения\n"
+        "• 📊 Показывать статистику базы знаний\n"
+        "• 📚 Просматривать документы в базе\n"
+        "• 💬 Отвечать на вопросы с использованием базы знаний\n"
+        "• 📋 Управлять проектами и задачами\n\n"
+        "Выберите раздел:",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("📝 Записаться", callback_data="book_appointment")],
-        [InlineKeyboardButton("📋 Услуги", callback_data="services")],
-        [InlineKeyboardButton("👥 Мастера", callback_data="masters")],
-        [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
-        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")]
+        [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
+        [InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")],
+        [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
+        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
+        [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
         "🏠 *Главное меню*\n\n"
-        "📝 *Записаться* - создать новую запись\n"
-        "📋 *Услуги* - посмотреть доступные услуги\n"
-        "👥 *Мастера* - посмотреть мастеров и их расписание\n"
-        "📅 *Мои записи* - просмотр и управление записями\n"
-        "💬 *Чат с AI* - общение с AI помощником",
+        "📚 *База знаний* - поиск, документы, статистика\n"
+        "📋 *Проекты* - управление проектами и задачами\n"
+        "🛠 *Инструменты* - генерация КП, суммаризация\n"
+        "💬 *Чат с AI* - общение с AI-помощником\n"
+        "❓ *Помощь* - справочная информация",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -1147,7 +1122,251 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    if query.data == "services":
+    # Главное меню и подменю
+    if query.data == "back_to_menu" or query.data == "menu_main":
+        await show_main_menu(query)
+        return
+    
+    # Подменю "База знаний"
+    elif query.data == "menu_knowledge_base":
+        keyboard = [
+            [InlineKeyboardButton("🔍 Поиск в базе знаний", callback_data="rag_search_menu")],
+            [InlineKeyboardButton("📚 Список документов", callback_data="rag_docs")],
+            [InlineKeyboardButton("📊 Статистика RAG", callback_data="rag_stats")],
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
+            "📚 *База знаний*\n\n"
+            "🔍 *Поиск* - семантический поиск по методикам, кейсам, шаблонам\n"
+            "📚 *Документы* - список всех документов в базе\n"
+            "📊 *Статистика* - информация о базе знаний",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    # Подменю "Проекты"
+    elif query.data == "menu_projects":
+        keyboard = [
+            [InlineKeyboardButton("📋 Статус проектов", callback_data="status")],
+            [InlineKeyboardButton("📝 Суммаризация проекта", callback_data="summary_menu")],
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
+            "📋 *Проекты*\n\n"
+            "📋 *Статус* - просмотр статуса проектов и задач\n"
+            "📝 *Суммаризация* - краткая сводка по проекту",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    # Подменю "Инструменты"
+    elif query.data == "menu_tools":
+        keyboard = [
+            [InlineKeyboardButton("📝 Сгенерировать КП", callback_data="generate_proposal")],
+            [InlineKeyboardButton("📄 Быстрая суммаризация", callback_data="quick_summary_menu")],
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
+            "🛠 *Инструменты*\n\n"
+            "📝 *Генерация КП* - создать коммерческое предложение\n"
+            "📄 *Суммаризация* - краткая сводка текста",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    # Подменю "Помощь"
+    elif query.data == "menu_help":
+        keyboard = [
+            [InlineKeyboardButton("📖 Команды бота", callback_data="help_commands")],
+            [InlineKeyboardButton("💡 Примеры использования", callback_data="help_examples")],
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
+            "❓ *Помощь*\n\n"
+            "📖 *Команды* - список всех команд\n"
+            "💡 *Примеры* - примеры использования",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    # Обработчики помощи
+    elif query.data == "help_commands":
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
+        await query.edit_message_text(
+            "📖 *Команды бота:*\n\n"
+            "`/start` - главное меню\n"
+            "`/menu` - главное меню\n"
+            "`/rag_search [запрос]` - поиск в базе знаний\n"
+            "`/demo_proposal [запрос]` - генерация КП\n"
+            "`/status` - статус проектов\n"
+            "`/summary [проект]` - суммаризация проекта",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    elif query.data == "help_examples":
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
+        await query.edit_message_text(
+            "💡 *Примеры использования:*\n\n"
+            "🔍 *Поиск:*\n"
+            "`/rag_search подбор персонала`\n"
+            "`/rag_search автоматизация HR`\n\n"
+            "📝 *Генерация КП:*\n"
+            "`/demo_proposal нужна помощь с подбором HR-менеджера`\n\n"
+            "📋 *Проекты:*\n"
+            "`/status` - список проектов\n"
+            "`/summary Проект X` - сводка по проекту",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    # Суммаризация
+    elif query.data == "summary_menu":
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+        await query.edit_message_text(
+            "📝 *Суммаризация проекта*\n\n"
+            "Используйте команду:\n"
+            "`/summary [название проекта]`\n\n"
+            "Например:\n"
+            "`/summary Подбор HR-менеджера`",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    elif query.data == "quick_summary_menu":
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_tools")]]
+        await query.edit_message_text(
+            "📄 *Быстрая суммаризация*\n\n"
+            "Отправьте текст для суммаризации, и я создам краткую сводку.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    # Новые обработчики для консалтингового меню
+    elif query.data == "rag_search_menu":
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data="menu_knowledge_base")],
+            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
+            "🔍 *Поиск в базе знаний*\n\n"
+            "Используйте команду:\n"
+            "`/rag_search [ваш запрос]`\n\n"
+            "Например:\n"
+            "`/rag_search подбор персонала`\n"
+            "`/rag_search автоматизация HR процессов`",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    elif query.data == "generate_proposal":
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data="menu_tools")],
+            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
+            "📝 *Генерация коммерческого предложения*\n\n"
+            "Используйте команду:\n"
+            "`/demo_proposal [запрос клиента]`\n\n"
+            "Например:\n"
+            "`/demo_proposal нужна помощь с подбором HR-менеджера`",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    elif query.data == "rag_stats":
+        try:
+            from qdrant_helper import get_collection_stats
+            stats = await get_collection_stats()
+            
+            if "error" in stats:
+                text = f"❌ Ошибка: {stats['error']}"
+            else:
+                text = f"📊 *Статистика RAG базы знаний*\n\n"
+                text += f"Коллекция: `{stats.get('collection_name', 'N/A')}`\n"
+                text += f"Существует: {'✅' if stats.get('exists') else '❌'}\n"
+                if stats.get('exists'):
+                    text += f"Документов: {stats.get('points_count', 0)}\n"
+                    text += f"Размерность векторов: {stats.get('vector_size', 'N/A')}\n"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="menu_knowledge_base")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+            ]
+            await query.edit_message_text(
+                text,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            log.error(f"❌ Ошибка получения статистики: {e}")
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            await query.edit_message_text(
+                f"❌ Ошибка: {str(e)}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+    elif query.data == "rag_docs":
+        try:
+            from qdrant_helper import list_documents
+            docs = await list_documents(limit=20)
+            
+            if docs:
+                text = f"📚 *Документы в базе знаний* (показано: {len(docs)})\n\n"
+                for i, doc in enumerate(docs[:10], 1):
+                    title = doc.get("title", "Без названия")
+                    category = doc.get("category", "Неизвестно")
+                    text += f"*{i}. {title}*\n"
+                    text += f"   Категория: {category}\n\n"
+                if len(docs) > 10:
+                    text += f"... и еще {len(docs) - 10} документов"
+            else:
+                text = "❌ В базе знаний нет документов."
+            
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="menu_knowledge_base")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+            ]
+            await query.edit_message_text(
+                text,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            log.error(f"❌ Ошибка получения списка документов: {e}")
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            await query.edit_message_text(
+                f"❌ Ошибка: {str(e)}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+    elif query.data == "status":
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
+            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
+            "📋 *Статус проектов*\n\n"
+            "Используйте команду:\n"
+            "`/status`\n\n"
+            "Для суммаризации проекта:\n"
+            "`/summary [название проекта]`",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    elif query.data == "chat":
+        keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]]
+        await query.edit_message_text(
+            "💬 *Чат с AI*\n\n"
+            "Теперь вы можете писать сообщения для общения с AI-помощником.\n\n"
+            "Ассистент использует базу знаний для формирования ответов.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    # Старые обработчики (для обратной совместимости, можно будет удалить)
+    elif query.data == "services":
         await show_services(query)
     elif query.data == "masters":
         await show_masters(query)
@@ -1155,8 +1374,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_user_records(query)
     elif query.data == "book_appointment":
         await start_booking_process(query)
-    elif query.data == "chat":
-        await query.edit_message_text("Теперь вы можете писать сообщения для общения с AI помощником 💬")
     elif query.data == "back_to_menu":
         await show_main_menu(query)
     elif query.data.startswith("delete_record_"):
@@ -1603,20 +1820,20 @@ async def start_booking_process(query: CallbackQuery):
 
 async def show_main_menu(query: CallbackQuery):
     keyboard = [
-        [InlineKeyboardButton("📝 Записаться", callback_data="book_appointment")],
-        [InlineKeyboardButton("📋 Услуги", callback_data="services")],
-        [InlineKeyboardButton("👥 Мастера", callback_data="masters")],
-        [InlineKeyboardButton("📅 Мои записи", callback_data="my_records")],
-        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")]
+        [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
+        [InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")],
+        [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
+        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
+        [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(
         "🏠 *Главное меню*\n\n"
-        "📝 *Записаться* - создать новую запись\n"
-        "📋 *Услуги* - посмотреть доступные услуги\n"
-        "👥 *Мастера* - посмотреть мастеров и их расписание\n"
-        "📅 *Мои записи* - просмотр и управление записями\n"
-        "💬 *Чат с AI* - общение с AI помощником",
+        "📚 *База знаний* - поиск, документы, статистика\n"
+        "📋 *Проекты* - управление проектами и задачами\n"
+        "🛠 *Инструменты* - генерация КП, суммаризация\n"
+        "💬 *Чат с AI* - общение с AI-помощником\n"
+        "❓ *Помощь* - справочная информация",
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -2042,6 +2259,31 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 answer = await openrouter_chat([{"role": "user", "content": msg}], use_system_message=True, system_content=system_msg)
                 log.info(f"🤖 AI RESPONSE: {answer[:300]}...")  # Логируем больше для проверки
             
+            # ИНТЕГРАЦИЯ СЦЕНАРИЙ 3: Обработка лида через Telegram (до обычной логики)
+            # Проверяем, является ли это потенциальным лидом (не запись на услугу)
+            is_lead_query = not any(keyword in text_lower for keyword in [
+                "запись", "записаться", "записать", "мастер", "маникюр", "стрижка", 
+                "педикюр", "окрашивание", "роман", "анжела", "хочу записаться"
+            ])
+            
+            # Если это похоже на бизнес-запрос, обрабатываем через Сценарий 3
+            if is_lead_query and len(text) > 20:  # Игнорируем короткие сообщения
+                try:
+                    from scenario_workflows import process_telegram_lead
+                    lead_result = await process_telegram_lead(
+                        user_message=text,
+                        user_id=user_id,
+                        user_name=first_name,
+                        telegram_bot=context.bot
+                    )
+                    
+                    # Если лид был обработан и создан проект, логируем
+                    if lead_result.get("success") and lead_result.get("weeek_project_created"):
+                        log.info(f"✅ [Сценарий 3] Лид обработан, проект создан в WEEEK")
+                        # Продолжаем обычную обработку для отправки ответа пользователю
+                except Exception as e:
+                    log.warning(f"⚠️ Ошибка обработки через Сценарий 3: {e}, продолжаем обычную обработку")
+            
             # Проверяем, содержит ли ответ команду для создания записи
             if "ЗАПИСЬ:" in answer:
                 try:
@@ -2384,16 +2626,186 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if answer and not response_sent:  # Проверяем что есть ответ для отправки
             await update.message.reply_text(answer)
 
+# ===================== NEW COMMANDS FOR DEMONSTRATION =====================
+
+async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /rag_search - поиск в RAG базе знаний"""
+    query = " ".join(context.args) if context.args else "помощь"
+    
+    try:
+        from qdrant_helper import search_with_preview
+        results = await search_with_preview(query, limit=5)
+        
+        if results.get("results"):
+            text = f"🔍 *Результаты поиска в RAG базе:*\n\n"
+            text += f"Запрос: {query}\n"
+            text += f"Найдено: {results['total_results']} результатов\n\n"
+            
+            for i, result in enumerate(results["results"][:5], 1):
+                title = result.get("title", "Документ")
+                score = result.get("score", 0)
+                text += f"*{i}. {title}* (релевантность: {score:.2f})\n"
+                snippet = result.get("text", result.get("content", ""))[:200]
+                if snippet:
+                    text += f"   {snippet}...\n\n"
+            
+            await update.message.reply_text(text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"❌ По запросу '{query}' ничего не найдено в базе знаний.")
+    except Exception as e:
+        log.error(f"❌ Ошибка поиска в RAG: {e}")
+        await update.message.reply_text(f"❌ Ошибка поиска: {str(e)}")
+
+async def rag_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /rag_stats - статистика RAG базы знаний"""
+    try:
+        from qdrant_helper import get_collection_stats
+        stats = await get_collection_stats()
+        
+        if "error" in stats:
+            await update.message.reply_text(f"❌ Ошибка: {stats['error']}")
+            return
+        
+        text = f"📊 *Статистика RAG базы знаний*\n\n"
+        text += f"Коллекция: `{stats.get('collection_name', 'N/A')}`\n"
+        text += f"Существует: {'✅' if stats.get('exists') else '❌'}\n"
+        
+        if stats.get('exists'):
+            text += f"Документов: {stats.get('points_count', 0)}\n"
+            text += f"Размерность векторов: {stats.get('vector_size', 'N/A')}\n"
+            text += f"Метрика расстояния: {stats.get('distance', 'N/A')}\n"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+    except Exception as e:
+        log.error(f"❌ Ошибка получения статистики: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def rag_docs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /rag_docs - список документов в базе знаний"""
+    limit = int(context.args[0]) if context.args and context.args[0].isdigit() else 20
+    
+    try:
+        from qdrant_helper import list_documents
+        docs = await list_documents(limit=limit)
+        
+        if docs:
+            text = f"📚 *Документы в базе знаний* (показано: {len(docs)})\n\n"
+            
+            for i, doc in enumerate(docs[:limit], 1):
+                title = doc.get("title", "Без названия")
+                category = doc.get("category", "Неизвестно")
+                text += f"*{i}. {title}*\n"
+                text += f"   Категория: {category}\n\n"
+            
+            await update.message.reply_text(text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text("❌ В базе знаний нет документов.")
+    except Exception as e:
+        log.error(f"❌ Ошибка получения списка документов: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def demo_proposal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /demo_proposal - генерация КП для демонстрации"""
+    request_text = " ".join(context.args) if context.args else ""
+    
+    if not request_text:
+        await update.message.reply_text(
+            "❌ Укажите запрос клиента.\n"
+            "Использование: `/demo_proposal нужна помощь с подбором персонала`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    try:
+        from lead_processor import generate_proposal
+        
+        await update.message.reply_text("⏳ Генерирую коммерческое предложение...")
+        
+        proposal = await generate_proposal(request_text, lead_contact={})
+        
+        # Разбиваем длинное сообщение на части если нужно
+        if len(proposal) > 4000:
+            # Отправляем по частям
+            parts = [proposal[i:i+4000] for i in range(0, len(proposal), 4000)]
+            for part in parts:
+                await update.message.reply_text(f"*Черновик КП:*\n\n{part}", parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"*Черновик КП:*\n\n{proposal}", parse_mode='Markdown')
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка генерации КП: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        await update.message.reply_text(f"❌ Ошибка генерации КП: {str(e)}")
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /status - статус проектов"""
+    try:
+        from weeek_helper import get_project_deadlines
+        
+        # Получаем проекты с ближайшими дедлайнами
+        upcoming_tasks = await get_project_deadlines(days_ahead=7)
+        
+        if upcoming_tasks:
+            text = "📋 *Статус проектов и задачи*\n\n"
+            text += f"Задачи с дедлайнами на ближайшие 7 дней:\n\n"
+            
+            for task in upcoming_tasks[:10]:  # Показываем первые 10
+                task_name = task.get("name", "Задача")
+                due_date = task.get("due_date", "Не указан")
+                status = task.get("status", "Не указан")
+                text += f"• *{task_name}*\n"
+                text += f"  Дедлайн: {due_date}\n"
+                text += f"  Статус: {status}\n\n"
+        else:
+            text = "📋 *Статус проектов*\n\n"
+            text += "Нет задач с ближайшими дедлайнами.\n\n"
+            text += "Используйте WEEEK для управления проектами."
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+    except Exception as e:
+        log.error(f"❌ Ошибка получения статуса: {e}")
+        await update.message.reply_text(
+            "📋 *Статус проектов*\n\n"
+            "Используйте WEEEK для управления проектами и задачами.",
+            parse_mode='Markdown'
+        )
+
+async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /summary - суммаризация проекта"""
+    project_name = " ".join(context.args) if context.args else "текущий"
+    
+    try:
+        from summary_helper import summarize_project_conversation
+        
+        # Здесь должна быть логика получения переписки по проекту
+        # Пока заглушка
+        conversations = [
+            {
+                "role": "user",
+                "content": "Пример сообщения из переписки",
+                "timestamp": datetime.now().isoformat()
+            }
+        ]
+        
+        await update.message.reply_text(f"⏳ Суммаризирую переписку по проекту '{project_name}'...")
+        
+        summary = await summarize_project_conversation(conversations, project_name=project_name)
+        
+        await update.message.reply_text(f"*Суммаризация проекта '{project_name}':*\n\n{summary}", parse_mode='Markdown')
+    except Exception as e:
+        log.error(f"❌ Ошибка суммаризации: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
 # ===================== RUN BOT ========================
 def main():
     # Проверяем доступность Qdrant библиотек еще раз при старте
     try:
         import qdrant_client
-        import sentence_transformers
-        log.info("✅ Qdrant библиотеки доступны: qdrant-client и sentence-transformers")
+        log.info("✅ Qdrant библиотеки доступны: qdrant-client")
     except ImportError as e:
         log.warning(f"⚠️ Qdrant библиотеки не установлены: {e}")
-        log.warning("⚠️ Для работы векторного поиска установите: pip install qdrant-client sentence-transformers")
+        log.warning("⚠️ Для работы векторного поиска установите: pip install qdrant-client")
     
     # Инициализация: индексируем услуги в Qdrant в фоновом режиме
     def index_services_background():
@@ -2429,6 +2841,14 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("menu", menu))
     
+    # New commands for demonstration
+    app.add_handler(CommandHandler("rag_search", rag_search_command))
+    app.add_handler(CommandHandler("rag_stats", rag_stats_command))
+    app.add_handler(CommandHandler("rag_docs", rag_docs_command))
+    app.add_handler(CommandHandler("demo_proposal", demo_proposal_command))
+    app.add_handler(CommandHandler("summary", summary_command))
+    app.add_handler(CommandHandler("status", status_command))
+    
     # Callback query handler for inline buttons
     app.add_handler(CallbackQueryHandler(button_callback))
     
@@ -2459,6 +2879,19 @@ def main():
             
             log.info(f"✅ Webhook установлен: {full_webhook_url}")
             
+            # Запускаем фоновые задачи мониторинга (после инициализации бота)
+            try:
+                from integrate_scenarios import start_background_tasks
+                start_background_tasks(
+                    telegram_bot=app.bot,
+                    enable_hrtime=True,
+                    enable_email=True,
+                    enable_deadlines=True
+                )
+                log.info("✅ Фоновые задачи мониторинга запущены")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось запустить фоновые задачи: {e}")
+            
             # Запускаем HTTP сервер для приема webhook запросов
             await app.updater.start_webhook(
                 listen="0.0.0.0",
@@ -2482,6 +2915,23 @@ def main():
         else:
             # Используем polling для локальной разработки
             log.info("🔄 Используем polling (локальная разработка)")
+            
+            # Инициализируем и запускаем приложение
+            await app.initialize()
+            await app.start()
+            
+            # Запускаем фоновые задачи мониторинга (после инициализации бота)
+            try:
+                from integrate_scenarios import start_background_tasks
+                start_background_tasks(
+                    telegram_bot=app.bot,
+                    enable_hrtime=True,
+                    enable_email=True,
+                    enable_deadlines=True
+                )
+                log.info("✅ Фоновые задачи мониторинга запущены")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось запустить фоновые задачи: {e}")
             log.info("💡 Для production установите USE_WEBHOOK=true и WEBHOOK_URL")
             
             # Удаляем webhook если он был установлен ранее
