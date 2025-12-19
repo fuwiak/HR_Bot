@@ -3175,7 +3175,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             project_title = project.get('title', 'Без названия')
                             
                             # Получаем задачи проекта
-                            tasks = await get_tasks(project_id=project_id, completed=False, limit=5)
+                            tasks = await get_tasks(project_id=project_id, completed=False, per_page=5)
                             task_list = []
                             if tasks and tasks.get('tasks'):
                                 for task in tasks['tasks'][:3]:  # Топ-3 задачи
@@ -3668,7 +3668,7 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 project_title = target_project.get('title', 'Без названия')
                 
                 # Получаем задачи проекта
-                tasks = await get_tasks(project_id=project_id, limit=20)
+                tasks = await get_tasks(project_id=project_id, per_page=20)
                 
                 weeek_data = f"Проект: {project_title} (ID: {project_id})\n\n"
                 
@@ -3754,7 +3754,9 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Ответь на русском языке, структурированно и подробно."""
         
         summary = await generate_with_fallback(
-            prompt=prompt,
+            messages=[{"role": "user", "content": prompt}],
+            use_system_message=True,
+            system_content="Ты AI-ассистент HR консультанта. Создавай подробные и структурированные суммаризации проектов.",
             max_tokens=1500,
             temperature=0.7
         )
