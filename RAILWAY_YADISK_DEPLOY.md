@@ -46,7 +46,7 @@
 
 ```env
 # Обязательные
-YANDEX_TOKEN=y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg
+YANDEX_TOKEN=your_yandex_token_here
 QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io
 QDRANT_API_KEY=your_qdrant_key
 OPENAI_API_KEY=your_openai_key
@@ -95,7 +95,7 @@ railway service create yadisk-indexer
 railway service use yadisk-indexer
 
 # 3. Добавить переменные окружения
-railway variables set YANDEX_TOKEN="y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg"
+railway variables set YANDEX_TOKEN="your_yandex_token_here"
 railway variables set QDRANT_URL="https://your-cluster.aws.cloud.qdrant.io"
 railway variables set QDRANT_API_KEY="your_qdrant_key"
 railway variables set OPENAI_API_KEY="your_openai_key"

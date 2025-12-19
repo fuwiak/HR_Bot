@@ -30,7 +30,7 @@ railway logs --service yadisk-indexer
 ### Krok 1: Sprawdź .env
 ```bash
 cat .env | grep YANDEX_TOKEN
-# Powinno być: YANDEX_TOKEN=y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg
+# Powinno być: YANDEX_TOKEN=your_yandex_token_here
 ```
 
 ### Krok 2: Uruchom indexator
@@ -115,7 +115,7 @@ https://railway.app
 #### 5. Dodaj zmienne środowiskowe
 **Variables:**
 ```env
-YANDEX_TOKEN=y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg
+YANDEX_TOKEN=your_yandex_token_here
 QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io
 QDRANT_API_KEY=your_qdrant_key
 OPENAI_API_KEY=your_openai_key
@@ -170,7 +170,7 @@ railway service
 railway variables --service telegram-bot > vars.txt
 
 # Lub dodaj ręcznie
-railway variables set YANDEX_TOKEN="y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg"
+railway variables set YANDEX_TOKEN="your_yandex_token_here"
 railway variables set QDRANT_URL="https://..."
 railway variables set QDRANT_API_KEY="..."
 railway variables set OPENAI_API_KEY="..."
@@ -304,7 +304,7 @@ railway variables set YADISK_WATCH_FOLDERS="/Dokumenty,/KP"
 cat .env | grep YANDEX_TOKEN
 
 # Dodaj jeśli brak
-echo 'YANDEX_TOKEN=y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg' >> .env
+echo 'YANDEX_TOKEN=your_yandex_token_here' >> .env
 ```
 
 ### Błąd: "Cannot connect to Qdrant"
@@ -349,7 +349,7 @@ tail -f logs/yadisk_indexer.out
 ### Railway:
 ```bash
 railway service create yadisk-indexer
-railway variables set YANDEX_TOKEN="y0__xDwj..."
+railway variables set YANDEX_TOKEN="your_yandex_token_here"
 railway up
 railway logs
 ```

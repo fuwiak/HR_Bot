@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 # ===================== CONFIGURATION =====================
 
 # Yandex Disk
-TOKEN = os.getenv("YANDEX_TOKEN", "y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg")
+TOKEN = os.getenv("YANDEX_TOKEN", "your_yandex_token_here")
 BASE_URL = "https://cloud-api.yandex.net/v1/disk"
 HEADERS = {"Authorization": f"OAuth {TOKEN}"}
 

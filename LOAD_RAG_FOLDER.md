@@ -229,7 +229,7 @@ for point in results[0]:
 cat .env | grep YANDEX_TOKEN
 
 # Должно быть:
-# YANDEX_TOKEN=y0__xDwj...
+# YANDEX_TOKEN=your_yandex_token_here
 ```
 
 ### "Не удалось подключиться к Qdrant"
@@ -251,7 +251,7 @@ cat .env | grep YANDEX_TOKEN
 # Тестовый скрипт
 python3 -c "
 import requests
-TOKEN = 'y0__xDwj...'
+TOKEN = 'your_yandex_token_here'
 headers = {'Authorization': f'OAuth {TOKEN}'}
 response = requests.get(
     'https://cloud-api.yandex.net/v1/disk/resources',

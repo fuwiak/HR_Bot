@@ -12,7 +12,7 @@ Kod automatycznie wybiera API dla embeddings w kolejności:
 ## ✅ Twoja konfiguracja (.env)
 
 ```env
-OPENROUTER_API_KEY=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
+OPENROUTER_API_KEY=your_openrouter_key_here
 OPENROUTER_API_URL=https://openrouter.ai/api/v1/chat/completions
 OPENROUTER_MODEL=deepseek/deepseek-chat
 ```

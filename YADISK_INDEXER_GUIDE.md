@@ -19,7 +19,7 @@
 
 ```env
 # Обязательные
-YANDEX_TOKEN=y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg
+YANDEX_TOKEN=your_yandex_token_here
 QDRANT_URL=https://your-cluster.aws.cloud.qdrant.io
 QDRANT_API_KEY=your_qdrant_key
 OPENAI_API_KEY=your_openai_key  # Для эмбеддингов

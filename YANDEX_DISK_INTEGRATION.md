@@ -6,7 +6,7 @@
 
 В `.env` уже добавлен токен:
 ```env
-YANDEX_TOKEN=y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg
+YANDEX_TOKEN=your_yandex_token_here
 ```
 
 Токен также добавлен в Railway variables.

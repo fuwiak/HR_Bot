@@ -123,7 +123,7 @@ tail -f logs/yadisk_indexer.out
 
 ```env
 # Yandex Disk
-YANDEX_TOKEN=y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg
+YANDEX_TOKEN=your_yandex_token_here
 
 # Qdrant
 QDRANT_URL=https://...

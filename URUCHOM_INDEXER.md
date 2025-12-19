@@ -52,7 +52,7 @@ railway link
 railway service create yadisk-indexer
 
 # 3. Skopiuj zmienne z telegram-bot
-railway variables set YANDEX_TOKEN="y0__xDwjeyGARi1ujwg-6Lo3RVdezzMTmMlylbqtmwcpcYAWEQ5Dg"
+railway variables set YANDEX_TOKEN="your_yandex_token_here"
 railway variables set OPENROUTER_API_KEY="sk-or-v1-..."
 # ... (lub skopiuj wszystkie z głównego bota)
 
