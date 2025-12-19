@@ -206,7 +206,7 @@ UserWeeekWorkspace: Dict[int, str] = {}  # WEEEK Workspace ID для каждо�
 ADMIN_USER_ID = int(os.getenv("TELEGRAM_ADMIN_ID", "5305427956"))
 # Хранилище обработанных email ID (чтобы не дублировать уведомления)
 processed_email_ids: set = set()
-email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "1"))  # 5 минут по умолчанию
+email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "10"))  # 10 секунд по умолчанию
 
 def add_memory(user_id, role, text):
     UserMemory[user_id].append((role, text))
@@ -1258,7 +1258,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("weeek_set_type_"):
         await handle_weeek_set_type(query, context)
         return
-
+    
     # Обработчики помощи
     elif query.data == "help_commands":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
@@ -3531,7 +3531,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /rag_search - поиск в RAG базе знаний с генерацией ответа"""
     query = " ".join(context.args) if context.args else "помощь"
-
+    
     try:
         await update.message.reply_text(f"🔍 Ищу в базе знаний: *{query}*...", parse_mode='Markdown')
         
@@ -3808,7 +3808,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /summary - суммаризация проекта с использованием WEEEK и RAG"""
     project_name = " ".join(context.args) if context.args else "текущий"
-
+    
     try:
         await update.message.reply_text(f"⏳ Суммаризирую проект '{project_name}'...")
 
@@ -5579,8 +5579,8 @@ def main():
             # Инициализируем и запускаем приложение
             # Проверяем, что приложение еще не запущено
             if not app.running:
-                await app.initialize()
-                await app.start()
+            await app.initialize()
+            await app.start()
             else:
                 log.warning("⚠️ Приложение уже запущено, пропускаем повторный запуск")
             
@@ -5612,7 +5612,7 @@ def main():
                 log.info("✅ Фоновая задача мониторинга почты запущена")
             except Exception as e:
                 log.warning(f"⚠️ Не удалось запустить мониторинг почты: {e}")
-
+            
             # Запускаем HTTP сервер для приема webhook запросов
             await app.updater.start_webhook(
                 listen="0.0.0.0",
