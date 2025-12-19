@@ -2,6 +2,7 @@
 import os
 import re
 import time
+import json
 import logging
 import asyncio
 from collections import defaultdict, deque
@@ -202,11 +203,62 @@ UserBookingData: Dict[int, Dict] = {}  # Частично собранные д�
 UserWeeekWorkspace: Dict[int, str] = {}  # WEEEK Workspace ID для каждого пользователя
 
 # ===================== EMAIL MONITORING =====================
-# ID администратора для уведомлений о новых письмах
-ADMIN_USER_ID = int(os.getenv("TELEGRAM_ADMIN_ID", "5305427956"))
+# ID администраторов для уведомлений о новых письмах (можно указать несколько через запятую)
+ADMIN_USER_IDS_STR = os.getenv("TELEGRAM_ADMIN_IDS", os.getenv("TELEGRAM_ADMIN_ID", "5305427956"))
+# Парсим список ID администраторов
+ADMIN_USER_IDS = [int(uid.strip()) for uid in ADMIN_USER_IDS_STR.split(",") if uid.strip().isdigit()]
+# Для обратной совместимости оставляем ADMIN_USER_ID (первый из списка)
+ADMIN_USER_ID = ADMIN_USER_IDS[0] if ADMIN_USER_IDS else 5305427956
 # Хранилище обработанных email ID (чтобы не дублировать уведомления)
 processed_email_ids: set = set()
 email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "10"))  # 10 секунд по умолчанию
+# Хранилище состояния ответа на email для каждого пользователя
+email_reply_state: Dict[int, Dict] = {}  # {user_id: {'email_id': ..., 'to': ..., 'subject': ...}}
+
+# ===================== EMAIL SUBSCRIBERS =====================
+# Файл для хранения подписчиков на уведомления о почте
+EMAIL_SUBSCRIBERS_FILE = "email_subscribers.json"
+
+def load_email_subscribers() -> set:
+    """Загрузить список подписчиков из файла"""
+    try:
+        if os.path.exists(EMAIL_SUBSCRIBERS_FILE):
+            with open(EMAIL_SUBSCRIBERS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return set(data.get('subscribers', []))
+    except Exception as e:
+        log.warning(f"⚠️ Ошибка загрузки подписчиков: {e}")
+    return set()
+
+def save_email_subscribers(subscribers: set):
+    """Сохранить список подписчиков в файл"""
+    try:
+        data = {'subscribers': list(subscribers)}
+        with open(EMAIL_SUBSCRIBERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        log.error(f"❌ Ошибка сохранения подписчиков: {e}")
+
+def add_email_subscriber(user_id: int):
+    """Добавить пользователя в список подписчиков"""
+    subscribers = load_email_subscribers()
+    subscribers.add(user_id)
+    save_email_subscribers(subscribers)
+    log.info(f"✅ Пользователь {user_id} подписан на уведомления о почте")
+
+def remove_email_subscriber(user_id: int):
+    """Удалить пользователя из списка подписчиков"""
+    subscribers = load_email_subscribers()
+    subscribers.discard(user_id)
+    save_email_subscribers(subscribers)
+    log.info(f"❌ Пользователь {user_id} отписан от уведомлений о почте")
+
+def get_email_subscribers() -> set:
+    """Получить список всех подписчиков"""
+    subscribers = load_email_subscribers()
+    # Всегда добавляем администраторов
+    subscribers.update(ADMIN_USER_IDS)
+    return subscribers
 
 def add_memory(user_id, role, text):
     UserMemory[user_id].append((role, text))
@@ -1085,6 +1137,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Логируем команду /start
     log.info(f"🚀 КОМАНДА /start: user_id={user_id}, username=@{username}, name={first_name}")
     
+    # Автоматически подписываем пользователя на уведомления о почте
+    add_email_subscriber(user_id)
+    
     keyboard = [
         [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
         [InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")],
@@ -1508,6 +1563,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("email_full_"):
         email_id = query.data.replace("email_full_", "")
         await handle_email_full(query, email_id)
+    elif query.data.startswith("email_send_reply_"):
+        email_id = query.data.replace("email_send_reply_", "")
+        await handle_email_send_reply(query, email_id)
     elif query.data.startswith("email_task_create_"):
         # Формат: email_task_create_{email_id}_{project_id}
         parts = query.data.replace("email_task_create_", "").split("_", 1)
@@ -2472,6 +2530,73 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     username = update.message.from_user.username or "без username"
     first_name = update.message.from_user.first_name or "без имени"
+    
+    # Автоматически подписываем пользователя на уведомления о почте (если еще не подписан)
+    subscribers = load_email_subscribers()
+    if user_id not in subscribers:
+        add_email_subscriber(user_id)
+    
+    # Проверяем, ожидаем ли мы ответ на email
+    if user_id in email_reply_state:
+        try:
+            email_reply_data = email_reply_state.get(user_id)
+            if not email_reply_data:
+                await update.message.reply_text("❌ Ошибка: данные письма не найдены")
+                email_reply_state.pop(user_id, None)
+                return
+            
+            to_email = email_reply_data.get("to")
+            subject = email_reply_data.get("subject")
+            email_id = email_reply_data.get("email_id")
+            
+            if not to_email:
+                await update.message.reply_text("❌ Ошибка: адрес получателя не найден")
+                email_reply_state.pop(user_id, None)
+                return
+            
+            # Проверяем команду отмены
+            if text.lower() in ["/cancel", "отмена", "cancel"]:
+                await update.message.reply_text("❌ Отправка ответа отменена")
+                email_reply_state.pop(user_id, None)
+                return
+            
+            await update.message.reply_text("⏳ Отправляю ответ на email...")
+            
+            # Отправляем email
+            from email_helper import send_email
+            
+            success = await send_email(
+                to_email=to_email,
+                subject=subject,
+                body=text,
+                is_html=False
+            )
+            
+            if success:
+                await update.message.reply_text(
+                    f"✅ *Ответ отправлен!*\n\n"
+                    f"*Кому:* {to_email}\n"
+                    f"*Тема:* {subject}\n\n"
+                    f"Ваш ответ был успешно отправлен.",
+                    parse_mode='Markdown'
+                )
+                log.info(f"✅ Ответ на письмо {email_id} отправлен на {to_email}")
+            else:
+                await update.message.reply_text(
+                    "❌ Не удалось отправить ответ. Проверьте настройки SMTP."
+                )
+            
+            # Сбрасываем состояние
+            email_reply_state.pop(user_id, None)
+            return
+            
+        except Exception as e:
+            log.error(f"❌ Ошибка отправки ответа на email: {e}")
+            import traceback
+            log.error(traceback.format_exc())
+            await update.message.reply_text(f"❌ Ошибка отправки: {str(e)}")
+            email_reply_state.pop(user_id, None)
+            return
     
     # Проверяем, ждем ли мы название задачи для WEEEK
     # Обработка обновления задачи
@@ -4615,6 +4740,54 @@ async def yadisk_recent_command(update: Update, context: ContextTypes.DEFAULT_TY
         log.error(f"❌ Traceback: {traceback.format_exc()}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
+async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /myid - показать Telegram ID пользователя"""
+    try:
+        user = update.message.from_user
+        user_id = user.id
+        username = user.username or "не указан"
+        first_name = user.first_name or "не указано"
+        last_name = user.last_name or ""
+        full_name = f"{first_name} {last_name}".strip()
+        
+        text = f"🆔 *Ваш Telegram ID*\n\n"
+        text += f"*ID:* `{user_id}`\n"
+        text += f"*Имя:* {full_name}\n"
+        text += f"*Username:* @{username}\n\n"
+        text += f"💡 *Использование:*\n"
+        text += f"Добавьте этот ID в `.env`:\n"
+        text += f"```\nTELEGRAM_ADMIN_IDS=5305427956,{user_id}\n```\n\n"
+        text += f"Или используйте для настройки уведомлений о почте."
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+        
+        log.info(f"🆔 Пользователь {user_id} (@{username}) запросил свой ID")
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка получения ID: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /unsubscribe - отписаться от уведомлений о почте"""
+    try:
+        user_id = update.message.from_user.id
+        username = update.message.from_user.username or "без username"
+        
+        # Удаляем пользователя из подписчиков
+        remove_email_subscriber(user_id)
+        
+        text = "❌ *Вы отписаны от уведомлений о почте*\n\n"
+        text += "Вы больше не будете получать уведомления о новых письмах.\n\n"
+        text += "Чтобы снова подписаться, используйте команду /start"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+        
+        log.info(f"❌ Пользователь {user_id} (@{username}) отписался от уведомлений")
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка отписки: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
 async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /email_check - проверка новых писем с уведомлениями"""
     try:
@@ -4732,25 +4905,44 @@ async def send_email_notification(bot, email_data: Dict):
                 InlineKeyboardButton("📄 Создать КП", callback_data=f"email_proposal_{email_id}")
             ],
             [
-                InlineKeyboardButton("📋 Создать задачу в WEEEK", callback_data=f"email_task_{email_id}"),
-                InlineKeyboardButton("✅ Обработано", callback_data=f"email_done_{email_id}")
+                InlineKeyboardButton("📧 Ответить на письмо", callback_data=f"email_send_reply_{email_id}"),
+                InlineKeyboardButton("📋 Создать задачу в WEEEK", callback_data=f"email_task_{email_id}")
             ],
             [
+                InlineKeyboardButton("✅ Обработано", callback_data=f"email_done_{email_id}"),
                 InlineKeyboardButton("📧 Показать полный текст", callback_data=f"email_full_{email_id}")
             ]
         ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        # Отправляем уведомление администратору
-        await bot.send_message(
-            chat_id=ADMIN_USER_ID,
-            text=text,
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
+        # Отправляем уведомление всем подписчикам (всем пользователям бота)
+        subscribers = get_email_subscribers()
+        sent_count = 0
+        failed_count = 0
         
-        log.info(f"✅ Уведомление о письме отправлено администратору: {subject}")
+        for user_id in subscribers:
+            try:
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=text,
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+                sent_count += 1
+            except Exception as e:
+                failed_count += 1
+                error_msg = str(e)
+                # Не логируем ошибки "Chat not found" для пользователей, которые заблокировали бота
+                if "chat not found" not in error_msg.lower() and "blocked" not in error_msg.lower():
+                    log.warning(f"⚠️ Не удалось отправить уведомление пользователю {user_id}: {e}")
+        
+        if sent_count > 0:
+            log.info(f"✅ Уведомление о письме отправлено {sent_count} пользователю(ам): {subject}")
+            if failed_count > 0:
+                log.info(f"⚠️ Не удалось отправить {failed_count} уведомлений (возможно, пользователи заблокировали бота)")
+        else:
+            log.error(f"❌ Не удалось отправить уведомление ни одному пользователю: {subject}")
         
     except Exception as e:
         log.error(f"❌ Ошибка отправки уведомления о письме: {e}")
@@ -5051,6 +5243,46 @@ async def handle_email_create_task(query: CallbackQuery, email_id: str, project_
         log.error(traceback.format_exc())
         await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
 
+async def handle_email_send_reply(query: CallbackQuery, email_id: str):
+    """Обработка кнопки 'Ответить на письмо' - запрос текста ответа"""
+    try:
+        email_data = email_cache.get(email_id)
+        if not email_data:
+            await query.answer("❌ Данные письма не найдены", show_alert=True)
+            return
+        
+        from_addr = email_data.get("from", "")
+        subject = email_data.get("subject", "")
+        original_subject = subject
+        
+        # Формируем тему ответа (Re:)
+        reply_subject = f"Re: {subject}" if not subject.startswith("Re:") else subject
+        
+        # Сохраняем данные для отправки в глобальный словарь
+        user_id = query.from_user.id
+        email_reply_state[user_id] = {
+            'email_id': email_id,
+            'to': from_addr,
+            'subject': reply_subject,
+            'original_subject': original_subject
+        }
+        
+        text = f"📧 *Ответить на письмо*\n\n"
+        text += f"*Кому:* {from_addr}\n"
+        text += f"*Тема:* {reply_subject}\n\n"
+        text += "💬 *Введите текст ответа:*\n\n"
+        text += "💡 Вы можете отправить текст ответа прямо в следующем сообщении.\n"
+        text += "Или используйте /cancel для отмены."
+        
+        await query.answer("💬 Введите текст ответа")
+        await query.edit_message_text(text, parse_mode='Markdown')
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка при запросе текста ответа: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
 async def handle_email_cancel(query: CallbackQuery, email_id: str):
     """Отмена действия с письмом"""
     try:
@@ -5080,10 +5312,11 @@ async def handle_email_cancel(query: CallbackQuery, email_id: str):
                 InlineKeyboardButton("📄 Создать КП", callback_data=f"email_proposal_{email_id}")
             ],
             [
-                InlineKeyboardButton("📋 Создать задачу в WEEEK", callback_data=f"email_task_{email_id}"),
-                InlineKeyboardButton("✅ Обработано", callback_data=f"email_done_{email_id}")
+                InlineKeyboardButton("📧 Ответить на письмо", callback_data=f"email_send_reply_{email_id}"),
+                InlineKeyboardButton("📋 Создать задачу в WEEEK", callback_data=f"email_task_{email_id}")
             ],
             [
+                InlineKeyboardButton("✅ Обработано", callback_data=f"email_done_{email_id}"),
                 InlineKeyboardButton("📧 Показать полный текст", callback_data=f"email_full_{email_id}")
             ]
         ]
@@ -5546,6 +5779,10 @@ def main():
     app.add_handler(CommandHandler("yadisk_list", yadisk_list_command))
     app.add_handler(CommandHandler("yadisk_search", yadisk_search_command))
     app.add_handler(CommandHandler("yadisk_recent", yadisk_recent_command))
+    
+    # Utility commands
+    app.add_handler(CommandHandler("myid", myid_command))
+    app.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
     
     # Email commands
     app.add_handler(CommandHandler("email_check", email_check_command))

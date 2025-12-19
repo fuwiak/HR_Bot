@@ -95,6 +95,7 @@ Thumbs.db
 
 # Project specific
 google_sheets_credentials.json
+email_subscribers.json
 
 # Files with real credentials - DO NOT COMMIT
 ENV_VARIABLES.md
