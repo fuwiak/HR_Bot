@@ -206,7 +206,7 @@ UserWeeekWorkspace: Dict[int, str] = {}  # WEEEK Workspace ID для каждо�
 ADMIN_USER_ID = int(os.getenv("TELEGRAM_ADMIN_ID", "5305427956"))
 # Хранилище обработанных email ID (чтобы не дублировать уведомления)
 processed_email_ids: set = set()
-email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "300"))  # 5 минут по умолчанию
+email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "1"))  # 5 минут по умолчанию
 
 def add_memory(user_id, role, text):
     UserMemory[user_id].append((role, text))
