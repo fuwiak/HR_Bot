@@ -30,6 +30,18 @@ YANDEX_SMTP_SERVER = os.getenv("YANDEX_SMTP_SERVER", "smtp.yandex.ru")
 YANDEX_IMAP_PORT = int(os.getenv("YANDEX_IMAP_PORT", 993))
 YANDEX_SMTP_PORT = int(os.getenv("YANDEX_SMTP_PORT", 465))
 
+# Логируем настройки для диагностики (без пароля) - ТОЛЬКО ПРИ ПЕРВОМ ИМПОРТЕ
+if not hasattr(log, '_email_config_logged'):
+    log.info(f"📧 SMTP настройки: email={YANDEX_EMAIL}, server={YANDEX_SMTP_SERVER}, port={YANDEX_SMTP_PORT}, password_set={bool(YANDEX_PASSWORD)}")
+    if not YANDEX_EMAIL or not YANDEX_PASSWORD:
+        log.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА: YANDEX_EMAIL или YANDEX_PASSWORD не установлены!")
+        log.error(f"   YANDEX_EMAIL: {YANDEX_EMAIL or 'НЕ УСТАНОВЛЕН'}")
+        log.error(f"   YANDEX_PASSWORD: {'УСТАНОВЛЕН' if YANDEX_PASSWORD else 'НЕ УСТАНОВЛЕН'}")
+        log.error(f"   YANDEX_IMAP_PASSWORD: {'УСТАНОВЛЕН' if os.getenv('YANDEX_IMAP_PASSWORD') else 'НЕ УСТАНОВЛЕН'}")
+        log.error(f"   Проверьте Railway Variables: YANDEX_EMAIL и YANDEX_IMAP_PASSWORD должны быть установлены!")
+        log.error(f"   См. инструкцию: RAILWAY_EMAIL_FIX.md")
+    log._email_config_logged = True
+
 # Для async работы используем aiosmtplib для SMTP, для IMAP используем синхронную версию через asyncio.to_thread
 # aiimaplib недоступен в PyPI, поэтому используем встроенный imaplib
 try:
@@ -351,6 +363,18 @@ def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, atta
     import socket
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
+    
+    # Проверяем, что все переменные установлены
+    if not YANDEX_EMAIL or not YANDEX_PASSWORD:
+        log.error(f"❌ YANDEX_EMAIL или YANDEX_PASSWORD не установлены!")
+        log.error(f"   YANDEX_EMAIL: {YANDEX_EMAIL or 'НЕ УСТАНОВЛЕН'}")
+        log.error(f"   YANDEX_PASSWORD: {'УСТАНОВЛЕН' if YANDEX_PASSWORD else 'НЕ УСТАНОВЛЕН'}")
+        log.error(f"   YANDEX_IMAP_PASSWORD: {'УСТАНОВЛЕН' if os.getenv('YANDEX_IMAP_PASSWORD') else 'НЕ УСТАНОВЛЕН'}")
+        log.error(f"   YANDEX_PASSWORD (old): {'УСТАНОВЛЕН' if os.getenv('YANDEX_PASSWORD') else 'НЕ УСТАНОВЛЕН'}")
+        log.error(f"   Проверьте Railway Variables: YANDEX_EMAIL и YANDEX_IMAP_PASSWORD должны быть установлены!")
+        return False
+    
+    log.info(f"📧 Отправка email: от={YANDEX_EMAIL}, к={to_email}, тема={subject}, server={YANDEX_SMTP_SERVER}, port=465/587")
     
     message = MIMEMultipart()
     message["From"] = YANDEX_EMAIL
