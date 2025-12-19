@@ -246,9 +246,10 @@ async def send_email(
         return await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
 
 async def _send_email_async(to_email: str, subject: str, body: str, is_html: bool, attachments: Optional[List[str]]) -> bool:
-    """Async версия отправки email через aiosmtplib"""
+    """Async версия отправки email через aiosmtplib с fallback на синхронную версию"""
     try:
         import aiosmtplib
+        import ssl
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
         
@@ -259,27 +260,56 @@ async def _send_email_async(to_email: str, subject: str, body: str, is_html: boo
         
         message.attach(MIMEText(body, "html" if is_html else "plain"))
         
-        await aiosmtplib.send(
-            message,
+        # Для порта 465 используем SSL с самого начала
+        # Создаем SSL контекст
+        ssl_context = ssl.create_default_context()
+        
+        # Используем SMTP с SSL
+        smtp = aiosmtplib.SMTP(
             hostname=YANDEX_SMTP_SERVER,
             port=YANDEX_SMTP_PORT,
-            username=YANDEX_EMAIL,
-            password=YANDEX_PASSWORD,
-            use_tls=True
+            timeout=30,
+            use_tls=False,  # Для порта 465 не используем STARTTLS
+            tls_context=ssl_context  # Используем SSL контекст
         )
         
-        log.info(f"✅ Email отправлен: {to_email} - {subject}")
-        return True
+        try:
+            await smtp.connect()
+            await smtp.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+            await smtp.send_message(message)
+            await smtp.quit()
+            
+            log.info(f"✅ Email отправлен (async): {to_email} - {subject}")
+            return True
+        except Exception as e:
+            try:
+                await smtp.quit()
+            except:
+                pass
+            raise
+        
     except Exception as e:
-        log.error(f"❌ Ошибка отправки email (async): {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
-        return False
+        error_msg = str(e).lower()
+        log.warning(f"⚠️ Ошибка отправки email (async): {e}")
+        
+        # При любой ошибке пробуем синхронную версию (более надежную)
+        log.info("🔄 Пробую отправить через синхронный SMTP (fallback)...")
+        try:
+            result = await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
+            if result:
+                log.info("✅ Email успешно отправлен через синхронный SMTP")
+            return result
+        except Exception as sync_error:
+            log.error(f"❌ Ошибка отправки email (sync fallback): {sync_error}")
+            import traceback
+            log.error(f"❌ Traceback: {traceback.format_exc()}")
+            return False
 
 def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, attachments: Optional[List[str]]) -> bool:
     """Синхронная версия отправки email через smtplib"""
     try:
         import smtplib
+        import socket
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
         
@@ -290,14 +320,32 @@ def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, atta
         
         message.attach(MIMEText(body, "html" if is_html else "plain"))
         
-        with smtplib.SMTP_SSL(YANDEX_SMTP_SERVER, YANDEX_SMTP_PORT) as server:
+        # Устанавливаем таймаут для соединения
+        socket.setdefaulttimeout(30)  # 30 секунд
+        
+        # Для порта 465 используем SMTP_SSL (SSL с самого начала)
+        server = smtplib.SMTP_SSL(YANDEX_SMTP_SERVER, YANDEX_SMTP_PORT, timeout=30)
+        try:
             server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
             server.send_message(message)
+            log.info(f"✅ Email отправлен (sync): {to_email} - {subject}")
+            return True
+        finally:
+            server.quit()
         
-        log.info(f"✅ Email отправлен: {to_email} - {subject}")
-        return True
+    except socket.timeout:
+        log.error(f"❌ Таймаут при отправке email (sync): {to_email}")
+        return False
+    except smtplib.SMTPAuthenticationError as e:
+        log.error(f"❌ Ошибка аутентификации SMTP: {e}")
+        return False
+    except smtplib.SMTPException as e:
+        log.error(f"❌ Ошибка SMTP: {e}")
+        return False
     except Exception as e:
         log.error(f"❌ Ошибка отправки email (sync): {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
 
 # ===================== EMAIL CLASSIFICATION =====================
