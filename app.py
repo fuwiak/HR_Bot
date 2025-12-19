@@ -1265,6 +1265,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "`/rag_docs` - список документов\n\n"
             "**WEEEK проекты:**\n"
             "`/weeek_projects` - список проектов\n"
+            "`/weeek_create_project [nazwa]` - создать проект\n"
             "`/weeek_tasks [id]` - задачи проекта\n"
             "`/weeek_task [проект] | [задача]` - создать задачу\n"
             "`/weeek_update` - обновить задачу (интерактивно)\n"
@@ -3685,6 +3686,51 @@ async def weeek_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         log.error(f"❌ Ошибка получения задач: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
+async def weeek_create_project_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /weeek_create_project - создание проекта в Weeek"""
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Укажите название проекта.\n"
+            "Использование: `/weeek_create_project [название]`\n\n"
+            "Примеры:\n"
+            "`/weeek_create_project Новый проект HR`\n"
+            "`/weeek_create_project Консалтинг 2025`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    try:
+        from weeek_helper import create_project
+        
+        project_name = " ".join(context.args)
+        username = update.message.from_user.username or update.message.from_user.first_name
+        
+        await update.message.reply_text(f"⏳ Создаю проект: {project_name}")
+        
+        project = await create_project(
+            name=project_name,
+            description=f"Создано через Telegram бот пользователем @{username}"
+        )
+        
+        if project:
+            project_id = project.get("id")
+            await update.message.reply_text(
+                f"✅ Проект создан в WEEEK!\n\n"
+                f"📁 Название: {project_name}\n"
+                f"🆔 ID: `{project_id}`\n\n"
+                f"Теперь можете добавить задачи:\n"
+                f"`/weeek_task {project_name} | Название задачи`\n"
+                f"или через меню: `/weeek_update`",
+                parse_mode='Markdown'
+            )
+            log.info(f"✅ Проект создан: {project_name} (ID: {project_id})")
+        else:
+            await update.message.reply_text("❌ Не удалось создать проект в WEEEK")
+            
+    except Exception as e:
+        log.error(f"❌ Ошибка создания проекта: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
 async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /email_check - проверка новых писем"""
     try:
@@ -4186,6 +4232,7 @@ def main():
     # WEEEK commands
     app.add_handler(CommandHandler("weeek_task", weeek_create_task_command))
     app.add_handler(CommandHandler("weeek_projects", weeek_projects_command))
+    app.add_handler(CommandHandler("weeek_create_project", weeek_create_project_command))
     app.add_handler(CommandHandler("weeek_update", weeek_update_command))
     app.add_handler(CommandHandler("weeek_tasks", weeek_tasks_command))
 

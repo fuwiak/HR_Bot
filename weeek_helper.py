@@ -44,49 +44,69 @@ def get_headers() -> Dict[str, str]:
 async def create_project(
     name: str,
     description: str = "",
-    lead_id: Optional[str] = None,
-    status: str = "new"
+    color: Optional[str] = None,
+    is_favorite: bool = False
 ) -> Optional[Dict]:
     """
     Создать новый проект в WEEEK
+    API: POST /pm/projects
     
     Args:
-        name: Название проекта
+        name: Название проекта (обязательно)
         description: Описание проекта
-        lead_id: ID лида (для связи)
-        status: Статус проекта (new, in_progress, completed, rejected)
+        color: Цвет проекта (hex, например "#FF5733")
+        is_favorite: Добавить в избранное
     
     Returns:
         Словарь с данными созданного проекта или None при ошибке
     """
-    if not WEEEK_API_KEY or not WEEEK_WORKSPACE_ID:
-        log.error("❌ WEEEK_API_KEY или WEEEK_WORKSPACE_ID не установлены")
+    if not WEEEK_API_KEY:
+        log.error("❌ WEEEK_API_KEY не установлен")
         return None
     
-    url = f"{WEEEK_API_URL}/projects"
+    url = f"{WEEEK_API_URL}/pm/projects"
     headers = get_headers()
     
+    # Формируем данные по документации API
     data = {
-        "name": name,
-        "description": description,
-        "workspace_id": WEEEK_WORKSPACE_ID,
-        "status": status
+        "name": name
     }
     
-    if lead_id:
-        data["custom_fields"] = {"lead_id": lead_id}
+    if description:
+        data["description"] = description
+    if color:
+        data["color"] = color
+    if is_favorite:
+        data["isFavorite"] = is_favorite
     
     try:
+        log.info(f"📤 [WEEEK] Создаю проект: {name}")
+        log.debug(f"📤 Данные: {data}")
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(url, json=data, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                response_text = await response.text()
+                
                 if response.status >= 400:
-                    error_text = await response.text()
-                    log.error(f"❌ [WEEEK] Ошибка создания проекта: {response.status} - {error_text}")
+                    log.error(f"❌ [WEEEK] Ошибка создания проекта: {response.status}")
+                    log.error(f"❌ Response: {response_text[:500]}")
                     return None
                 
-                result = await response.json()
-                log.info(f"✅ [WEEEK] Проект создан: {name} (ID: {result.get('id')})")
-                return result
+                result = await response.json() if response_text else {}
+                
+                # API возвращает {"success": true, "project": {...}}
+                if isinstance(result, dict) and "project" in result:
+                    project = result["project"]
+                    log.info(f"✅ [WEEEK] Проект создан: {name} (ID: {project.get('id')})")
+                    return project
+                elif isinstance(result, dict) and "id" in result:
+                    # Если вернулся сразу проект
+                    log.info(f"✅ [WEEEK] Проект создан: {name} (ID: {result.get('id')})")
+                    return result
+                else:
+                    log.warning(f"⚠️ Неожиданный формат ответа: {result}")
+                    return result
+                
     except Exception as e:
         log.error(f"❌ [WEEEK] Ошибка создания проекта: {e}")
         import traceback
@@ -127,11 +147,14 @@ async def update_project_status(project_id: str, status: str) -> bool:
         return False
 
 async def get_project(project_id: str) -> Optional[Dict]:
-    """Получить информацию о проекте"""
+    """
+    Получить информацию о проекте
+    API: GET /pm/projects/{id}
+    """
     if not WEEEK_API_KEY:
         return None
     
-    url = f"{WEEEK_API_URL}/projects/{project_id}"
+    url = f"{WEEEK_API_URL}/pm/projects/{project_id}"
     headers = get_headers()
     
     try:
@@ -147,7 +170,7 @@ async def get_project(project_id: str) -> Optional[Dict]:
 async def get_projects() -> List[Dict]:
     """
     Получить список всех проектов
-    API: GET /ws/projects
+    API: GET /pm/projects
     
     Returns:
         Список словарей с данными проектов
@@ -156,27 +179,40 @@ async def get_projects() -> List[Dict]:
         log.error("❌ WEEEK_API_KEY не установлен")
         return []
     
-    url = f"{WEEEK_API_URL}/ws/projects"
+    # Используем правильный endpoint по документации
+    url = f"{WEEEK_API_URL}/pm/projects"
     headers = get_headers()
     
     try:
+        log.info(f"📤 [WEEEK] Запрос проектов: {url}")
+        
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                response_text = await response.text()
+                
                 if response.status >= 400:
-                    error_text = await response.text()
                     log.error(f"❌ [WEEEK] Ошибка получения проектов: {response.status}")
-                    log.error(f"❌ Response: {error_text[:500]}")
+                    log.error(f"❌ Response: {response_text[:500]}")
                     return []
                 
-                result = await response.json()
+                result = await response.json() if response_text else {}
                 
                 # API возвращает {"success": true, "projects": [...]}
-                if isinstance(result, dict) and "projects" in result:
-                    projects = result["projects"]
+                if isinstance(result, dict):
+                    if "projects" in result:
+                        projects = result["projects"]
+                    elif "data" in result:
+                        projects = result["data"]
+                    elif "success" in result and result["success"]:
+                        # Если просто success: true без projects, возвращаем пустой список
+                        projects = []
+                    else:
+                        log.error(f"❌ Неожиданный формат ответа: {result}")
+                        return []
                 elif isinstance(result, list):
                     projects = result
                 else:
-                    log.error(f"❌ Неожиданный формат ответа: {type(result)}")
+                    log.error(f"❌ Неожиданный тип ответа: {type(result)}")
                     return []
                 
                 log.info(f"✅ [WEEEK] Получено проектов: {len(projects)}")
@@ -229,14 +265,11 @@ async def create_task(
     url = f"{WEEEK_API_URL}/tm/tasks"
     headers = get_headers()
     
-    # Обязательные поля по документации API
+    # По Twojemu working примеру используем prostszy format
+    # API wymaga: name, projectId, boardId (opcjonalnie)
     data = {
-        "locations": [
-            {
-                "projectId": int(project_id)
-            }
-        ],
-        "title": task_title,
+        "name": task_title,
+        "projectId": int(project_id),
         "type": task_type
     }
     
