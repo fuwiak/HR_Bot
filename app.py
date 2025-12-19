@@ -1154,6 +1154,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
         [InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")],
         [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
+        [InlineKeyboardButton("📧 Ответить на последний мейл", callback_data="email_reply_last")],
         [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
         [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
     ]
@@ -1166,7 +1167,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 📊 Показывать статистику базы знаний\n"
         "• 📚 Просматривать документы в базе\n"
         "• 💬 Отвечать на вопросы с использованием базы знаний\n"
-        "• 📋 Управлять проектами и задачами\n\n"
+        "• 📋 Управлять проектами и задачами\n"
+        "• 📧 Отвечать на последний мейл\n\n"
         "Выберите раздел:",
         parse_mode='Markdown',
         reply_markup=reply_markup
@@ -1177,6 +1179,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
         [InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")],
         [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
+        [InlineKeyboardButton("📧 Ответить на последний мейл", callback_data="email_reply_last")],
         [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
         [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
     ]
@@ -1186,6 +1189,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📚 *База знаний* - поиск, документы, статистика\n"
         "📋 *Проекты* - управление проектами и задачами\n"
         "🛠 *Инструменты* - генерация КП, суммаризация\n"
+        "📧 *Ответить на последний мейл* - быстрый ответ на последнее письмо\n"
         "💬 *Чат с AI* - общение с AI-помощником\n"
         "❓ *Помощь* - справочная информация",
         parse_mode='Markdown',
@@ -1558,6 +1562,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_services_page(query)
     
     # Обработчики для действий с письмами
+    elif query.data == "email_reply_last":
+        # Обработка кнопки "Ответить на последний мейл"
+        await handle_email_reply_last(query)
     elif query.data.startswith("email_reply_"):
         email_id = query.data.replace("email_reply_", "")
         await handle_email_reply(query, email_id)
@@ -2487,6 +2494,7 @@ async def show_main_menu(query: CallbackQuery):
         [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
         [InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")],
         [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
+        [InlineKeyboardButton("📧 Ответить на последний мейл", callback_data="email_reply_last")],
         [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
         [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
     ]
@@ -2496,6 +2504,7 @@ async def show_main_menu(query: CallbackQuery):
         "📚 *База знаний* - поиск, документы, статистика\n"
         "📋 *Проекты* - управление проектами и задачами\n"
         "🛠 *Инструменты* - генерация КП, суммаризация\n"
+        "📧 *Ответить на последний мейл* - быстрый ответ на последнее письмо\n"
         "💬 *Чат с AI* - общение с AI-помощником\n"
         "❓ *Помощь* - справочная информация",
         parse_mode='Markdown',
@@ -5095,6 +5104,85 @@ async def email_monitor_task(bot):
             await asyncio.sleep(email_check_interval)
 
 # ===================== EMAIL ACTION HANDLERS =====================
+
+async def handle_email_reply_last(query: CallbackQuery):
+    """Обработка кнопки 'Ответить на последний мейл' - получает последнее письмо и предлагает ответить"""
+    try:
+        await query.answer("⏳ Получаю последнее письмо...")
+        
+        from email_helper import check_new_emails
+        
+        # Получаем последнее письмо
+        emails = await check_new_emails(since_days=7, limit=1)
+        
+        if not emails:
+            await query.edit_message_text(
+                "❌ *Писем не найдено*\n\n"
+                "За последние 7 дней новых писем не обнаружено.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        # Берем самое новое письмо (первое в списке)
+        email_data = emails[0]
+        email_id = email_data.get("id", "")
+        from_addr = email_data.get("from", "")
+        subject = email_data.get("subject", "")
+        body = email_data.get("body", "")
+        date = email_data.get("date", "")
+        
+        # Сохраняем в кэш для дальнейшей работы
+        if email_id:
+            email_cache[email_id] = email_data
+        
+        # Формируем тему ответа (Re:)
+        reply_subject = f"Re: {subject}" if not subject.startswith("Re:") else subject
+        
+        # Сохраняем данные для отправки в глобальный словарь
+        user_id = query.from_user.id
+        email_reply_state[user_id] = {
+            'email_id': email_id,
+            'to': from_addr,
+            'subject': reply_subject,
+            'original_subject': subject
+        }
+        
+        # Показываем информацию о письме и предлагаем ответить
+        text = f"📧 *Последнее письмо*\n\n"
+        text += f"*От:* {from_addr}\n"
+        text += f"*Тема:* {subject}\n"
+        text += f"*Дата:* {date}\n\n"
+        
+        # Показываем первые 300 символов письма
+        body_preview = body[:300] + "..." if len(body) > 300 else body
+        text += f"*Содержимое:*\n{body_preview}\n\n"
+        text += "💬 *Введите текст ответа:*\n\n"
+        text += "💡 Вы можете отправить текст ответа прямо в следующем сообщении.\n"
+        text += "Или используйте /cancel для отмены."
+        
+        keyboard = [
+            [InlineKeyboardButton("📧 Показать полный текст", callback_data=f"email_full_{email_id}")],
+            [InlineKeyboardButton("❌ Отмена", callback_data="back_to_menu")]
+        ]
+        
+        await query.edit_message_text(
+            text,
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+        log.info(f"📧 Пользователь {user_id} запросил ответ на последнее письмо: {subject}")
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка получения последнего письма: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+        await query.edit_message_text(
+            f"❌ *Ошибка*\n\nНе удалось получить последнее письмо.\n\n"
+            f"Ошибка: {str(e)}",
+            parse_mode='Markdown'
+        )
 
 async def handle_email_reply(query: CallbackQuery, email_id: str):
     """Обработка кнопки 'Подготовить ответ' для письма"""
