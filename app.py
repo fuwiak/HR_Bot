@@ -3764,7 +3764,53 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not summary:
             summary = "Не удалось создать суммаризацию. Проверьте доступность LLM и данных."
 
-        await update.message.reply_text(f"*Суммаризация проекта '{project_name}':*\n\n{summary}", parse_mode='Markdown')
+        # Экранируем специальные символы Markdown
+        def escape_markdown(text: str) -> str:
+            """Экранирует специальные символы Markdown"""
+            special_chars = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+            for char in special_chars:
+                text = text.replace(char, f'\\{char}')
+            return text
+        
+        # Экранируем название проекта, но оставляем summary как есть (может содержать форматирование)
+        escaped_project_name = escape_markdown(project_name)
+        
+        # Формируем сообщение
+        message_text = f"*Суммаризация проекта '{escaped_project_name}':*\n\n{summary}"
+        
+        # Если сообщение слишком длинное, разбиваем на части
+        max_length = 4000  # Лимит Telegram
+        
+        if len(message_text) > max_length:
+            # Разбиваем на части
+            parts = []
+            current_part = f"*Суммаризация проекта '{escaped_project_name}':*\n\n"
+            
+            # Пробуем разбить по разделам
+            lines = summary.split('\n')
+            for line in lines:
+                if len(current_part) + len(line) + 1 > max_length:
+                    parts.append(current_part)
+                    current_part = ""
+                current_part += line + "\n"
+            
+            if current_part:
+                parts.append(current_part)
+            
+            # Отправляем первую часть с Markdown
+            await update.message.reply_text(parts[0], parse_mode='Markdown')
+            
+            # Остальные части без Markdown (чтобы избежать ошибок парсинга)
+            for part in parts[1:]:
+                await update.message.reply_text(part)
+        else:
+            # Короткое сообщение - отправляем с Markdown
+            try:
+                await update.message.reply_text(message_text, parse_mode='Markdown')
+            except Exception as parse_error:
+                # Если ошибка парсинга, отправляем без Markdown
+                log.warning(f"⚠️ Ошибка парсинга Markdown, отправляю без форматирования: {parse_error}")
+                await update.message.reply_text(f"Суммаризация проекта '{project_name}':\n\n{summary}")
     except Exception as e:
         log.error(f"❌ Ошибка суммаризации: {e}")
         import traceback
