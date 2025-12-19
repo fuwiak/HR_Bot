@@ -3652,16 +3652,44 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             projects = await get_projects()
             target_project = None
             
-            # Ищем проект по названию
+            # Ищем проект по названию или ID
             if project_name.lower() != "текущий":
-                for project in projects:
-                    if project_name.lower() in project.get('title', '').lower():
-                        target_project = project
-                        break
+                # Сначала проверяем, не указан ли ID (число)
+                try:
+                    project_id_input = int(project_name.strip())
+                    # Ищем по ID
+                    for project in projects:
+                        if project.get('id') == project_id_input:
+                            target_project = project
+                            log.info(f"✅ Найден проект по ID: {project_id_input} - {project.get('title')}")
+                            break
+                except ValueError:
+                    # Не число, ищем по названию
+                    project_name_lower = project_name.lower().strip()
+                    
+                    # 1. Сначала точное совпадение
+                    for project in projects:
+                        if project.get('title', '').lower().strip() == project_name_lower:
+                            target_project = project
+                            log.info(f"✅ Найден проект точным совпадением: {project.get('title')}")
+                            break
+                    
+                    # 2. Если не нашли, ищем частичное совпадение (но только если название короткое)
+                    if not target_project and len(project_name_lower) > 3:
+                        for project in projects:
+                            project_title_lower = project.get('title', '').lower()
+                            # Проверяем, что название проекта начинается с запроса или запрос - это отдельное слово
+                            if (project_title_lower.startswith(project_name_lower) or 
+                                f" {project_name_lower} " in f" {project_title_lower} "):
+                                target_project = project
+                                log.info(f"✅ Найден проект частичным совпадением: {project.get('title')}")
+                                break
             
             # Если не нашли, берем первый активный
             if not target_project and projects:
                 target_project = [p for p in projects if not p.get('isArchived', False)][0] if projects else None
+                if target_project:
+                    log.info(f"⚠️ Проект '{project_name}' не найден, используется первый активный: {target_project.get('title')}")
             
             if target_project:
                 project_id = target_project.get('id')
@@ -3751,7 +3779,7 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 4. Следующие шаги
 5. Рекомендации
 
-Ответь на русском языке, структурированно и подробно."""
+ВАЖНО: Не используй Markdown форматирование (**, ###, __ и т.д.). Пиши обычным текстом с переносами строк."""
         
         summary = await generate_with_fallback(
             messages=[{"role": "user", "content": prompt}],
@@ -3764,19 +3792,35 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not summary:
             summary = "Не удалось создать суммаризацию. Проверьте доступность LLM и данных."
 
-        # Экранируем специальные символы Markdown
-        def escape_markdown(text: str) -> str:
-            """Экранирует специальные символы Markdown"""
-            special_chars = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-            for char in special_chars:
-                text = text.replace(char, f'\\{char}')
-            return text
+        # Убираем Markdown форматирование из ответа
+        import re
+        def remove_markdown(text: str) -> str:
+            """Удаляет Markdown форматирование из текста"""
+            # Убираем **bold**
+            text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
+            # Убираем *italic*
+            text = re.sub(r'\*([^*]+)\*', r'\1', text)
+            # Убираем __bold__
+            text = re.sub(r'__([^_]+)__', r'\1', text)
+            # Убираем _italic_
+            text = re.sub(r'_([^_]+)_', r'\1', text)
+            # Убираем ### заголовки
+            text = re.sub(r'###+\s*', '', text)
+            # Убираем ## заголовки
+            text = re.sub(r'##+\s*', '', text)
+            # Убираем # заголовки
+            text = re.sub(r'#+\s*', '', text)
+            # Убираем `code`
+            text = re.sub(r'`([^`]+)`', r'\1', text)
+            # Убираем ~~strikethrough~~
+            text = re.sub(r'~~([^~]+)~~', r'\1', text)
+            return text.strip()
         
-        # Экранируем название проекта, но оставляем summary как есть (может содержать форматирование)
-        escaped_project_name = escape_markdown(project_name)
+        # Очищаем summary от Markdown
+        summary_clean = remove_markdown(summary)
         
-        # Формируем сообщение
-        message_text = f"*Суммаризация проекта '{escaped_project_name}':*\n\n{summary}"
+        # Формируем сообщение без Markdown
+        message_text = f"Суммаризация проекта '{project_name}':\n\n{summary_clean}"
         
         # Если сообщение слишком длинное, разбиваем на части
         max_length = 4000  # Лимит Telegram
@@ -3784,10 +3828,11 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if len(message_text) > max_length:
             # Разбиваем на части
             parts = []
-            current_part = f"*Суммаризация проекта '{escaped_project_name}':*\n\n"
+            header = f"Суммаризация проекта '{project_name}':\n\n"
+            current_part = header
             
             # Пробуем разбить по разделам
-            lines = summary.split('\n')
+            lines = summary_clean.split('\n')
             for line in lines:
                 if len(current_part) + len(line) + 1 > max_length:
                     parts.append(current_part)
@@ -3797,20 +3842,12 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if current_part:
                 parts.append(current_part)
             
-            # Отправляем первую часть с Markdown
-            await update.message.reply_text(parts[0], parse_mode='Markdown')
-            
-            # Остальные части без Markdown (чтобы избежать ошибок парсинга)
-            for part in parts[1:]:
+            # Отправляем все части без Markdown
+            for part in parts:
                 await update.message.reply_text(part)
         else:
-            # Короткое сообщение - отправляем с Markdown
-            try:
-                await update.message.reply_text(message_text, parse_mode='Markdown')
-            except Exception as parse_error:
-                # Если ошибка парсинга, отправляем без Markdown
-                log.warning(f"⚠️ Ошибка парсинга Markdown, отправляю без форматирования: {parse_error}")
-                await update.message.reply_text(f"Суммаризация проекта '{project_name}':\n\n{summary}")
+            # Отправляем без Markdown
+            await update.message.reply_text(message_text)
     except Exception as e:
         log.error(f"❌ Ошибка суммаризации: {e}")
         import traceback
