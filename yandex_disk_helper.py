@@ -6,10 +6,17 @@ import os
 import logging
 import aiohttp
 import asyncio
+import ssl
 from typing import Dict, List, Optional
 from datetime import datetime
 
 log = logging.getLogger()
+
+# Отключаем проверку SSL сертификатов для Yandex Disk API
+# (решает проблему: SSL: CERTIFICATE_VERIFY_FAILED)
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
 
 # ===================== CONFIGURATION =====================
 YANDEX_DISK_TOKEN = os.getenv("YANDEX_TOKEN") or os.getenv("YANDEX_DISK_TOKEN")
@@ -48,7 +55,8 @@ async def get_disk_info() -> Optional[Dict]:
     try:
         log.info(f"📤 [Yandex Disk] Запрос информации о диске")
         
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 if response.status >= 400:
                     error_text = await response.text()
@@ -97,7 +105,8 @@ async def list_files(path: str = "/", limit: int = 100, offset: int = 0) -> Opti
     try:
         log.info(f"📤 [Yandex Disk] Запрос файлов: {path}")
         
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 if response.status >= 400:
                     error_text = await response.text()
@@ -173,7 +182,8 @@ async def get_download_link(path: str) -> Optional[str]:
     try:
         log.info(f"📤 [Yandex Disk] Запрос ссылки на скачивание: {path}")
         
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 if response.status >= 400:
                     error_text = await response.text()
@@ -215,7 +225,8 @@ async def download_file_content(path: str) -> Optional[bytes]:
     try:
         log.info(f"📥 [Yandex Disk] Скачивание файла: {path}")
         
-        async with aiohttp.ClientSession() as session:
+        connector = aiohttp.TCPConnector(ssl=ssl_context)
+        async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(download_url, timeout=aiohttp.ClientTimeout(total=60)) as response:
                 if response.status >= 400:
                     log.error(f"❌ [Yandex Disk] Ошибка скачивания: {response.status}")

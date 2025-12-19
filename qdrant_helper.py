@@ -33,8 +33,8 @@ except ImportError:
     log.warning("⚠️ Qdrant библиотеки не установлены. Установите: pip install qdrant-client")
 
 # Конфигурация для эмбеддингов через OpenRouter (Qwen3-Embedding-8B) или OpenAI
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 EMBEDDING_API_KEY = OPENROUTER_API_KEY or OPENAI_API_KEY  # Приоритет OpenRouter
 
 # ВАЖНО: Коллекция в Qdrant создана с размерностью 1536
@@ -42,13 +42,20 @@ EMBEDDING_API_KEY = OPENROUTER_API_KEY or OPENAI_API_KEY  # Приоритет O
 TARGET_DIMENSION = 1536  # Размерность коллекции в Qdrant
 
 # Определяем URL и модель в зависимости от того, какой API ключ используется
-if OPENAI_API_KEY:
-    # Используем OpenAI напрямую (приоритет, т.к. коллекция на 1536)
+if OPENROUTER_API_KEY:
+    # Используем OpenRouter с Qwen3-Embedding-8B (приоритет)
+    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")
+    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))  # Целевая размерность
+    log.info(f"🔧 Используется OpenRouter (модель: {EMBEDDING_MODEL})")
+    log.info(f"🔧 Вектора будут дополнены до {TARGET_DIMENSION} для совместимости с Qdrant")
+elif OPENAI_API_KEY:
+    # Используем OpenAI напрямую (если нет OpenRouter)
     EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://api.openai.com/v1/embeddings")
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
     EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))
     log.info(f"🔧 Используется OpenAI API для эмбеддингов (модель: {EMBEDDING_MODEL}, размерность: {EMBEDDING_DIMENSION})")
-elif OPENROUTER_API_KEY:
+elif False:  # Старый код OpenRouter
     # Используем OpenRouter с Qwen3-Embedding-8B (нужно дополнять до 1536)
     EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")
