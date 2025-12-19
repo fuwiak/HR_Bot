@@ -280,6 +280,205 @@ async def create_task(
         log.error(f"❌ Traceback: {traceback.format_exc()}")
         return None
 
+async def update_task(
+    task_id: str,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    priority: Optional[int] = None,
+    task_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    due_date: Optional[str] = None,
+    duration: Optional[int] = None,
+    tags: Optional[List[int]] = None
+) -> Optional[Dict]:
+    """
+    Обновить задачу
+    API: PUT /tm/tasks/{id}
+    
+    Args:
+        task_id: ID задачи
+        title: Новое название (max 255)
+        description: Новое описание
+        priority: Новый приоритет (0=Low, 1=Medium, 2=High, 3=Hold)
+        task_type: Новый тип (action, meet, call)
+        start_date: Дата начала (Y-m-d format)
+        due_date: Дата окончания (Y-m-d format)
+        duration: Оценка времени в минутах
+        tags: Список ID тегов
+    
+    Returns:
+        Обновленная задача или None при ошибке
+    """
+    if not WEEEK_API_KEY:
+        log.error("❌ WEEEK_API_KEY не установлен")
+        return None
+    
+    url = f"{WEEEK_API_URL}/tm/tasks/{task_id}"
+    headers = get_headers()
+    
+    # Формируем данные для обновления (только переданные поля)
+    data = {}
+    if title is not None:
+        data["title"] = title
+    if description is not None:
+        data["description"] = description
+    if priority is not None:
+        data["priority"] = priority
+    if task_type is not None:
+        data["type"] = task_type
+    if start_date is not None:
+        data["startDate"] = start_date
+    if due_date is not None:
+        data["dueDate"] = due_date
+    if duration is not None:
+        data["duration"] = duration
+    if tags is not None:
+        data["tags"] = tags
+    
+    if not data:
+        log.warning("⚠️ Нет данных для обновления")
+        return None
+    
+    try:
+        log.info(f"📤 [WEEEK] Обновляю задачу {task_id}: {data}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.put(url, json=data, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                response_text = await response.text()
+                
+                if response.status >= 400:
+                    log.error(f"❌ [WEEEK] Ошибка обновления задачи: {response.status}")
+                    log.error(f"❌ Response: {response_text[:500]}")
+                    return None
+                
+                result = await response.json() if response_text else {}
+                
+                if isinstance(result, dict) and "task" in result:
+                    task = result["task"]
+                    log.info(f"✅ [WEEEK] Задача обновлена: {task_id}")
+                    return task
+                else:
+                    log.warning(f"⚠️ Неожиданный формат ответа")
+                    return result
+                
+    except Exception as e:
+        log.error(f"❌ [WEEEK] Ошибка обновления задачи: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return None
+
+async def complete_task(task_id: str) -> bool:
+    """
+    Отметить задачу как выполненную
+    API: POST /tm/tasks/{id}/complete
+    """
+    if not WEEEK_API_KEY:
+        return False
+    
+    url = f"{WEEEK_API_URL}/tm/tasks/{task_id}/complete"
+    headers = get_headers()
+    
+    try:
+        log.info(f"📤 [WEEEK] Завершаю задачу {task_id}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status < 400:
+                    log.info(f"✅ [WEEEK] Задача {task_id} завершена")
+                    return True
+                else:
+                    response_text = await response.text()
+                    log.error(f"❌ [WEEEK] Ошибка: {response.status} - {response_text[:200]}")
+                    return False
+    except Exception as e:
+        log.error(f"❌ [WEEEK] Ошибка завершения задачи: {e}")
+        return False
+
+async def uncomplete_task(task_id: str) -> bool:
+    """
+    Отменить завершение задачи
+    API: POST /tm/tasks/{id}/un-complete
+    """
+    if not WEEEK_API_KEY:
+        return False
+    
+    url = f"{WEEEK_API_URL}/tm/tasks/{task_id}/un-complete"
+    headers = get_headers()
+    
+    try:
+        log.info(f"📤 [WEEEK] Возобновляю задачу {task_id}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status < 400:
+                    log.info(f"✅ [WEEEK] Задача {task_id} возобновлена")
+                    return True
+                else:
+                    response_text = await response.text()
+                    log.error(f"❌ [WEEEK] Ошибка: {response.status} - {response_text[:200]}")
+                    return False
+    except Exception as e:
+        log.error(f"❌ [WEEEK] Ошибка возобновления задачи: {e}")
+        return False
+
+async def delete_task(task_id: str) -> bool:
+    """
+    Удалить задачу
+    API: DELETE /tm/tasks/{id}
+    """
+    if not WEEEK_API_KEY:
+        return False
+    
+    url = f"{WEEEK_API_URL}/tm/tasks/{task_id}"
+    headers = get_headers()
+    
+    try:
+        log.info(f"📤 [WEEEK] Удаляю задачу {task_id}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.delete(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status < 400:
+                    log.info(f"✅ [WEEEK] Задача {task_id} удалена")
+                    return True
+                else:
+                    response_text = await response.text()
+                    log.error(f"❌ [WEEEK] Ошибка: {response.status} - {response_text[:200]}")
+                    return False
+    except Exception as e:
+        log.error(f"❌ [WEEEK] Ошибка удаления задачи: {e}")
+        return False
+
+async def get_task(task_id: str) -> Optional[Dict]:
+    """
+    Получить информацию об одной задаче
+    API: GET /tm/tasks/{id}
+    """
+    if not WEEEK_API_KEY:
+        return None
+    
+    url = f"{WEEEK_API_URL}/tm/tasks/{task_id}"
+    headers = get_headers()
+    
+    try:
+        log.info(f"📤 [WEEEK] Получаю задачу {task_id}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status >= 400:
+                    response_text = await response.text()
+                    log.error(f"❌ [WEEEK] Ошибка: {response.status} - {response_text[:200]}")
+                    return None
+                
+                result = await response.json()
+                
+                if isinstance(result, dict) and "task" in result:
+                    return result["task"]
+                else:
+                    return result
+    except Exception as e:
+        log.error(f"❌ [WEEEK] Ошибка получения задачи: {e}")
+        return None
+
 async def get_tasks(
     day: Optional[str] = None,
     user_id: Optional[str] = None,

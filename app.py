@@ -1223,6 +1223,34 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_weeek_project_details(query, context)
         return
     
+    elif query.data.startswith("weeek_update_select_project_"):
+        await show_weeek_tasks_for_update(query, context)
+        return
+    
+    elif query.data.startswith("weeek_edit_task_"):
+        await show_weeek_task_edit_menu(query, context)
+        return
+    
+    elif query.data.startswith("weeek_edit_field_"):
+        await handle_weeek_edit_field(query, context)
+        return
+    
+    elif query.data.startswith("weeek_complete_"):
+        await handle_weeek_complete_task(query, context)
+        return
+    
+    elif query.data.startswith("weeek_delete_"):
+        await handle_weeek_delete_task(query, context)
+        return
+    
+    elif query.data.startswith("weeek_set_priority_"):
+        await handle_weeek_set_priority(query, context)
+        return
+    
+    elif query.data.startswith("weeek_set_type_"):
+        await handle_weeek_set_type(query, context)
+        return
+
     # Обработчики помощи
     elif query.data == "help_commands":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
@@ -1237,7 +1265,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "`/rag_docs` - список документов\n\n"
             "**WEEEK проекты:**\n"
             "`/weeek_projects` - список проектов\n"
+            "`/weeek_tasks [id]` - задачи проекта\n"
             "`/weeek_task [проект] | [задача]` - создать задачу\n"
+            "`/weeek_update` - обновить задачу (интерактивно)\n"
             "`/status` - статус проектов\n\n"
             "**Email:**\n"
             "`/email_check` - проверить новые письма\n"
@@ -2002,6 +2032,345 @@ async def show_weeek_project_details(query: CallbackQuery, context: ContextTypes
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
+async def show_weeek_tasks_for_update(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Показать список задач проекта для обновления"""
+    try:
+        project_id = query.data.replace("weeek_update_select_project_", "")
+        
+        from weeek_helper import get_tasks, get_project
+        
+        await query.edit_message_text("⏳ Загружаю задачи...")
+        
+        # Получаем информацию о проекте
+        project = await get_project(project_id)
+        project_name = project.get("name", f"Проект {project_id}") if project else f"Проект {project_id}"
+        
+        # Получаем задачи
+        result = await get_tasks(project_id=int(project_id), completed=False, per_page=15)
+        
+        if not result["success"] or not result["tasks"]:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+            await query.edit_message_text(
+                f"📁 *{project_name}*\n\n"
+                "❌ Активных задач не найдено.\n\n"
+                "Сначала создайте задачи в этом проекте.",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        
+        # Показываем список задач
+        keyboard = []
+        for task in result["tasks"]:
+            title = task.get("title", "Без названия")
+            task_id = task.get("id", "")
+            priority = task.get("priority", 0)
+            priority_emoji = ["🟢", "🟡", "🔴", "⏸"][priority]
+            
+            # Обрезаем длинные названия
+            display_title = title[:40] + "..." if len(title) > 40 else title
+            
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"{priority_emoji} {display_title}",
+                    callback_data=f"weeek_edit_task_{task_id}"
+                )
+            ])
+        
+        keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")])
+        
+        await query.edit_message_text(
+            f"🔄 *Обновление задачи*\n\n"
+            f"Проект: *{project_name}*\n"
+            f"Шаг 2/3: Выберите задачу для редактирования:",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        await query.edit_message_text(
+            f"❌ Ошибка: {str(e)}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+async def show_weeek_task_edit_menu(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Показать меню редактирования задачи"""
+    try:
+        task_id = query.data.replace("weeek_edit_task_", "")
+        
+        from weeek_helper import get_task
+        
+        await query.edit_message_text("⏳ Загружаю задачу...")
+        
+        task = await get_task(task_id)
+        
+        if not task:
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+            await query.edit_message_text(
+                "❌ Не удалось загрузить задачу",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        
+        # Сохраняем task_id в контексте
+        context.user_data["editing_task_id"] = task_id
+        
+        title = task.get("title", "Без названия")
+        description = task.get("description", "Нет описания")
+        priority = task.get("priority", 0)
+        priority_names = ["🟢 Низкий", "🟡 Средний", "🔴 Высокий", "⏸ В ожидании"]
+        priority_str = priority_names[priority] if 0 <= priority <= 3 else "Не указан"
+        task_type = task.get("type", "action")
+        type_names = {"action": "📋 Задача", "meet": "👥 Встреча", "call": "📞 Звонок"}
+        type_str = type_names.get(task_type, "Задача")
+        completed = task.get("completed", False)
+        status_str = "✅ Завершена" if completed else "🔄 Активна"
+        
+        text = f"✏️ *Редактирование задачи*\n\n"
+        text += f"📝 *Название:* {title}\n\n"
+        text += f"📄 *Описание:*\n{description}\n\n"
+        text += f"🎯 *Приоритет:* {priority_str}\n"
+        text += f"🏷 *Тип:* {type_str}\n"
+        text += f"📊 *Статус:* {status_str}\n\n"
+        text += f"ID: `{task_id}`"
+        
+        keyboard = [
+            [InlineKeyboardButton("✏️ Изменить название", callback_data=f"weeek_edit_field_title_{task_id}")],
+            [InlineKeyboardButton("📝 Изменить описание", callback_data=f"weeek_edit_field_description_{task_id}")],
+            [InlineKeyboardButton("🎯 Изменить приоритет", callback_data=f"weeek_edit_field_priority_{task_id}")],
+            [InlineKeyboardButton("🏷 Изменить тип", callback_data=f"weeek_edit_field_type_{task_id}")],
+        ]
+        
+        if not completed:
+            keyboard.append([InlineKeyboardButton("✅ Отметить выполненной", callback_data=f"weeek_complete_{task_id}")])
+        else:
+            keyboard.append([InlineKeyboardButton("🔄 Возобновить", callback_data=f"weeek_uncomplete_{task_id}")])
+        
+        keyboard.extend([
+            [InlineKeyboardButton("🗑 Удалить задачу", callback_data=f"weeek_delete_{task_id}")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]
+        ])
+        
+        await query.edit_message_text(
+            text,
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]]
+        await query.edit_message_text(
+            f"❌ Ошибка: {str(e)}",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+async def handle_weeek_edit_field(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Обработать выбор поля для редактирования"""
+    try:
+        # Формат: weeek_edit_field_{field}_{task_id}
+        parts = query.data.replace("weeek_edit_field_", "").split("_", 1)
+        field = parts[0]
+        task_id = parts[1]
+        
+        context.user_data["editing_task_id"] = task_id
+        context.user_data["editing_field"] = field
+        
+        if field == "title":
+            await query.edit_message_text(
+                "✏️ *Изменение названия задачи*\n\n"
+                "Отправьте новое название задачи текстовым сообщением.",
+                parse_mode='Markdown'
+            )
+            context.user_data["waiting_for_task_update"] = "title"
+            
+        elif field == "description":
+            await query.edit_message_text(
+                "📝 *Изменение описания задачи*\n\n"
+                "Отправьте новое описание задачи текстовым сообщением.",
+                parse_mode='Markdown'
+            )
+            context.user_data["waiting_for_task_update"] = "description"
+            
+        elif field == "priority":
+            keyboard = [
+                [InlineKeyboardButton("🟢 Низкий (Low)", callback_data=f"weeek_set_priority_0_{task_id}")],
+                [InlineKeyboardButton("🟡 Средний (Medium)", callback_data=f"weeek_set_priority_1_{task_id}")],
+                [InlineKeyboardButton("🔴 Высокий (High)", callback_data=f"weeek_set_priority_2_{task_id}")],
+                [InlineKeyboardButton("⏸ В ожидании (Hold)", callback_data=f"weeek_set_priority_3_{task_id}")],
+                [InlineKeyboardButton("🔙 Отмена", callback_data=f"weeek_edit_task_{task_id}")]
+            ]
+            await query.edit_message_text(
+                "🎯 *Выберите новый приоритет:*",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+        elif field == "type":
+            keyboard = [
+                [InlineKeyboardButton("📋 Задача (action)", callback_data=f"weeek_set_type_action_{task_id}")],
+                [InlineKeyboardButton("👥 Встреча (meet)", callback_data=f"weeek_set_type_meet_{task_id}")],
+                [InlineKeyboardButton("📞 Звонок (call)", callback_data=f"weeek_set_type_call_{task_id}")],
+                [InlineKeyboardButton("🔙 Отмена", callback_data=f"weeek_edit_task_{task_id}")]
+            ]
+            await query.edit_message_text(
+                "🏷 *Выберите новый тип:*",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_weeek_complete_task(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Отметить задачу как выполненную"""
+    try:
+        task_id = query.data.replace("weeek_complete_", "").replace("weeek_uncomplete_", "")
+        
+        from weeek_helper import complete_task, uncomplete_task
+        
+        await query.edit_message_text("⏳ Обновляю статус...")
+        
+        if "weeek_complete_" in query.data:
+            success = await complete_task(task_id)
+            message = "✅ Задача отмечена как выполненная!" if success else "❌ Ошибка при обновлении статуса"
+        else:
+            success = await uncomplete_task(task_id)
+            message = "🔄 Задача возобновлена!" if success else "❌ Ошибка при обновлении статуса"
+        
+        keyboard = [[InlineKeyboardButton("🔙 К задаче", callback_data=f"weeek_edit_task_{task_id}")]]
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_weeek_delete_task(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Удалить задачу"""
+    try:
+        task_id = query.data.replace("weeek_delete_", "")
+        
+        # Подтверждение
+        if not context.user_data.get("confirm_delete_task"):
+            keyboard = [
+                [InlineKeyboardButton("✅ Да, удалить", callback_data=f"weeek_delete_confirm_{task_id}")],
+                [InlineKeyboardButton("❌ Отмена", callback_data=f"weeek_edit_task_{task_id}")]
+            ]
+            await query.edit_message_text(
+                "⚠️ *Подтверждение удаления*\n\n"
+                "Вы уверены, что хотите удалить эту задачу?",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            context.user_data["confirm_delete_task"] = task_id
+            return
+        
+        # Удаляем задачу
+        from weeek_helper import delete_task
+        
+        await query.edit_message_text("⏳ Удаляю задачу...")
+        
+        success = await delete_task(task_id)
+        
+        if success:
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            await query.edit_message_text(
+                "✅ Задача удалена!",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            keyboard = [[InlineKeyboardButton("🔙 К задаче", callback_data=f"weeek_edit_task_{task_id}")]]
+            await query.edit_message_text(
+                "❌ Ошибка при удалении задачи",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        
+        context.user_data["confirm_delete_task"] = None
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_weeek_set_priority(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Установить новый приоритет задачи"""
+    try:
+        # Формат: weeek_set_priority_{priority}_{task_id}
+        parts = query.data.replace("weeek_set_priority_", "").split("_", 1)
+        priority = int(parts[0])
+        task_id = parts[1]
+        
+        from weeek_helper import update_task
+        
+        await query.edit_message_text("⏳ Обновляю приоритет...")
+        
+        updated_task = await update_task(task_id, priority=priority)
+        
+        if updated_task:
+            priority_names = ["🟢 Низкий", "🟡 Средний", "🔴 Высокий", "⏸ В ожидании"]
+            priority_str = priority_names[priority]
+            
+            keyboard = [[InlineKeyboardButton("🔙 К задаче", callback_data=f"weeek_edit_task_{task_id}")]]
+            await query.edit_message_text(
+                f"✅ Приоритет обновлен!\n\n"
+                f"Новый приоритет: {priority_str}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            keyboard = [[InlineKeyboardButton("🔙 К задаче", callback_data=f"weeek_edit_task_{task_id}")]]
+            await query.edit_message_text(
+                "❌ Ошибка при обновлении приоритета",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+
+async def handle_weeek_set_type(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Установить новый тип задачи"""
+    try:
+        # Формат: weeek_set_type_{type}_{task_id}
+        parts = query.data.replace("weeek_set_type_", "").rsplit("_", 1)
+        task_type = parts[0]
+        task_id = parts[1]
+        
+        from weeek_helper import update_task
+        
+        await query.edit_message_text("⏳ Обновляю тип задачи...")
+        
+        updated_task = await update_task(task_id, task_type=task_type)
+        
+        if updated_task:
+            type_names = {"action": "📋 Задача", "meet": "👥 Встреча", "call": "📞 Звонок"}
+            type_str = type_names.get(task_type, task_type)
+            
+            keyboard = [[InlineKeyboardButton("🔙 К задаче", callback_data=f"weeek_edit_task_{task_id}")]]
+            await query.edit_message_text(
+                f"✅ Тип задачи обновлен!\n\n"
+                f"Новый тип: {type_str}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            keyboard = [[InlineKeyboardButton("🔙 К задаче", callback_data=f"weeek_edit_task_{task_id}")]]
+            await query.edit_message_text(
+                "❌ Ошибка при обновлении типа",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        await query.edit_message_text(f"❌ Ошибка: {str(e)}")
+
 async def show_main_menu(query: CallbackQuery):
     keyboard = [
         [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
@@ -2062,32 +2431,80 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     first_name = update.message.from_user.first_name or "без имени"
     
     # Проверяем, ждем ли мы название задачи для WEEEK
+    # Обработка обновления задачи
+    if context.user_data.get("waiting_for_task_update"):
+        try:
+            from weeek_helper import update_task
+            
+            task_id = context.user_data.get("editing_task_id")
+            field = context.user_data.get("waiting_for_task_update")
+            new_value = text
+            
+            if not task_id:
+                await update.message.reply_text("❌ Ошибка: задача не выбрана")
+                context.user_data["waiting_for_task_update"] = None
+                return
+            
+            await update.message.reply_text("⏳ Обновляю задачу...")
+            
+            # Обновляем задачу
+            if field == "title":
+                updated_task = await update_task(task_id, title=new_value)
+            elif field == "description":
+                updated_task = await update_task(task_id, description=new_value)
+            else:
+                await update.message.reply_text("❌ Неизвестное поле для обновления")
+                context.user_data["waiting_for_task_update"] = None
+                return
+            
+            if updated_task:
+                field_name = "Название" if field == "title" else "Описание"
+                await update.message.reply_text(
+                    f"✅ {field_name} задачи обновлено!\n\n"
+                    f"Используйте /weeek_update для дальнейшего редактирования"
+                )
+                log.info(f"✅ Задача {task_id} обновлена: {field} = {new_value}")
+            else:
+                await update.message.reply_text("❌ Не удалось обновить задачу")
+            
+            # Сбрасываем флаг ожидания
+            context.user_data["waiting_for_task_update"] = None
+            context.user_data["editing_task_id"] = None
+            return
+            
+        except Exception as e:
+            log.error(f"❌ Ошибка обновления задачи: {e}")
+            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+            context.user_data["waiting_for_task_update"] = None
+            return
+    
+    # Обработка создания задачи
     if context.user_data.get("waiting_for_task_name"):
         try:
             from weeek_helper import create_task, get_project
-            
+
             project_id = context.user_data.get("selected_project_id")
             task_name = text
-            
+
             if not project_id:
                 await update.message.reply_text("❌ Ошибка: проект не выбран")
                 context.user_data["waiting_for_task_name"] = False
                 return
-            
+
             await update.message.reply_text(f"⏳ Создаю задачу: {task_name}")
-            
+
             # Создаем задачу
             task = await create_task(
                 project_id=project_id,
                 title=task_name,
                 description=f"Создано через Telegram бот пользователем @{username}"
             )
-            
+
             if task:
                 # Получаем название проекта
                 project = await get_project(project_id)
                 project_name = project.get("name", "Проект") if project else "Проект"
-                
+
                 await update.message.reply_text(
                     f"✅ Задача создана в WEEEK!\n\n"
                     f"📁 Проект: {project_name}\n"
@@ -2097,12 +2514,12 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 log.info(f"✅ Задача создана в WEEEK: {task_name} (проект: {project_name})")
             else:
                 await update.message.reply_text("❌ Не удалось создать задачу в WEEEK")
-            
+
             # Сбрасываем флаг ожидания
             context.user_data["waiting_for_task_name"] = False
             context.user_data["selected_project_id"] = None
             return
-            
+
         except Exception as e:
             log.error(f"❌ Ошибка создания задачи: {e}")
             await update.message.reply_text(f"❌ Ошибка: {str(e)}")
@@ -3152,11 +3569,11 @@ async def weeek_projects_command(update: Update, context: ContextTypes.DEFAULT_T
     """Команда /weeek_projects - список проектов в Weeek"""
     try:
         from weeek_helper import get_projects
-        
+
         await update.message.reply_text("⏳ Получаю список проектов из WEEEK...")
-        
+
         projects = await get_projects()
-        
+
         if projects:
             text = f"📋 *Проекты в WEEEK* (всего: {len(projects)})\n\n"
             for i, project in enumerate(projects[:20], 1):
@@ -3164,12 +3581,108 @@ async def weeek_projects_command(update: Update, context: ContextTypes.DEFAULT_T
                 status = project.get("status", "Не указан")
                 text += f"{i}. *{name}*\n"
                 text += f"   Статус: {status}\n\n"
-            
+
             await update.message.reply_text(text, parse_mode='Markdown')
         else:
             await update.message.reply_text("❌ Проектов не найдено или WEEEK недоступен")
     except Exception as e:
         log.error(f"❌ Ошибка получения проектов: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def weeek_update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /weeek_update - обновление задачи в Weeek (интерактивное меню)"""
+    try:
+        from weeek_helper import get_projects
+        
+        await update.message.reply_text("⏳ Загружаю проекты...")
+        
+        projects = await get_projects()
+        
+        if not projects:
+            await update.message.reply_text(
+                "❌ Проектов не найдено.\n\n"
+                "Сначала создайте проекты и задачи в WEEEK."
+            )
+            return
+        
+        # Показываем список проектов для выбора
+        keyboard = []
+        for project in projects[:15]:
+            project_name = project.get("name", "Без названия")
+            project_id = project.get("id", "")
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📁 {project_name}",
+                    callback_data=f"weeek_update_select_project_{project_id}"
+                )
+            ])
+        
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="back_to_menu")])
+        
+        await update.message.reply_text(
+            "🔄 *Обновление задачи*\n\n"
+            "Шаг 1/3: Выберите проект с задачей:",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def weeek_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /weeek_tasks - просмотр задач проекта"""
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Укажите ID проекта.\n"
+            "Использование: `/weeek_tasks [project_id]`\n\n"
+            "Пример: `/weeek_tasks 123`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    try:
+        from weeek_helper import get_tasks, get_project
+        
+        project_id = int(context.args[0])
+        
+        await update.message.reply_text("⏳ Загружаю задачи...")
+        
+        # Получаем название проекта
+        project = await get_project(project_id)
+        project_name = project.get("name", f"Проект {project_id}") if project else f"Проект {project_id}"
+        
+        # Получаем задачи
+        result = await get_tasks(project_id=project_id, completed=False, per_page=20)
+        
+        if result["success"] and result["tasks"]:
+            tasks = result["tasks"]
+            text = f"📋 *Задачи проекта: {project_name}*\n"
+            text += f"Всего активных: {len(tasks)}\n\n"
+            
+            for i, task in enumerate(tasks, 1):
+                title = task.get("title", "Без названия")
+                task_id = task.get("id", "")
+                priority = task.get("priority", 0)
+                priority_emoji = ["🟢", "🟡", "🔴", "⏸"][priority]
+                
+                text += f"{i}. {priority_emoji} {title}\n"
+                text += f"   ID: `{task_id}`\n\n"
+            
+            text += "\n💡 Используйте `/weeek_update` для редактирования задачи"
+            
+            await update.message.reply_text(text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text(
+                f"📋 *Проект: {project_name}*\n\n"
+                "❌ Активных задач не найдено.",
+                parse_mode='Markdown'
+            )
+            
+    except ValueError:
+        await update.message.reply_text("❌ Неверный ID проекта (должно быть число)")
+    except Exception as e:
+        log.error(f"❌ Ошибка получения задач: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3673,7 +4186,9 @@ def main():
     # WEEEK commands
     app.add_handler(CommandHandler("weeek_task", weeek_create_task_command))
     app.add_handler(CommandHandler("weeek_projects", weeek_projects_command))
-    
+    app.add_handler(CommandHandler("weeek_update", weeek_update_command))
+    app.add_handler(CommandHandler("weeek_tasks", weeek_tasks_command))
+
     # Email commands
     app.add_handler(CommandHandler("email_check", email_check_command))
     app.add_handler(CommandHandler("email_draft", email_draft_command))
