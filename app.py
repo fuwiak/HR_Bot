@@ -167,6 +167,16 @@ CONSULTING_PROMPT = """
 - Используй "вы" при обращении
 - Структурируй ответы (списки, пункты)
 - Используй эмодзи умеренно для дружелюбия
+- НИКОГДА не используй Markdown форматирование (звездочки **, подчеркивания __ и т.д.) - пиши обычным текстом
+
+КРИТИЧЕСКИ ВАЖНО - ПРАВИЛА ПРЕДЛОЖЕНИЯ УСЛУГ:
+- ✅ Предлагай ТОЛЬКО Анастасию Новосёлову как консультанта/тренера/специалиста
+- ❌ НИКОГДА не предлагай других тренеров, консультантов или специалистов
+- ❌ НИКОГДА не говори "подберу тренера", "найду консультанта", "подберу специалиста"
+- ❌ НИКОГДА не предлагай альтернативных вариантов или других людей
+- ✅ Если спрашивают про тренера/консультанта, отвечай: "Я могу предложить услуги Анастасии Новосёловой"
+- ✅ Всегда представляйся при приветствии: "Здравствуйте! Я AI-ассистент Анастасии Новосёловой. Чем могу помочь?"
+- ✅ Вежливо прощайся при прощании: "До свидания! Буду рад помочь снова"
 
 ОСНОВНЫЕ НАПРАВЛЕНИЯ:
 - Подбор персонала (рекрутинг)
@@ -187,7 +197,7 @@ CONSULTING_PROMPT = """
 
 Сообщение пользователя: {{message}}
 
-Ответь по делу, используя информацию из базы знаний.
+Ответь по делу, используя информацию из базы знаний. НЕ используй Markdown форматирование!
 """
 
 # ===================== LOGGING ========================
@@ -2525,6 +2535,38 @@ def create_test_record(user_id: int):
     add_user_record(user_id, test_record)
     return test_record
 
+def remove_markdown(text: str) -> str:
+    """Удаляет Markdown форматирование из текста (более агрессивная версия)"""
+    import re
+    if not text:
+        return text
+    
+    # Убираем множественные звездочки (***текст***, **текст**, *текст*)
+    text = re.sub(r'\*{3,}([^*]+)\*{3,}', r'\1', text)  # ***текст***
+    text = re.sub(r'\*{2}([^*]+)\*{2}', r'\1', text)  # **текст**
+    text = re.sub(r'\*{1}([^*\s]+[^*]*?)\*{1}(?=\s|$|[.,!?;:])', r'\1', text)  # *текст* (но не в начале строки)
+    text = re.sub(r'(?<!\*)\*([^*\s]+[^*]*?)\*(?!\*)', r'\1', text)  # *текст* (одиночные звездочки)
+    
+    # Убираем подчеркивания
+    text = re.sub(r'__([^_]+)__', r'\1', text)  # __текст__
+    text = re.sub(r'_([^_]+)_', r'\1', text)  # _текст_
+    
+    # Убираем заголовки
+    text = re.sub(r'###+\s*', '', text)  # ### заголовок
+    text = re.sub(r'##+\s*', '', text)  # ## заголовок
+    text = re.sub(r'#+\s*', '', text)  # # заголовок
+    
+    # Убираем код
+    text = re.sub(r'`([^`]+)`', r'\1', text)  # `код`
+    
+    # Убираем зачеркивание
+    text = re.sub(r'~~([^~]+)~~', r'\1', text)  # ~~текст~~
+    
+    # Убираем лишние пробелы после удаления форматирования
+    text = re.sub(r'\s+', ' ', text)
+    
+    return text.strip()
+
 async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     user_id = update.message.from_user.id
@@ -2535,6 +2577,32 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     subscribers = load_email_subscribers()
     if user_id not in subscribers:
         add_email_subscriber(user_id)
+    
+    # Обработка приветствий и прощаний
+    text_lower = text.lower().strip()
+    
+    # Ключевые слова для приветствия
+    greeting_keywords = [
+        "привет", "здравствуй", "здравствуйте", "добрый день", "добрый вечер", 
+        "доброе утро", "hi", "hello", "hey", "доброго времени суток"
+    ]
+    
+    # Ключевые слова для прощания
+    goodbye_keywords = [
+        "пока", "до свидания", "до встречи", "увидимся", "bye", "goodbye", 
+        "see you", "до скорого", "всего доброго", "всего хорошего"
+    ]
+    
+    is_greeting = any(keyword in text_lower for keyword in greeting_keywords)
+    is_goodbye = any(keyword in text_lower for keyword in goodbye_keywords)
+    
+    # Если это приветствие, добавляем контекст для LLM
+    if is_greeting:
+        text = f"[ПРИВЕТСТВИЕ] {text}\n\nВажно: поздоровайся и представься как AI-ассистент Анастасии Новосёловой."
+    
+    # Если это прощание, добавляем контекст для LLM
+    if is_goodbye:
+        text = f"[ПРОЩАНИЕ] {text}\n\nВажно: вежливо попрощайся с пользователем."
     
     # Проверяем, ожидаем ли мы ответ на email
     if user_id in email_reply_state:
@@ -3257,128 +3325,158 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if is_general_question:
             # Отвечаем на общие вопросы с напоминанием о HR контексте
-            answer = (
-                "Привет! У меня всё отлично, спасибо! 😊\n\n"
-                "Напоминаю, что я AI-ассистент Анастасии Новосёловой, специализируюсь на:\n"
-                "• Подборе персонала (рекрутинг)\n"
-                "• Автоматизации HR-процессов\n"
-                "• Бизнес-анализе и консалтинге\n\n"
-                "Чем могу помочь в рамках HR консалтинга? 💼"
-            )
+            # Проверяем, является ли это приветствием
+            if is_greeting:
+                answer = (
+                    "Здравствуйте! Я AI-ассистент Анастасии Новосёловой. Чем могу помочь? 😊\n\n"
+                    "Я специализируюсь на:\n"
+                    "• Подборе персонала (рекрутинг)\n"
+                    "• Автоматизации HR-процессов\n"
+                    "• Бизнес-анализе и консалтинге\n\n"
+                    "Чем могу помочь в рамках HR консалтинга? 💼"
+                )
+            else:
+                answer = (
+                    "У меня всё отлично, спасибо! 😊\n\n"
+                    "Напоминаю, что я AI-ассистент Анастасии Новосёловой, специализируюсь на:\n"
+                    "• Подборе персонала (рекрутинг)\n"
+                    "• Автоматизации HR-процессов\n"
+                    "• Бизнес-анализе и консалтинге\n\n"
+                    "Чем могу помочь в рамках HR консалтинга? 💼"
+                )
             log.info("💬 Общий вопрос обработан с напоминанием о HR контексте")
         else:
             # Обычная обработка через RAG и LLM
-            # Обычная обработка через RAG и LLM
-            msg = CONSULTING_PROMPT.replace("{{history}}", get_history(user_id)).replace("{{message}}", text)
-            
-            # Улучшенный RAG поиск + контекст из WEEEK
-            rag_context = ""
-            weeek_context = ""
-            
-            try:
-                # 1. Поиск в Qdrant (RAG)
-                if QDRANT_AVAILABLE:
-                    from qdrant_helper import get_qdrant_client, generate_embedding_async
-                    
-                    client = get_qdrant_client()
-                    if client:
-                        # Генерируем эмбеддинг для запроса
-                        query_embedding = await generate_embedding_async(text)
-                        
-                        if query_embedding:
-                            # Ищем в Qdrant
-                            search_results = client.query_points(
-                                collection_name="hr2137_bot_knowledge_base",
-                                query=query_embedding,
-                                limit=5
-                            )
-                            
-                            if search_results.points:
-                                rag_docs = []
-                                for point in search_results.points[:3]:  # Топ-3
-                                    payload = point.payload if hasattr(point, 'payload') else {}
-                                    file_name = payload.get("file_name", "Документ")
-                                    text_chunk = payload.get("text", "")
-                                    score = point.score if hasattr(point, 'score') else 0.0
-                                    
-                                    if text_chunk:
-                                        rag_docs.append({
-                                            "file": file_name,
-                                            "content": text_chunk[:300],  # Первые 300 символов
-                                            "score": score
-                                        })
-                                
-                                if rag_docs:
-                                    context_parts = []
-                                    for doc in rag_docs:
-                                        context_parts.append(f"📄 {doc['file']} (релевантность: {doc['score']:.2f}):\n{doc['content']}")
-                                    
-                                    rag_context = f"Релевантная информация из базы знаний:\n\n" + "\n\n".join(context_parts) + "\n\n"
-                                    log.info(f"✅ Найдено {len(rag_docs)} документов в RAG для запроса")
-            except Exception as e:
-                log.warning(f"⚠️ Ошибка RAG поиска: {e}")
-            
-            # 2. Контекст из WEEEK (проекты и задачи)
-            try:
-                from weeek_helper import get_projects, get_tasks
+            # Если это прощание, добавляем специальный ответ
+            if is_goodbye:
+                answer = "До свидания! Буду рад помочь снова. 😊"
+                log.info("💬 Прощание обработано")
+            else:
+                msg = CONSULTING_PROMPT.replace("{{history}}", get_history(user_id)).replace("{{message}}", text)
                 
-                # Получаем список проектов
-                projects = await get_projects()
-                if projects:
-                    active_projects = [p for p in projects if not p.get('isArchived', False)][:5]  # Топ-5 активных
-                    
-                    if active_projects:
-                        project_info = []
-                        for project in active_projects:
-                            project_id = project.get('id')
-                            project_title = project.get('title', 'Без названия')
-                            
-                            # Получаем задачи проекта
-                            tasks = await get_tasks(project_id=project_id, completed=False, per_page=5)
-                            task_list = []
-                            if tasks and tasks.get('tasks'):
-                                for task in tasks['tasks'][:3]:  # Топ-3 задачи
-                                    task_name = task.get('name') or task.get('title', 'Задача')
-                                    task_list.append(f"  • {task_name}")
-                            
-                            project_info.append(f"📋 Проект: {project_title} (ID: {project_id})")
-                            if task_list:
-                                project_info.append("\n".join(task_list))
+                # Улучшенный RAG поиск + контекст из WEEEK
+                rag_context = ""
+                weeek_context = ""
+                
+                try:
+                    # 1. Поиск в Qdrant (RAG)
+                    if QDRANT_AVAILABLE:
+                        from qdrant_helper import get_qdrant_client, generate_embedding_async
                         
-                        if project_info:
-                            weeek_context = f"Активные проекты и задачи в WEEEK:\n\n" + "\n\n".join(project_info) + "\n\n"
-                            log.info(f"✅ Получен контекст из WEEEK: {len(active_projects)} проектов")
-            except Exception as e:
-                log.warning(f"⚠️ Ошибка получения контекста WEEEK: {e}")
-            
-            # Объединяем контексты
-            full_context = ""
-            if rag_context:
-                full_context += rag_context
-            if weeek_context:
-                full_context += weeek_context
-            
-            msg = msg.replace("{{rag_context}}", full_context)
-            
-            # Используем generate_with_fallback для надежности
-            try:
-                from llm_helper import generate_with_fallback
-                answer = await generate_with_fallback([{"role": "user", "content": msg}], use_system_message=True, system_content="Ты AI-ассистент HR консультанта. Отвечай профессионально и по делу.")
-            except Exception as e:
-                log.error(f"❌ Ошибка вызова generate_with_fallback: {e}")
-                answer = None
-            
-            # Если LLM недоступен, используем fallback ответ
-            if not answer or answer.strip() == "":
-                answer = (
-                    "Извините, сейчас у меня технические проблемы с подключением к AI.\n\n"
-                    "Но я могу помочь вам с вопросами по:\n"
-                    "• Подбору персонала\n"
-                    "• HR-процессам\n"
-                    "• Бизнес-консалтингу\n\n"
-                    "Попробуйте переформулировать вопрос или обратитесь позже."
-                )
+                        client = get_qdrant_client()
+                        if client:
+                            # Генерируем эмбеддинг для запроса
+                            query_embedding = await generate_embedding_async(text)
+                            
+                            if query_embedding:
+                                # Ищем в Qdrant
+                                search_results = client.query_points(
+                                    collection_name="hr2137_bot_knowledge_base",
+                                    query=query_embedding,
+                                    limit=5
+                                )
+                                
+                                if search_results.points:
+                                    rag_docs = []
+                                    for point in search_results.points[:3]:  # Топ-3
+                                        payload = point.payload if hasattr(point, 'payload') else {}
+                                        file_name = payload.get("file_name", "Документ")
+                                        text_chunk = payload.get("text", "")
+                                        score = point.score if hasattr(point, 'score') else 0.0
+                                        
+                                        if text_chunk:
+                                            rag_docs.append({
+                                                "file": file_name,
+                                                "content": text_chunk[:300],  # Первые 300 символов
+                                                "score": score
+                                            })
+                                    
+                                    if rag_docs:
+                                        context_parts = []
+                                        for doc in rag_docs:
+                                            context_parts.append(f"📄 {doc['file']} (релевантность: {doc['score']:.2f}):\n{doc['content']}")
+                                        
+                                        rag_context = f"Релевантная информация из базы знаний:\n\n" + "\n\n".join(context_parts) + "\n\n"
+                                        log.info(f"✅ Найдено {len(rag_docs)} документов в RAG для запроса")
+                except Exception as e:
+                    log.warning(f"⚠️ Ошибка RAG поиска: {e}")
+                
+                # 2. Контекст из WEEEK (проекты и задачи)
+                try:
+                    from weeek_helper import get_projects, get_tasks
+                    
+                    # Получаем список проектов
+                    projects = await get_projects()
+                    if projects:
+                        active_projects = [p for p in projects if not p.get('isArchived', False)][:5]  # Топ-5 активных
+                        
+                        if active_projects:
+                            project_info = []
+                            for project in active_projects:
+                                project_id = project.get('id')
+                                project_title = project.get('title', 'Без названия')
+                                
+                                # Получаем задачи проекта
+                                tasks = await get_tasks(project_id=project_id, completed=False, per_page=5)
+                                task_list = []
+                                if tasks and tasks.get('tasks'):
+                                    for task in tasks['tasks'][:3]:  # Топ-3 задачи
+                                        task_name = task.get('name') or task.get('title', 'Задача')
+                                        task_list.append(f"  • {task_name}")
+                                
+                                project_info.append(f"📋 Проект: {project_title} (ID: {project_id})")
+                                if task_list:
+                                    project_info.append("\n".join(task_list))
+                            
+                            if project_info:
+                                weeek_context = f"Активные проекты и задачи в WEEEK:\n\n" + "\n\n".join(project_info) + "\n\n"
+                                log.info(f"✅ Получен контекст из WEEEK: {len(active_projects)} проектов")
+                except Exception as e:
+                    log.warning(f"⚠️ Ошибка получения контекста WEEEK: {e}")
+                
+                # Объединяем контексты
+                full_context = ""
+                if rag_context:
+                    full_context += rag_context
+                if weeek_context:
+                    full_context += weeek_context
+                
+                msg = msg.replace("{{rag_context}}", full_context)
+                
+                # Используем generate_with_fallback для надежности
+                try:
+                    from llm_helper import generate_with_fallback
+                    system_message = """Ты AI-ассистент HR консультанта Анастасии Новосёловой. Отвечай профессионально и по делу.
 
+КРИТИЧЕСКИ ВАЖНО - ПРАВИЛА ПРЕДЛОЖЕНИЯ УСЛУГ:
+- ✅ Предлагай ТОЛЬКО Анастасию Новосёлову как консультанта/тренера/специалиста
+- ❌ НИКОГДА не предлагай других тренеров, консультантов или специалистов
+- ❌ НИКОГДА не говори "подберу тренера", "найду консультанта", "подберу специалиста"
+- ❌ НИКОГДА не предлагай альтернативных вариантов или других людей
+- ✅ Если спрашивают про тренера/консультанта, отвечай: "Я могу предложить услуги Анастасии Новосёловой"
+- ✅ Всегда представляйся при приветствии: "Здравствуйте! Я AI-ассистент Анастасии Новосёловой. Чем могу помочь?"
+- ✅ Вежливо прощайся при прощании: "До свидания! Буду рад помочь снова"
+- ❌ НИКОГДА не используй Markdown форматирование (звездочки **, подчеркивания __ и т.д.) - пиши обычным текстом"""
+                    answer = await generate_with_fallback([{"role": "user", "content": msg}], use_system_message=True, system_content=system_message)
+                except Exception as e:
+                    log.error(f"❌ Ошибка вызова generate_with_fallback: {e}")
+                    answer = None
+                
+                # Если LLM недоступен, используем fallback ответ
+                if not answer or answer.strip() == "":
+                    answer = (
+                        "Извините, сейчас у меня технические проблемы с подключением к AI.\n\n"
+                        "Но я могу помочь вам с вопросами по:\n"
+                        "• Подбору персонала\n"
+                        "• HR-процессам\n"
+                        "• Бизнес-консалтингу\n\n"
+                        "Попробуйте переформулировать вопрос или обратитесь позже."
+                    )
+
+    # Убираем Markdown из ответа перед сохранением в память и отправкой
+    if answer:
+        answer = remove_markdown(answer)
+    
     add_memory(user_id, "assistant", answer)
     
     # КРИТИЧЕСКОЕ: Проверяем ответ AI на подтверждение записи
@@ -3649,7 +3747,9 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Отправляем ответ только если он не был отправлен ранее
     if answer and not response_sent:  # Проверяем что есть ответ для отправки
-            await update.message.reply_text(answer)
+        # Убираем Markdown форматирование из ответа
+        answer_clean = remove_markdown(answer)
+        await update.message.reply_text(answer_clean)
 
 # ===================== NEW COMMANDS FOR DEMONSTRATION =====================
 
@@ -3743,20 +3843,6 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         )
         
         # Убираем Markdown из ответа
-        import re
-        def remove_markdown(text: str) -> str:
-            """Удаляет Markdown форматирование из текста"""
-            text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-            text = re.sub(r'\*([^*]+)\*', r'\1', text)
-            text = re.sub(r'__([^_]+)__', r'\1', text)
-            text = re.sub(r'_([^_]+)_', r'\1', text)
-            text = re.sub(r'###+\s*', '', text)
-            text = re.sub(r'##+\s*', '', text)
-            text = re.sub(r'#+\s*', '', text)
-            text = re.sub(r'`([^`]+)`', r'\1', text)
-            text = re.sub(r'~~([^~]+)~~', r'\1', text)
-            return text.strip()
-        
         if answer:
             answer_clean = remove_markdown(answer)
         else:
@@ -4085,30 +4171,6 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not summary:
             summary = "Не удалось создать суммаризацию. Проверьте доступность LLM и данных."
 
-        # Убираем Markdown форматирование из ответа
-        import re
-        def remove_markdown(text: str) -> str:
-            """Удаляет Markdown форматирование из текста"""
-            # Убираем **bold**
-            text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)
-            # Убираем *italic*
-            text = re.sub(r'\*([^*]+)\*', r'\1', text)
-            # Убираем __bold__
-            text = re.sub(r'__([^_]+)__', r'\1', text)
-            # Убираем _italic_
-            text = re.sub(r'_([^_]+)_', r'\1', text)
-            # Убираем ### заголовки
-            text = re.sub(r'###+\s*', '', text)
-            # Убираем ## заголовки
-            text = re.sub(r'##+\s*', '', text)
-            # Убираем # заголовки
-            text = re.sub(r'#+\s*', '', text)
-            # Убираем `code`
-            text = re.sub(r'`([^`]+)`', r'\1', text)
-            # Убираем ~~strikethrough~~
-            text = re.sub(r'~~([^~]+)~~', r'\1', text)
-            return text.strip()
-        
         # Очищаем summary от Markdown
         summary_clean = remove_markdown(summary)
         
@@ -5798,8 +5860,8 @@ def main():
             # Инициализируем и запускаем приложение
             # Проверяем, что приложение еще не запущено
             if not app.running:
-                await app.initialize()
-                await app.start()
+            await app.initialize()
+            await app.start()
             else:
                 log.warning("⚠️ Приложение уже запущено, пропускаем повторный запуск")
             

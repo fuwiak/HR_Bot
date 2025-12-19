@@ -250,7 +250,7 @@ async def send_email(
         return await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
 
 async def _send_email_async(to_email: str, subject: str, body: str, is_html: bool, attachments: Optional[List[str]]) -> bool:
-    """Async версия отправки email через aiosmtplib с fallback на синхронную версию"""
+    """Async версия отправки email через aiosmtplib с поддержкой альтернативных портов"""
     try:
         import aiosmtplib
         import ssl
@@ -264,33 +264,100 @@ async def _send_email_async(to_email: str, subject: str, body: str, is_html: boo
         
         message.attach(MIMEText(body, "html" if is_html else "plain"))
         
-        # Для порта 465 используем SSL с самого начала
         # Создаем SSL контекст
         ssl_context = ssl.create_default_context()
         
-        # Используем SMTP с SSL
-        smtp = aiosmtplib.SMTP(
-            hostname=YANDEX_SMTP_SERVER,
-            port=YANDEX_SMTP_PORT,
-            timeout=30,
-            use_tls=False,  # Для порта 465 не используем STARTTLS
-            tls_context=ssl_context  # Используем SSL контекст
-        )
-        
+        # Пробуем подключиться к основному порту
         try:
-            await smtp.connect()
-            await smtp.login(YANDEX_EMAIL, YANDEX_PASSWORD)
-            await smtp.send_message(message)
-            await smtp.quit()
+            if YANDEX_SMTP_PORT == 465:
+                # Для порта 465 используем SSL с самого начала
+                smtp = aiosmtplib.SMTP(
+                    hostname=YANDEX_SMTP_SERVER,
+                    port=465,
+                    timeout=30,
+                    use_tls=False,  # Для порта 465 не используем STARTTLS
+                    tls_context=ssl_context
+                )
+            elif YANDEX_SMTP_PORT == 587:
+                # Для порта 587 используем STARTTLS
+                smtp = aiosmtplib.SMTP(
+                    hostname=YANDEX_SMTP_SERVER,
+                    port=587,
+                    timeout=30,
+                    use_tls=True,  # Для порта 587 используем STARTTLS
+                    tls_context=ssl_context
+                )
+            else:
+                # Для других портов пробуем SSL
+                smtp = aiosmtplib.SMTP(
+                    hostname=YANDEX_SMTP_SERVER,
+                    port=YANDEX_SMTP_PORT,
+                    timeout=30,
+                    use_tls=False,
+                    tls_context=ssl_context
+                )
             
-            log.info(f"✅ Email отправлен (async): {to_email} - {subject}")
-            return True
-        except Exception as e:
             try:
+                await smtp.connect()
+                await smtp.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+                await smtp.send_message(message)
                 await smtp.quit()
-            except:
-                pass
-            raise
+                
+                log.info(f"✅ Email отправлен (async, порт {YANDEX_SMTP_PORT}): {to_email} - {subject}")
+                return True
+            except Exception as e:
+                try:
+                    await smtp.quit()
+                except:
+                    pass
+                raise
+        
+        except (TimeoutError, OSError, ConnectionError) as e:
+            error_str = str(e).lower()
+            log.warning(f"⚠️ Не удалось подключиться к порту {YANDEX_SMTP_PORT}: {e}")
+            
+            # Если основной порт недоступен, пробуем альтернативный
+            if "network is unreachable" in error_str or "timed out" in error_str or "connection refused" in error_str:
+                alternative_port = 587 if YANDEX_SMTP_PORT == 465 else 465
+                log.info(f"🔄 Пробую альтернативный порт {alternative_port}...")
+                
+                try:
+                    if alternative_port == 465:
+                        smtp = aiosmtplib.SMTP(
+                            hostname=YANDEX_SMTP_SERVER,
+                            port=465,
+                            timeout=30,
+                            use_tls=False,
+                            tls_context=ssl_context
+                        )
+                    else:
+                        smtp = aiosmtplib.SMTP(
+                            hostname=YANDEX_SMTP_SERVER,
+                            port=587,
+                            timeout=30,
+                            use_tls=True,
+                            tls_context=ssl_context
+                        )
+                    
+                    try:
+                        await smtp.connect()
+                        await smtp.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+                        await smtp.send_message(message)
+                        await smtp.quit()
+                        
+                        log.info(f"✅ Email отправлен (async, порт {alternative_port}): {to_email} - {subject}")
+                        return True
+                    except Exception as e2:
+                        try:
+                            await smtp.quit()
+                        except:
+                            pass
+                        raise e  # Возвращаем исходную ошибку
+                except Exception as e2:
+                    log.error(f"❌ Ошибка при подключении к порту {alternative_port}: {e2}")
+                    raise e  # Возвращаем исходную ошибку
+            else:
+                raise
         
     except Exception as e:
         error_msg = str(e).lower()
@@ -310,13 +377,13 @@ async def _send_email_async(to_email: str, subject: str, body: str, is_html: boo
             return False
 
 def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, attachments: Optional[List[str]]) -> bool:
-    """Синхронная версия отправки email через smtplib"""
+    """Синхронная версия отправки email через smtplib с поддержкой альтернативных портов"""
+    import smtplib
+    import socket
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
     try:
-        import smtplib
-        import socket
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        
         message = MIMEMultipart()
         message["From"] = YANDEX_EMAIL
         message["To"] = to_email
@@ -327,16 +394,89 @@ def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, atta
         # Устанавливаем таймаут для соединения
         socket.setdefaulttimeout(30)  # 30 секунд
         
-        # Для порта 465 используем SMTP_SSL (SSL с самого начала)
-        server = smtplib.SMTP_SSL(YANDEX_SMTP_SERVER, YANDEX_SMTP_PORT, timeout=30)
-        try:
-            server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
-            server.send_message(message)
-            log.info(f"✅ Email отправлен (sync): {to_email} - {subject}")
-            return True
-        finally:
-            server.quit()
+        # Пробуем разные варианты подключения
+        # Вариант 1: Порт 465 с SSL (SMTP_SSL)
+        if YANDEX_SMTP_PORT == 465:
+            try:
+                log.info(f"🔄 Попытка подключения к {YANDEX_SMTP_SERVER}:465 (SSL)...")
+                server = smtplib.SMTP_SSL(YANDEX_SMTP_SERVER, 465, timeout=30)
+                try:
+                    server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+                    server.send_message(message)
+                    log.info(f"✅ Email отправлен (sync, порт 465): {to_email} - {subject}")
+                    return True
+                finally:
+                    server.quit()
+            except (socket.timeout, OSError, ConnectionError) as e:
+                error_str = str(e).lower()
+                log.warning(f"⚠️ Не удалось подключиться к порту 465: {e}")
+                
+                # Если порт 465 недоступен, пробуем порт 587 с STARTTLS
+                if "network is unreachable" in error_str or "timed out" in error_str or "connection refused" in error_str:
+                    log.info("🔄 Пробую альтернативный порт 587 (STARTTLS)...")
+                    try:
+                        server = smtplib.SMTP(YANDEX_SMTP_SERVER, 587, timeout=30)
+                        try:
+                            server.starttls()
+                            server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+                            server.send_message(message)
+                            log.info(f"✅ Email отправлен (sync, порт 587): {to_email} - {subject}")
+                            return True
+                        finally:
+                            server.quit()
+                    except Exception as e2:
+                        log.error(f"❌ Ошибка при подключении к порту 587: {e2}")
+                        raise e  # Возвращаем исходную ошибку
+                else:
+                    raise
         
+        # Вариант 2: Порт 587 с STARTTLS (если изначально настроен)
+        elif YANDEX_SMTP_PORT == 587:
+            try:
+                log.info(f"🔄 Попытка подключения к {YANDEX_SMTP_SERVER}:587 (STARTTLS)...")
+                server = smtplib.SMTP(YANDEX_SMTP_SERVER, 587, timeout=30)
+                try:
+                    server.starttls()
+                    server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+                    server.send_message(message)
+                    log.info(f"✅ Email отправлен (sync, порт 587): {to_email} - {subject}")
+                    return True
+                finally:
+                    server.quit()
+            except (socket.timeout, OSError, ConnectionError) as e:
+                error_str = str(e).lower()
+                log.warning(f"⚠️ Не удалось подключиться к порту 587: {e}")
+                
+                # Если порт 587 недоступен, пробуем порт 465 с SSL
+                if "network is unreachable" in error_str or "timed out" in error_str or "connection refused" in error_str:
+                    log.info("🔄 Пробую альтернативный порт 465 (SSL)...")
+                    try:
+                        server = smtplib.SMTP_SSL(YANDEX_SMTP_SERVER, 465, timeout=30)
+                        try:
+                            server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+                            server.send_message(message)
+                            log.info(f"✅ Email отправлен (sync, порт 465): {to_email} - {subject}")
+                            return True
+                        finally:
+                            server.quit()
+                    except Exception as e2:
+                        log.error(f"❌ Ошибка при подключении к порту 465: {e2}")
+                        raise e  # Возвращаем исходную ошибку
+                else:
+                    raise
+        
+        # Вариант 3: Другой порт (используем как есть)
+        else:
+            log.info(f"🔄 Попытка подключения к {YANDEX_SMTP_SERVER}:{YANDEX_SMTP_PORT}...")
+            server = smtplib.SMTP_SSL(YANDEX_SMTP_SERVER, YANDEX_SMTP_PORT, timeout=30)
+            try:
+                server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+                server.send_message(message)
+                log.info(f"✅ Email отправлен (sync): {to_email} - {subject}")
+                return True
+            finally:
+                server.quit()
+    
     except socket.timeout:
         log.error(f"❌ Таймаут при отправке email (sync): {to_email}")
         return False
@@ -345,6 +485,11 @@ def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, atta
         return False
     except smtplib.SMTPException as e:
         log.error(f"❌ Ошибка SMTP: {e}")
+        return False
+    except (OSError, ConnectionError) as e:
+        log.error(f"❌ Ошибка сетевого подключения: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
     except Exception as e:
         log.error(f"❌ Ошибка отправки email (sync): {e}")
