@@ -5860,8 +5860,8 @@ def main():
             # Инициализируем и запускаем приложение
             # Проверяем, что приложение еще не запущено
             if not app.running:
-            await app.initialize()
-            await app.start()
+                await app.initialize()
+                await app.start()
             else:
                 log.warning("⚠️ Приложение уже запущено, пропускаем повторный запуск")
             
