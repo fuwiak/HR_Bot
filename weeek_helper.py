@@ -45,7 +45,7 @@ async def create_project(
     name: str,
     description: str = "",
     color: Optional[str] = None,
-    is_favorite: bool = False
+    is_private: bool = False
 ) -> Optional[Dict]:
     """
     Создать новый проект в WEEEK
@@ -55,7 +55,7 @@ async def create_project(
         name: Название проекта (обязательно)
         description: Описание проекта
         color: Цвет проекта (hex, например "#FF5733")
-        is_favorite: Добавить в избранное
+        is_private: Приватный проект (обязательное поле!)
     
     Returns:
         Словарь с данными созданного проекта или None при ошибке
@@ -68,16 +68,16 @@ async def create_project(
     headers = get_headers()
     
     # Формируем данные по документации API
+    # isPrivate - ОБЯЗАТЕЛЬНОЕ ПОЛЕ!
     data = {
-        "name": name
+        "name": name,
+        "isPrivate": is_private
     }
     
     if description:
         data["description"] = description
     if color:
         data["color"] = color
-    if is_favorite:
-        data["isFavorite"] = is_favorite
     
     try:
         log.info(f"📤 [WEEEK] Создаю проект: {name}")
