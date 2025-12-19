@@ -199,6 +199,7 @@ UserRecords: Dict[int, List[Dict]] = defaultdict(list)  # Хранилище з�
 UserAuth: Dict[int, Dict] = defaultdict(dict)  # Данные авторизации пользователей
 UserPhone: Dict[int, str] = {}  # Номера телефонов пользователей
 UserBookingData: Dict[int, Dict] = {}  # Частично собранные данные для записи (service, master, datetime)
+UserWeeekWorkspace: Dict[int, str] = {}  # WEEEK Workspace ID для каждого пользователя
 
 def add_memory(user_id, role, text):
     UserMemory[user_id].append((role, text))
@@ -1264,6 +1265,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "`/rag_stats` - статистика базы\n"
             "`/rag_docs` - список документов\n\n"
             "**WEEEK проекты:**\n"
+            "`/weeek_set_workspace [id]` - ustaw Workspace ID (NAJPIERW!)\n"
             "`/weeek_projects` - список проектов\n"
             "`/weeek_create_project [nazwa]` - создать проект\n"
             "`/weeek_tasks [id]` - задачи проекта\n"
@@ -1897,18 +1899,35 @@ async def start_booking_process(query: CallbackQuery):
 
 async def show_weeek_projects(query: CallbackQuery):
     """Показать список проектов из WEEEK"""
+    user_id = query.from_user.id
+    workspace_id = UserWeeekWorkspace.get(user_id)
+    
+    if not workspace_id:
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+        await query.edit_message_text(
+            "❌ *Najpierw ustaw Workspace ID!*\n\n"
+            "Użyj komendy:\n"
+            "`/weeek_set_workspace [twoje_workspace_id]`\n\n"
+            "Jak znaleźć ID - wpisz `/weeek_set_workspace` bez parametrów",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
     try:
         from weeek_helper import get_projects
-        
+
         await query.edit_message_text("⏳ Загружаю проекты из WEEEK...")
-        
-        projects = await get_projects()
-        
+
+        projects = await get_projects(workspace_id)
+
         if not projects:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
             await query.edit_message_text(
-                "❌ Проектов не найдено или WEEEK недоступен.\n\n"
-                "Проверьте настройки WEEEK_TOKEN и WEEEK_WORKSPACE_ID.",
+                "❌ Проектов не найдено.\n\n"
+                "Sprawdź czy Workspace ID jest poprawny:\n"
+                "`/weeek_set_workspace`",
+                parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return
@@ -1944,18 +1963,33 @@ async def show_weeek_projects(query: CallbackQuery):
 
 async def show_weeek_create_task_menu(query: CallbackQuery):
     """Показать меню создания задачи"""
+    user_id = query.from_user.id
+    workspace_id = UserWeeekWorkspace.get(user_id)
+    
+    if not workspace_id:
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+        await query.edit_message_text(
+            "❌ *Najpierw ustaw Workspace ID!*\n\n"
+            "Użyj komendy: `/weeek_set_workspace [id]`",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
     try:
         from weeek_helper import get_projects
-        
+
         await query.edit_message_text("⏳ Загружаю проекты...")
-        
-        projects = await get_projects()
-        
+
+        projects = await get_projects(workspace_id)
+
         if not projects:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
             await query.edit_message_text(
                 "❌ Проектов не найдено.\n\n"
-                "Сначала создайте проект в WEEEK.",
+                "Sprawdź czy Workspace ID jest poprawny:\n"
+                "`/weeek_set_workspace`",
+                parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return
@@ -3529,10 +3563,22 @@ async def weeek_create_task_command(update: Update, context: ContextTypes.DEFAUL
             )
             return
         
+        # Sprawdź workspace ID
+        user_id = update.message.from_user.id
+        workspace_id = UserWeeekWorkspace.get(user_id)
+        if not workspace_id:
+            await update.message.reply_text(
+                "❌ *Najpierw ustaw Workspace ID!*\n\n"
+                "Użyj komendy:\n"
+                "`/weeek_set_workspace [twoje_workspace_id]`",
+                parse_mode='Markdown'
+            )
+            return
+        
         await update.message.reply_text(f"⏳ Создаю задачу '{task_name}' в проекте '{project_name}'...")
         
         # Получаем список проектов для поиска ID
-        projects = await get_projects()
+        projects = await get_projects(workspace_id)
         project_id = None
         for project in projects:
             if project_name.lower() in project.get("name", "").lower():
@@ -3568,41 +3614,74 @@ async def weeek_create_task_command(update: Update, context: ContextTypes.DEFAUL
 
 async def weeek_projects_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /weeek_projects - список проектов в Weeek"""
+    user_id = update.message.from_user.id
+    
+    # Sprawdź workspace ID
+    workspace_id = UserWeeekWorkspace.get(user_id)
+    if not workspace_id:
+        await update.message.reply_text(
+            "❌ *Najpierw ustaw Workspace ID!*\n\n"
+            "Użyj komendy:\n"
+            "`/weeek_set_workspace [twoje_workspace_id]`",
+            parse_mode='Markdown'
+        )
+        return
+    
     try:
         from weeek_helper import get_projects
 
         await update.message.reply_text("⏳ Получаю список проектов из WEEEK...")
 
-        projects = await get_projects()
+        projects = await get_projects(workspace_id)
 
         if projects:
             text = f"📋 *Проекты в WEEEK* (всего: {len(projects)})\n\n"
             for i, project in enumerate(projects[:20], 1):
                 name = project.get("name", "Без названия")
-                status = project.get("status", "Не указан")
+                project_id = project.get("id", "")
                 text += f"{i}. *{name}*\n"
-                text += f"   Статус: {status}\n\n"
+                text += f"   ID: `{project_id}`\n\n"
 
             await update.message.reply_text(text, parse_mode='Markdown')
         else:
-            await update.message.reply_text("❌ Проектов не найдено или WEEEK недоступен")
+            await update.message.reply_text(
+                "❌ Проектов не найдено.\n\n"
+                "Sprawdź czy Workspace ID jest poprawny:\n"
+                "`/weeek_set_workspace`",
+                parse_mode='Markdown'
+            )
     except Exception as e:
         log.error(f"❌ Ошибка получения проектов: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def weeek_update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /weeek_update - обновление задачи в Weeek (интерактивное меню)"""
+    user_id = update.message.from_user.id
+    
+    # Sprawdź workspace ID
+    workspace_id = UserWeeekWorkspace.get(user_id)
+    if not workspace_id:
+        await update.message.reply_text(
+            "❌ *Najpierw ustaw Workspace ID!*\n\n"
+            "Użyj komendy:\n"
+            "`/weeek_set_workspace [twoje_workspace_id]`",
+            parse_mode='Markdown'
+        )
+        return
+    
     try:
         from weeek_helper import get_projects
         
         await update.message.reply_text("⏳ Загружаю проекты...")
         
-        projects = await get_projects()
+        projects = await get_projects(workspace_id)
         
         if not projects:
             await update.message.reply_text(
                 "❌ Проектов не найдено.\n\n"
-                "Сначала создайте проекты и задачи в WEEEK."
+                "Sprawdź czy Workspace ID jest poprawny:\n"
+                "`/weeek_set_workspace`",
+                parse_mode='Markdown'
             )
             return
         
@@ -3686,8 +3765,62 @@ async def weeek_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         log.error(f"❌ Ошибка получения задач: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
+async def weeek_set_workspace_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /weeek_set_workspace - ustawienie workspace ID"""
+    user_id = update.message.from_user.id
+    
+    if not context.args:
+        # Pokaż aktualny workspace ID
+        current_workspace = UserWeeekWorkspace.get(user_id)
+        
+        await update.message.reply_text(
+            f"🔧 *WEEEK Workspace ID*\n\n"
+            f"Aktualny: `{current_workspace or 'nie ustawiony'}`\n\n"
+            f"**Aby zmienić:**\n"
+            f"`/weeek_set_workspace [workspace_id]`\n\n"
+            f"**Jak znaleźć Workspace ID:**\n"
+            f"1. Otwórz WEEEK w przeglądarce\n"
+            f"2. Zobacz URL: `https://app.weeek.net/ws/[ID]/...`\n"
+            f"3. Skopiuj ID po `/ws/`\n\n"
+            f"**Przykład:**\n"
+            f"`/weeek_set_workspace 12345`",
+            parse_mode='Markdown'
+        )
+        return
+    
+    workspace_id = context.args[0]
+    
+    # Zapisz workspace ID dla użytkownika
+    UserWeeekWorkspace[user_id] = workspace_id
+    
+    await update.message.reply_text(
+        f"✅ *Workspace ID ustawiony!*\n\n"
+        f"🆔 Workspace: `{workspace_id}`\n\n"
+        f"Teraz możesz używać komend WEEEK:\n"
+        f"• `/weeek_projects` - lista projektów\n"
+        f"• `/weeek_create_project [nazwa]` - nowy projekt\n"
+        f"• `/weeek_task` - nowa zadanie",
+        parse_mode='Markdown'
+    )
+    
+    log.info(f"✅ User {user_id} ustawił Workspace ID: {workspace_id}")
+
 async def weeek_create_project_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /weeek_create_project - создание проекта в Weeek"""
+    user_id = update.message.from_user.id
+    
+    # Sprawdź czy user ma workspace ID
+    workspace_id = UserWeeekWorkspace.get(user_id)
+    if not workspace_id:
+        await update.message.reply_text(
+            "❌ *Najpierw ustaw Workspace ID!*\n\n"
+            "Użyj komendy:\n"
+            "`/weeek_set_workspace [twoje_workspace_id]`\n\n"
+            "Jak znaleźć ID - wpisz `/weeek_set_workspace` bez parametrów",
+            parse_mode='Markdown'
+        )
+        return
+    
     if not context.args:
         await update.message.reply_text(
             "❌ Укажите название проекта.\n"
@@ -3841,11 +3974,23 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         from summary_helper import generate_project_report
         
+        # Sprawdź workspace ID
+        user_id = update.message.from_user.id
+        workspace_id = UserWeeekWorkspace.get(user_id)
+        if not workspace_id:
+            await update.message.reply_text(
+                "❌ *Najpierw ustaw Workspace ID!*\n\n"
+                "Użyj komendy:\n"
+                "`/weeek_set_workspace [twoje_workspace_id]`",
+                parse_mode='Markdown'
+            )
+            return
+        
         await update.message.reply_text(f"⏳ Генерирую отчёт по проекту '{project_name}'...")
         
         # Получаем информацию о проекте из WEEEK
         from weeek_helper import get_projects
-        projects = await get_projects()
+        projects = await get_projects(workspace_id)
         project_data = None
         for project in projects:
             if project_name.lower() in project.get("name", "").lower():
@@ -4230,6 +4375,7 @@ def main():
     app.add_handler(CommandHandler("status", status_command))
     
     # WEEEK commands
+    app.add_handler(CommandHandler("weeek_set_workspace", weeek_set_workspace_command))
     app.add_handler(CommandHandler("weeek_task", weeek_create_task_command))
     app.add_handler(CommandHandler("weeek_projects", weeek_projects_command))
     app.add_handler(CommandHandler("weeek_create_project", weeek_create_project_command))

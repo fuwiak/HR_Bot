@@ -167,10 +167,13 @@ async def get_project(project_id: str) -> Optional[Dict]:
         log.error(f"❌ [WEEEK] Ошибка получения проекта: {e}")
         return None
 
-async def get_projects() -> List[Dict]:
+async def get_projects(workspace_id: Optional[str] = None) -> List[Dict]:
     """
     Получить список всех проектов
-    API: GET /pm/projects
+    API: GET /pm/projects?workspaceId={workspace_id}
+    
+    Args:
+        workspace_id: ID workspace (wymagane dla filtrowania projektów)
     
     Returns:
         Список словарей с данными проектов
@@ -179,15 +182,19 @@ async def get_projects() -> List[Dict]:
         log.error("❌ WEEEK_API_KEY не установлен")
         return []
     
-    # Используем правильный endpoint по документации
+    # Używamy workspace_id w query params
     url = f"{WEEEK_API_URL}/pm/projects"
     headers = get_headers()
     
+    params = {}
+    if workspace_id:
+        params["workspaceId"] = workspace_id
+    
     try:
-        log.info(f"📤 [WEEEK] Запрос проектов: {url}")
+        log.info(f"📤 [WEEEK] Запрос проектов: {url} (workspace: {workspace_id or 'all'})")
         
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 response_text = await response.text()
                 
                 if response.status >= 400:
