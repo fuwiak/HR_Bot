@@ -243,11 +243,10 @@ async def send_email(
         log.error("❌ YANDEX_EMAIL или YANDEX_PASSWORD не установлены")
         return False
     
-    if ASYNC_SMTP_AVAILABLE:
-        return await _send_email_async(to_email, subject, body, is_html, attachments)
-    else:
-        # Используем синхронную версию через asyncio.to_thread
-        return await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
+    # Всегда используем синхронную версию через asyncio.to_thread
+    # Она работает надежнее и использует ту же логику, что и тестовый скрипт
+    log.info("🔄 Использую синхронную версию SMTP (проверенная и рабочая)...")
+    return await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
 
 async def _send_email_async(to_email: str, subject: str, body: str, is_html: bool, attachments: Optional[List[str]]) -> bool:
     """Async версия отправки email через aiosmtplib с fallback на синхронную версию"""
@@ -347,7 +346,7 @@ async def _send_email_async(to_email: str, subject: str, body: str, is_html: boo
             return False
 
 def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, attachments: Optional[List[str]]) -> bool:
-    """Синхронная версия отправки email через smtplib с поддержкой альтернативных портов"""
+    """Синхронная версия отправки email через smtplib - точно как в test_email_simple.py"""
     import smtplib
     import socket
     from email.mime.text import MIMEText
@@ -363,51 +362,44 @@ def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, atta
     # Устанавливаем таймаут для соединения
     socket.setdefaulttimeout(30)  # 30 секунд
     
-    # Пробуем порт 465 (SMTP_SSL) - основной вариант
-    log.info(f"🔄 Попытка подключения к {YANDEX_SMTP_SERVER}:465 (SSL)...")
+    # Попытка 1: Порт 465 (SMTP_SSL) - точно как в тестовом скрипте
+    log.info(f"🔄 Попытка 1: Порт 465 (SMTP_SSL)...")
     try:
         server = smtplib.SMTP_SSL(YANDEX_SMTP_SERVER, 465, timeout=30)
-        try:
-            server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
-            server.send_message(message)
-            log.info(f"✅ Email отправлен (sync, порт 465): {to_email} - {subject}")
-            return True
-        finally:
-            try:
-                server.quit()
-            except:
-                pass
-    except (socket.timeout, OSError, ConnectionError, smtplib.SMTPException) as e:
-        error_str = str(e).lower()
-        log.warning(f"⚠️ Не удалось подключиться к порту 465: {e}")
-        
-        # Если порт 465 недоступен, пробуем порт 587 с STARTTLS
-        if "network is unreachable" in error_str or "timed out" in error_str or "connection refused" in error_str or "timeout" in error_str:
-            log.info("🔄 Пробую альтернативный порт 587 (STARTTLS)...")
-            try:
-                server = smtplib.SMTP(YANDEX_SMTP_SERVER, 587, timeout=30)
-                try:
-                    server.starttls()
-                    server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
-                    server.send_message(message)
-                    log.info(f"✅ Email отправлен (sync, порт 587): {to_email} - {subject}")
-                    return True
-                finally:
-                    try:
-                        server.quit()
-                    except:
-                        pass
-            except Exception as e2:
-                log.error(f"❌ Ошибка при подключении к порту 587: {e2}")
-                # Не пробрасываем ошибку дальше, просто возвращаем False
-        else:
-            # Для других ошибок (например, аутентификация) пробрасываем дальше
-            if isinstance(e, smtplib.SMTPAuthenticationError):
-                log.error(f"❌ Ошибка аутентификации SMTP: {e}")
-                return False
-            elif isinstance(e, smtplib.SMTPException):
-                log.error(f"❌ Ошибка SMTP: {e}")
-                return False
+        server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+        server.send_message(message)
+        server.quit()
+        log.info(f"✅ Email отправлен (sync, порт 465): {to_email} - {subject}")
+        return True
+    except socket.timeout as e:
+        log.warning(f"⚠️ Таймаут на порту 465: {e}")
+    except OSError as e:
+        log.warning(f"⚠️ Ошибка сети на порту 465: {e}")
+    except smtplib.SMTPAuthenticationError as e:
+        log.error(f"❌ Ошибка авторизации на порту 465: {e}")
+        return False  # Авторизация не пройдет и на другом порту
+    except Exception as e:
+        log.warning(f"⚠️ Ошибка на порту 465: {e}")
+    
+    # Попытка 2: Порт 587 (STARTTLS) - точно как в тестовом скрипте
+    log.info(f"🔄 Попытка 2: Порт 587 (STARTTLS)...")
+    try:
+        server = smtplib.SMTP(YANDEX_SMTP_SERVER, 587, timeout=30)
+        server.starttls()
+        server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
+        server.send_message(message)
+        server.quit()
+        log.info(f"✅ Email отправлен (sync, порт 587): {to_email} - {subject}")
+        return True
+    except socket.timeout as e:
+        log.error(f"❌ Таймаут на порту 587: {e}")
+    except OSError as e:
+        log.error(f"❌ Ошибка сети на порту 587: {e}")
+    except smtplib.SMTPAuthenticationError as e:
+        log.error(f"❌ Ошибка авторизации на порту 587: {e}")
+        return False
+    except Exception as e:
+        log.error(f"❌ Ошибка на порту 587: {e}")
     
     # Если дошли сюда - не удалось отправить
     log.error(f"❌ Не удалось отправить email через оба порта")
