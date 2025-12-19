@@ -2481,11 +2481,103 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["waiting_for_task_update"] = None
             return
     
-    # Обработка создания задачи
-    if context.user_data.get("waiting_for_task_name"):
+    # Обработка даты задачи
+    if context.user_data.get("waiting_for_task_date"):
         try:
             from weeek_helper import create_task, get_project
-
+            import re
+            from datetime import datetime
+            
+            project_id = context.user_data.get("selected_project_id")
+            task_name = context.user_data.get("task_name_temp")
+            task_date = text.strip()
+            
+            if not project_id or not task_name:
+                await update.message.reply_text("❌ Ошибка: данные задачи потеряны")
+                context.user_data["waiting_for_task_date"] = False
+                return
+            
+            # Парсим дату (поддерживаем разные форматы)
+            day_formatted = None
+            
+            # Формат dd.mm.yyyy
+            if re.match(r'\d{1,2}\.\d{1,2}\.\d{4}', task_date):
+                day_formatted = task_date
+            # Формат dd.mm
+            elif re.match(r'\d{1,2}\.\d{1,2}', task_date):
+                parts = task_date.split('.')
+                current_year = datetime.now().year
+                day_formatted = f"{parts[0].zfill(2)}.{parts[1].zfill(2)}.{current_year}"
+            # Формат dd/mm/yyyy или dd-mm-yyyy
+            elif re.match(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', task_date):
+                task_date = task_date.replace('/', '.').replace('-', '.')
+                day_formatted = task_date
+            # Относительные даты
+            elif task_date.lower() in ['сегодня', 'today']:
+                day_formatted = datetime.now().strftime("%d.%m.%Y")
+            elif task_date.lower() in ['завтра', 'tomorrow']:
+                from datetime import timedelta
+                day_formatted = (datetime.now() + timedelta(days=1)).strftime("%d.%m.%Y")
+            # Пропустить дату
+            elif task_date.lower() in ['нет', 'no', 'skip', 'пропустить', '-']:
+                day_formatted = None
+            else:
+                await update.message.reply_text(
+                    "❌ Неверный формат даты!\n\n"
+                    "Используйте:\n"
+                    "• `25.12.2024` или `25.12`\n"
+                    "• `сегодня` / `завтра`\n"
+                    "• `нет` - без даты"
+                )
+                return
+            
+            await update.message.reply_text(f"⏳ Создаю задачу...")
+            
+            # Получаем название проекта
+            project = await get_project(project_id)
+            project_title = project.get("title", f"Проект {project_id}") if project else f"Проект {project_id}"
+            
+            # Создаем задачу
+            task = await create_task(
+                project_id=project_id,
+                title=task_name,
+                description=f"Создано через Telegram бот пользователем @{username}",
+                day=day_formatted
+            )
+            
+            if task:
+                text_result = f"✅ *Задача создана в WEEEK!*\n\n"
+                text_result += f"📁 *Проект:* {project_title}\n"
+                text_result += f"📝 *Задача:* {task_name}\n"
+                if day_formatted:
+                    text_result += f"📅 *Дата:* {day_formatted}\n"
+                text_result += f"🆔 *ID:* `{task.get('id')}`\n\n"
+                text_result += f"Используйте `/weeek_tasks {project_id}` для просмотра всех задач"
+                
+                await update.message.reply_text(text_result, parse_mode='Markdown')
+                log.info(f"✅ Задача создана в WEEEK: {task_name} в проекте {project_title} (ID: {project_id}), дата: {day_formatted}")
+            else:
+                await update.message.reply_text("❌ Не удалось создать задачу в WEEEK")
+            
+            # Сбрасываем флаги
+            context.user_data["waiting_for_task_date"] = False
+            context.user_data["selected_project_id"] = None
+            context.user_data["task_name_temp"] = None
+            return
+            
+        except Exception as e:
+            log.error(f"❌ Ошибка создания задачи: {e}")
+            import traceback
+            log.error(f"❌ Traceback: {traceback.format_exc()}")
+            await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+            context.user_data["waiting_for_task_date"] = False
+            context.user_data["selected_project_id"] = None
+            context.user_data["task_name_temp"] = None
+            return
+    
+    # Обработка названия задачи (шаг 1: название, потом спросим дату)
+    if context.user_data.get("waiting_for_task_name"):
+        try:
             project_id = context.user_data.get("selected_project_id")
             task_name = text
 
@@ -2493,41 +2585,28 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ Ошибка: проект не выбран")
                 context.user_data["waiting_for_task_name"] = False
                 return
-
-            await update.message.reply_text(f"⏳ Создаю задачу: {task_name}")
-
-            # Создаем задачу
-            task = await create_task(
-                project_id=project_id,
-                title=task_name,
-                description=f"Создано через Telegram бот пользователем @{username}"
-            )
-
-            if task:
-                # Получаем название проекта
-                project = await get_project(project_id)
-                project_name = project.get("name", "Проект") if project else "Проект"
-
-                await update.message.reply_text(
-                    f"✅ Задача создана в WEEEK!\n\n"
-                    f"📁 Проект: {project_name}\n"
-                    f"📝 Задача: {task_name}\n\n"
-                    f"Используйте /menu для возврата в главное меню"
-                )
-                log.info(f"✅ Задача создана в WEEEK: {task_name} (проект: {project_name})")
-            else:
-                await update.message.reply_text("❌ Не удалось создать задачу в WEEEK")
-
-            # Сбрасываем флаг ожидания
+            
+            # Сохраняем название и спрашиваем дату
+            context.user_data["task_name_temp"] = task_name
             context.user_data["waiting_for_task_name"] = False
-            context.user_data["selected_project_id"] = None
+            context.user_data["waiting_for_task_date"] = True
+            
+            await update.message.reply_text(
+                f"✅ Название задачи: *{task_name}*\n\n"
+                f"📅 *Укажите дату задачи:*\n\n"
+                f"Форматы:\n"
+                f"• `25.12.2024` или `25.12`\n"
+                f"• `сегодня` / `завтра`\n"
+                f"• `нет` - создать без даты\n\n"
+                f"Например: `25.12` или `завтра`",
+                parse_mode='Markdown'
+            )
             return
 
         except Exception as e:
-            log.error(f"❌ Ошибка создания задачи: {e}")
+            log.error(f"❌ Ошибка: {e}")
             await update.message.reply_text(f"❌ Ошибка: {str(e)}")
             context.user_data["waiting_for_task_name"] = False
-            context.user_data["selected_project_id"] = None
             return
     
     # Логируем ВСЕ входящие сообщения для отладки
