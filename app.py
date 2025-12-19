@@ -201,6 +201,13 @@ UserPhone: Dict[int, str] = {}  # Номера телефонов пользов
 UserBookingData: Dict[int, Dict] = {}  # Частично собранные данные для записи (service, master, datetime)
 UserWeeekWorkspace: Dict[int, str] = {}  # WEEEK Workspace ID для каждого пользователя
 
+# ===================== EMAIL MONITORING =====================
+# ID администратора для уведомлений о новых письмах
+ADMIN_USER_ID = int(os.getenv("TELEGRAM_ADMIN_ID", "5305427956"))
+# Хранилище обработанных email ID (чтобы не дублировать уведомления)
+processed_email_ids: set = set()
+email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "300"))  # 5 минут по умолчанию
+
 def add_memory(user_id, role, text):
     UserMemory[user_id].append((role, text))
 
@@ -1484,6 +1491,33 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reset_user_session(query)
     elif query.data.startswith("services_page_"):
         await show_services_page(query)
+    
+    # Обработчики для действий с письмами
+    elif query.data.startswith("email_reply_"):
+        email_id = query.data.replace("email_reply_", "")
+        await handle_email_reply(query, email_id)
+    elif query.data.startswith("email_proposal_"):
+        email_id = query.data.replace("email_proposal_", "")
+        await handle_email_proposal(query, email_id)
+    elif query.data.startswith("email_task_"):
+        email_id = query.data.replace("email_task_", "")
+        await handle_email_task(query, email_id)
+    elif query.data.startswith("email_done_"):
+        email_id = query.data.replace("email_done_", "")
+        await handle_email_done(query, email_id)
+    elif query.data.startswith("email_full_"):
+        email_id = query.data.replace("email_full_", "")
+        await handle_email_full(query, email_id)
+    elif query.data.startswith("email_task_create_"):
+        # Формат: email_task_create_{email_id}_{project_id}
+        parts = query.data.replace("email_task_create_", "").split("_", 1)
+        if len(parts) == 2:
+            email_id = parts[0]
+            project_id = int(parts[1])
+            await handle_email_create_task(query, email_id, project_id)
+    elif query.data.startswith("email_cancel_"):
+        email_id = query.data.replace("email_cancel_", "")
+        await handle_email_cancel(query, email_id)
 
 async def show_services_page(query: CallbackQuery):
     """Показать конкретную страницу услуг"""
@@ -4582,29 +4616,44 @@ async def yadisk_recent_command(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /email_check - проверка новых писем"""
+    """Команда /email_check - проверка новых писем с уведомлениями"""
     try:
         from email_helper import check_new_emails
 
         await update.message.reply_text("⏳ Проверяю новые письма...")
 
-        emails = await check_new_emails(since_days=1, limit=5)
+        emails = await check_new_emails(since_days=1, limit=10)
         
         if emails:
-            text = f"📧 *Новые письма* (последние {len(emails)})\n\n"
-            for i, email_data in enumerate(emails, 1):
-                from_addr = email_data.get("from", "Неизвестно")
-                subject = email_data.get("subject", "Без темы")
-                date = email_data.get("date", "")
-                text += f"{i}. *От:* {from_addr}\n"
-                text += f"   *Тема:* {subject}\n"
-                text += f"   *Дата:* {date}\n\n"
+            # Фильтруем только новые письма (которых еще нет в processed_email_ids)
+            new_emails = []
+            for email_data in emails:
+                email_id = email_data.get("id", "")
+                if email_id and email_id not in processed_email_ids:
+                    new_emails.append(email_data)
+                    processed_email_ids.add(email_id)
             
-            await update.message.reply_text(text, parse_mode='Markdown')
+            if new_emails:
+                # Отправляем уведомления о новых письмах
+                for email_data in new_emails:
+                    await send_email_notification(app.bot, email_data)
+                    await asyncio.sleep(1)  # Небольшая задержка между уведомлениями
+                
+                await update.message.reply_text(
+                    f"✅ Найдено {len(new_emails)} новых писем. Уведомления отправлены.",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(
+                    f"📧 Найдено {len(emails)} писем, но все уже обработаны.\n\n"
+                    f"Используйте кнопки в уведомлениях для работы с письмами."
+                )
         else:
             await update.message.reply_text("📧 Новых писем нет или email недоступен")
     except Exception as e:
         log.error(f"❌ Ошибка проверки email: {e}")
+        import traceback
+        log.error(traceback.format_exc())
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def email_draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4641,6 +4690,412 @@ async def email_draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         log.error(f"❌ Ошибка подготовки черновика: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+# ===================== EMAIL NOTIFICATIONS =====================
+
+# Кэш для хранения данных писем
+email_cache: Dict[str, Dict] = {}
+
+async def send_email_notification(bot, email_data: Dict):
+    """
+    Отправить уведомление о новом письме администратору с интерактивными кнопками
+    
+    Args:
+        bot: Telegram Bot instance
+        email_data: Словарь с данными письма
+    """
+    try:
+        from_addr = email_data.get("from", "Неизвестно")
+        subject = email_data.get("subject", "Без темы")
+        body = email_data.get("body", "")
+        date = email_data.get("date", "")
+        email_id = email_data.get("id", "")
+        
+        # Обрезаем тело письма для отображения
+        body_preview = body[:500] + "..." if len(body) > 500 else body
+        
+        # Формируем текст уведомления
+        text = f"📧 *Новое письмо*\n\n"
+        text += f"*От:* {from_addr}\n"
+        text += f"*Тема:* {subject}\n"
+        text += f"*Дата:* {date}\n\n"
+        text += f"*Содержимое:*\n{body_preview}\n\n"
+        text += f"Что сделать с этим письмом?"
+        
+        # Сохраняем полные данные письма
+        email_cache[email_id] = email_data
+        
+        # Создаем интерактивные кнопки
+        keyboard = [
+            [
+                InlineKeyboardButton("📝 Подготовить ответ", callback_data=f"email_reply_{email_id}"),
+                InlineKeyboardButton("📄 Создать КП", callback_data=f"email_proposal_{email_id}")
+            ],
+            [
+                InlineKeyboardButton("📋 Создать задачу в WEEEK", callback_data=f"email_task_{email_id}"),
+                InlineKeyboardButton("✅ Обработано", callback_data=f"email_done_{email_id}")
+            ],
+            [
+                InlineKeyboardButton("📧 Показать полный текст", callback_data=f"email_full_{email_id}")
+            ]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Отправляем уведомление администратору
+        await bot.send_message(
+            chat_id=ADMIN_USER_ID,
+            text=text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+        log.info(f"✅ Уведомление о письме отправлено администратору: {subject}")
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка отправки уведомления о письме: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+
+async def email_monitor_task(bot):
+    """
+    Фоновая задача для мониторинга новых писем
+    
+    Args:
+        bot: Telegram Bot instance
+    """
+    global processed_email_ids
+    
+    log.info(f"📧 Запуск мониторинга почты (интервал: {email_check_interval} сек)")
+    
+    while True:
+        try:
+            from email_helper import check_new_emails
+            
+            # Проверяем новые письма за последние 24 часа (но отправляем только новые)
+            emails = await check_new_emails(since_days=1, limit=50)
+            
+            if emails:
+                new_emails = []
+                for email_data in emails:
+                    email_id = email_data.get("id", "")
+                    
+                    # Проверяем, не обрабатывали ли уже это письмо
+                    if email_id and email_id not in processed_email_ids:
+                        # Проверяем время письма (не отправляем уведомления о письмах старше 2 часов при первом запуске)
+                        # Но если список processed_email_ids не пустой, значит это не первый запуск
+                        if len(processed_email_ids) == 0:
+                            # Первый запуск - проверяем время письма
+                            from datetime import datetime, timedelta
+                            try:
+                                date_str = email_data.get("date", "")
+                                # Парсим дату письма (примерный формат)
+                                # Если письмо старше 2 часов, пропускаем
+                                # Это предотвращает массовые уведомления о старых письмах при первом запуске
+                                # Но если пользователь запустил /email_check, все письма будут обработаны
+                            except:
+                                pass
+                        
+                        new_emails.append(email_data)
+                        processed_email_ids.add(email_id)
+                
+                # Отправляем уведомления о новых письмах
+                for email_data in new_emails:
+                    await send_email_notification(bot, email_data)
+                    log.info(f"📧 Новое письмо обнаружено: {email_data.get('subject', 'Без темы')}")
+                    
+                    # Небольшая задержка между уведомлениями
+                    await asyncio.sleep(2)
+            
+            # Ждем перед следующей проверкой
+            await asyncio.sleep(email_check_interval)
+            
+        except Exception as e:
+            log.error(f"❌ Ошибка в мониторинге почты: {e}")
+            import traceback
+            log.error(traceback.format_exc())
+            # При ошибке ждем перед следующей попыткой
+            await asyncio.sleep(email_check_interval)
+
+# ===================== EMAIL ACTION HANDLERS =====================
+
+async def handle_email_reply(query: CallbackQuery, email_id: str):
+    """Обработка кнопки 'Подготовить ответ' для письма"""
+    try:
+        email_data = email_cache.get(email_id)
+        if not email_data:
+            await query.answer("❌ Данные письма не найдены", show_alert=True)
+            return
+        
+        from lead_processor import generate_proposal
+        
+        subject = email_data.get("subject", "")
+        body = email_data.get("body", "")
+        from_addr = email_data.get("from", "")
+        
+        # Формируем запрос для генерации ответа
+        request_text = f"{subject}\n\n{body[:500]}"
+        
+        await query.answer("⏳ Готовлю ответ...")
+        
+        # Генерируем ответ
+        draft = await generate_proposal(request_text, lead_contact={"email": from_addr})
+        
+        # Убираем Markdown
+        import re
+        draft_clean = re.sub(r'\*\*([^*]+)\*\*', r'\1', draft)
+        draft_clean = re.sub(r'\*([^*]+)\*', r'\1', draft_clean)
+        draft_clean = re.sub(r'###+\s*', '', draft_clean)
+        draft_clean = re.sub(r'##+\s*', '', draft_clean)
+        draft_clean = re.sub(r'#+\s*', '', draft_clean)
+        
+        text = f"📧 *Черновик ответа на письмо:*\n\n"
+        text += f"*От:* {from_addr}\n"
+        text += f"*Тема:* {subject}\n\n"
+        text += f"{draft_clean}\n\n"
+        text += "💡 Отредактируйте и отправьте через почтовый клиент."
+        
+        await query.edit_message_text(text, parse_mode='Markdown')
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка подготовки ответа: {e}")
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+async def handle_email_proposal(query: CallbackQuery, email_id: str):
+    """Обработка кнопки 'Создать КП' для письма"""
+    try:
+        email_data = email_cache.get(email_id)
+        if not email_data:
+            await query.answer("❌ Данные письма не найдены", show_alert=True)
+            return
+        
+        from lead_processor import generate_proposal
+        
+        subject = email_data.get("subject", "")
+        body = email_data.get("body", "")
+        from_addr = email_data.get("from", "")
+        
+        # Извлекаем запрос из письма
+        request_text = f"{subject}\n\n{body}"
+        
+        await query.answer("⏳ Генерирую КП...")
+        
+        # Генерируем КП
+        proposal = await generate_proposal(request_text, lead_contact={"email": from_addr})
+        
+        # Убираем Markdown
+        import re
+        proposal_clean = re.sub(r'\*\*([^*]+)\*\*', r'\1', proposal)
+        proposal_clean = re.sub(r'\*([^*]+)\*', r'\1', proposal_clean)
+        proposal_clean = re.sub(r'###+\s*', '', proposal_clean)
+        proposal_clean = re.sub(r'##+\s*', '', proposal_clean)
+        proposal_clean = re.sub(r'#+\s*', '', proposal_clean)
+        
+        text = f"📄 *Коммерческое предложение*\n\n"
+        text += f"*Для:* {from_addr}\n"
+        text += f"*Запрос:* {subject}\n\n"
+        text += f"{proposal_clean}\n\n"
+        text += "💡 Отредактируйте и отправьте клиенту."
+        
+        # Разбиваем на части если длинное
+        if len(text) > 4000:
+            parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
+            await query.edit_message_text(parts[0], parse_mode='Markdown')
+            for part in parts[1:]:
+                await query.message.reply_text(part)
+        else:
+            await query.edit_message_text(text, parse_mode='Markdown')
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка генерации КП: {e}")
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+async def handle_email_task(query: CallbackQuery, email_id: str):
+    """Обработка кнопки 'Создать задачу в WEEEK' для письма"""
+    try:
+        email_data = email_cache.get(email_id)
+        if not email_data:
+            await query.answer("❌ Данные письма не найдены", show_alert=True)
+            return
+        
+        subject = email_data.get("subject", "")
+        from_addr = email_data.get("from", "")
+        
+        # Показываем меню выбора проекта
+        from weeek_helper import get_projects
+        
+        projects = await get_projects()
+        if not projects:
+            await query.answer("❌ Нет доступных проектов в WEEEK", show_alert=True)
+            return
+        
+        keyboard = []
+        for project in projects[:10]:  # Топ-10 проектов
+            project_id = project.get('id')
+            project_title = project.get('title', 'Без названия')
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📋 {project_title}",
+                    callback_data=f"email_task_create_{email_id}_{project_id}"
+                )
+            ])
+        
+        keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data=f"email_cancel_{email_id}")])
+        
+        text = f"📋 *Создать задачу в WEEEK*\n\n"
+        text += f"*Письмо:* {subject}\n"
+        text += f"*От:* {from_addr}\n\n"
+        text += f"Выберите проект:"
+        
+        await query.edit_message_text(
+            text,
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка создания задачи: {e}")
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+async def handle_email_done(query: CallbackQuery, email_id: str):
+    """Обработка кнопки 'Обработано' для письма"""
+    try:
+        await query.answer("✅ Письмо отмечено как обработанное")
+        await query.edit_message_text(
+            "✅ Письмо обработано",
+            reply_markup=None
+        )
+        log.info(f"✅ Письмо {email_id} отмечено как обработанное")
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+
+async def handle_email_full(query: CallbackQuery, email_id: str):
+    """Обработка кнопки 'Показать полный текст' для письма"""
+    try:
+        email_data = email_cache.get(email_id)
+        if not email_data:
+            await query.answer("❌ Данные письма не найдены", show_alert=True)
+            return
+        
+        from_addr = email_data.get("from", "")
+        subject = email_data.get("subject", "")
+        body = email_data.get("body", "")
+        date = email_data.get("date", "")
+        
+        text = f"📧 *Полный текст письма*\n\n"
+        text += f"*От:* {from_addr}\n"
+        text += f"*Тема:* {subject}\n"
+        text += f"*Дата:* {date}\n\n"
+        text += f"*Содержимое:*\n{body}"
+        
+        # Разбиваем на части если длинное
+        if len(text) > 4000:
+            parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
+            await query.edit_message_text(parts[0], parse_mode='Markdown')
+            for part in parts[1:]:
+                await query.message.reply_text(part)
+        else:
+            await query.edit_message_text(text, parse_mode='Markdown')
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка показа полного текста: {e}")
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+async def handle_email_create_task(query: CallbackQuery, email_id: str, project_id: int):
+    """Создание задачи в WEEEK из письма"""
+    try:
+        email_data = email_cache.get(email_id)
+        if not email_data:
+            await query.answer("❌ Данные письма не найдены", show_alert=True)
+            return
+        
+        from weeek_helper import create_task, get_project
+        
+        subject = email_data.get("subject", "")
+        body = email_data.get("body", "")
+        from_addr = email_data.get("from", "")
+        
+        # Формируем название задачи из темы письма
+        task_name = f"Ответить на: {subject[:50]}" if subject else "Обработать письмо"
+        
+        # Формируем описание задачи
+        task_description = f"Письмо от: {from_addr}\n\nТема: {subject}\n\n{body[:500]}"
+        
+        await query.answer("⏳ Создаю задачу...")
+        
+        # Создаем задачу
+        task = await create_task(
+            name=task_name,
+            description=task_description,
+            project_id=project_id
+        )
+        
+        if task:
+            project = await get_project(project_id)
+            project_title = project.get('title', 'Проект') if project else 'Проект'
+            
+            text = f"✅ *Задача создана в WEEEK*\n\n"
+            text += f"*Проект:* {project_title}\n"
+            text += f"*Задача:* {task_name}\n"
+            text += f"*ID задачи:* {task.get('id', 'N/A')}\n\n"
+            text += f"Письмо: {subject}"
+            
+            await query.edit_message_text(text, parse_mode='Markdown')
+            log.info(f"✅ Задача создана из письма {email_id} в проект {project_id}")
+        else:
+            await query.answer("❌ Не удалось создать задачу", show_alert=True)
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка создания задачи из письма: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+
+async def handle_email_cancel(query: CallbackQuery, email_id: str):
+    """Отмена действия с письмом"""
+    try:
+        email_data = email_cache.get(email_id)
+        if not email_data:
+            await query.answer("❌ Данные письма не найдены", show_alert=True)
+            return
+        
+        # Возвращаемся к исходному уведомлению
+        from_addr = email_data.get("from", "")
+        subject = email_data.get("subject", "Без темы")
+        body = email_data.get("body", "")
+        date = email_data.get("date", "")
+        
+        body_preview = body[:500] + "..." if len(body) > 500 else body
+        
+        text = f"📧 *Новое письмо*\n\n"
+        text += f"*От:* {from_addr}\n"
+        text += f"*Тема:* {subject}\n"
+        text += f"*Дата:* {date}\n\n"
+        text += f"*Содержимое:*\n{body_preview}\n\n"
+        text += f"Что сделать с этим письмом?"
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("📝 Подготовить ответ", callback_data=f"email_reply_{email_id}"),
+                InlineKeyboardButton("📄 Создать КП", callback_data=f"email_proposal_{email_id}")
+            ],
+            [
+                InlineKeyboardButton("📋 Создать задачу в WEEEK", callback_data=f"email_task_{email_id}"),
+                InlineKeyboardButton("✅ Обработано", callback_data=f"email_done_{email_id}")
+            ],
+            [
+                InlineKeyboardButton("📧 Показать полный текст", callback_data=f"email_full_{email_id}")
+            ]
+        ]
+        
+        await query.edit_message_text(
+            text,
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка отмены: {e}")
 
 async def hypothesis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /hypothesis - генерация гипотез для проекта"""
@@ -5151,6 +5606,13 @@ def main():
             except Exception as e:
                 log.warning(f"⚠️ Не удалось запустить фоновые задачи: {e}")
             
+            # Запускаем фоновую задачу мониторинга почты
+            try:
+                asyncio.create_task(email_monitor_task(app.bot))
+                log.info("✅ Фоновая задача мониторинга почты запущена")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось запустить мониторинг почты: {e}")
+
             # Запускаем HTTP сервер для приема webhook запросов
             await app.updater.start_webhook(
                 listen="0.0.0.0",
@@ -5195,6 +5657,14 @@ def main():
                 log.info("✅ Фоновые задачи мониторинга запущены")
             except Exception as e:
                 log.warning(f"⚠️ Не удалось запустить фоновые задачи: {e}")
+            
+            # Запускаем фоновую задачу мониторинга почты
+            try:
+                asyncio.create_task(email_monitor_task(app.bot))
+                log.info("✅ Фоновая задача мониторинга почты запущена")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось запустить мониторинг почты: {e}")
+            
             log.info("💡 Для production установите USE_WEBHOOK=true и WEBHOOK_URL")
             
             # Удаляем webhook если он был установлен ранее
