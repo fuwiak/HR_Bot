@@ -82,14 +82,18 @@ def _check_new_emails_sync(folder: str, since_days: int, limit: int) -> List[Dic
         email_ids = messages[0].split()
         emails = []
         
-        for email_id in email_ids[-limit:]:
+        # Берем последние N писем (самые новые) и разворачиваем, чтобы самое новое было первым
+        recent_ids = email_ids[-limit:] if limit > 0 else email_ids
+        recent_ids = list(reversed(recent_ids))  # Разворачиваем, чтобы самое новое было первым
+        
+        for email_id in recent_ids:
             status, msg_data = imap.fetch(email_id, "(RFC822)")
             if status == "OK":
                 email_message = email.message_from_bytes(msg_data[0][1])
                 emails.append(_parse_email(email_message, email_id.decode()))
         
         imap.logout()
-        return emails
+        return emails  # Теперь самое новое письмо первое в списке
     except Exception as e:
         log.error(f"❌ Ошибка чтения email (sync): {e}")
         return []

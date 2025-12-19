@@ -4793,33 +4793,35 @@ async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     try:
         from email_helper import check_new_emails
 
-        await update.message.reply_text("⏳ Проверяю новые письма...")
+        await update.message.reply_text("⏳ Проверяю самое новое письмо...")
 
-        emails = await check_new_emails(since_days=1, limit=10)
+        # Проверяем только самое новое письмо (limit=1 для скорости)
+        emails = await check_new_emails(since_days=1, limit=1)
         
         if emails:
-            # Фильтруем только новые письма (которых еще нет в processed_email_ids)
-            new_emails = []
-            for email_data in emails:
-                email_id = email_data.get("id", "")
-                if email_id and email_id not in processed_email_ids:
-                    new_emails.append(email_data)
-                    processed_email_ids.add(email_id)
+            # Берем только самое новое письмо (первое в списке)
+            email_data = emails[0]
+            email_id = email_data.get("id", "")
             
-            if new_emails:
-                # Отправляем уведомления о новых письмах
-                for email_data in new_emails:
-                    await send_email_notification(app.bot, email_data)
-                    await asyncio.sleep(1)  # Небольшая задержка между уведомлениями
+            # Проверяем, не обрабатывали ли уже это письмо
+            if email_id and email_id not in processed_email_ids:
+                # Отправляем уведомление только о самом новом письме
+                await send_email_notification(app.bot, email_data)
+                processed_email_ids.add(email_id)
                 
                 await update.message.reply_text(
-                    f"✅ Найдено {len(new_emails)} новых писем. Уведомления отправлены.",
+                    f"✅ *Найдено новое письмо*\n\n"
+                    f"*Тема:* {email_data.get('subject', 'Без темы')}\n"
+                    f"*От:* {email_data.get('from', 'Неизвестно')}\n\n"
+                    f"Уведомление отправлено всем подписчикам.",
                     parse_mode='Markdown'
                 )
             else:
                 await update.message.reply_text(
-                    f"📧 Найдено {len(emails)} писем, но все уже обработаны.\n\n"
-                    f"Используйте кнопки в уведомлениях для работы с письмами."
+                    f"📧 *Самое новое письмо уже обработано*\n\n"
+                    f"*Тема:* {email_data.get('subject', 'Без темы')}\n\n"
+                    f"Используйте кнопки в уведомлениях для работы с письмами.",
+                    parse_mode='Markdown'
                 )
         else:
             await update.message.reply_text("📧 Новых писем нет или email недоступен")
@@ -4964,40 +4966,20 @@ async def email_monitor_task(bot):
         try:
             from email_helper import check_new_emails
             
-            # Проверяем новые письма за последние 24 часа (но отправляем только новые)
-            emails = await check_new_emails(since_days=1, limit=50)
+            # Проверяем только самое новое письмо (limit=1 для скорости)
+            emails = await check_new_emails(since_days=1, limit=1)
             
             if emails:
-                new_emails = []
-                for email_data in emails:
-                    email_id = email_data.get("id", "")
-                    
-                    # Проверяем, не обрабатывали ли уже это письмо
-                    if email_id and email_id not in processed_email_ids:
-                        # Проверяем время письма (не отправляем уведомления о письмах старше 2 часов при первом запуске)
-                        # Но если список processed_email_ids не пустой, значит это не первый запуск
-                        if len(processed_email_ids) == 0:
-                            # Первый запуск - проверяем время письма
-                            from datetime import datetime, timedelta
-                            try:
-                                date_str = email_data.get("date", "")
-                                # Парсим дату письма (примерный формат)
-                                # Если письмо старше 2 часов, пропускаем
-                                # Это предотвращает массовые уведомления о старых письмах при первом запуске
-                                # Но если пользователь запустил /email_check, все письма будут обработаны
-                            except:
-                                pass
-                        
-                        new_emails.append(email_data)
-                        processed_email_ids.add(email_id)
+                # Берем только самое новое письмо (первое в списке)
+                email_data = emails[0]
+                email_id = email_data.get("id", "")
                 
-                # Отправляем уведомления о новых письмах
-                for email_data in new_emails:
+                # Проверяем, не обрабатывали ли уже это письмо
+                if email_id and email_id not in processed_email_ids:
+                    # Отправляем уведомление только о самом новом письме
                     await send_email_notification(bot, email_data)
+                    processed_email_ids.add(email_id)
                     log.info(f"📧 Новое письмо обнаружено: {email_data.get('subject', 'Без темы')}")
-                    
-                    # Небольшая задержка между уведомлениями
-                    await asyncio.sleep(2)
             
             # Ждем перед следующей проверкой
             await asyncio.sleep(email_check_interval)
