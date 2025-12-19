@@ -3112,20 +3112,94 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Обычная обработка через RAG и LLM
             msg = CONSULTING_PROMPT.replace("{{history}}", get_history(user_id)).replace("{{message}}", text)
             
-            # Пытаемся использовать RAG для контекста
+            # Улучшенный RAG поиск + контекст из WEEEK
             rag_context = ""
+            weeek_context = ""
+            
             try:
+                # 1. Поиск в Qdrant (RAG)
                 if QDRANT_AVAILABLE:
-                    from rag_chain import RAGChain
-                    rag_chain = RAGChain()
-                    rag_result = await rag_chain.query(text, use_rag=True, top_k=3)
-                    if rag_result.get("context_docs"):
-                        context_text = "\n".join([doc.get("content", "")[:200] for doc in rag_result["context_docs"][:3]])
-                        rag_context = f"Релевантная информация из базы знаний:\n{context_text}\n\n"
+                    from qdrant_helper import get_qdrant_client, generate_embedding_async
+                    
+                    client = get_qdrant_client()
+                    if client:
+                        # Генерируем эмбеддинг для запроса
+                        query_embedding = await generate_embedding_async(text)
+                        
+                        if query_embedding:
+                            # Ищем в Qdrant
+                            search_results = client.query_points(
+                                collection_name="hr2137_bot_knowledge_base",
+                                query=query_embedding,
+                                limit=5
+                            )
+                            
+                            if search_results.points:
+                                rag_docs = []
+                                for point in search_results.points[:3]:  # Топ-3
+                                    payload = point.payload if hasattr(point, 'payload') else {}
+                                    file_name = payload.get("file_name", "Документ")
+                                    text_chunk = payload.get("text", "")
+                                    score = point.score if hasattr(point, 'score') else 0.0
+                                    
+                                    if text_chunk:
+                                        rag_docs.append({
+                                            "file": file_name,
+                                            "content": text_chunk[:300],  # Первые 300 символов
+                                            "score": score
+                                        })
+                                
+                                if rag_docs:
+                                    context_parts = []
+                                    for doc in rag_docs:
+                                        context_parts.append(f"📄 {doc['file']} (релевантность: {doc['score']:.2f}):\n{doc['content']}")
+                                    
+                                    rag_context = f"Релевантная информация из базы знаний:\n\n" + "\n\n".join(context_parts) + "\n\n"
+                                    log.info(f"✅ Найдено {len(rag_docs)} документов в RAG для запроса")
             except Exception as e:
                 log.warning(f"⚠️ Ошибка RAG поиска: {e}")
             
-            msg = msg.replace("{{rag_context}}", rag_context)
+            # 2. Контекст из WEEEK (проекты и задачи)
+            try:
+                from weeek_helper import get_projects, get_tasks
+                
+                # Получаем список проектов
+                projects = await get_projects()
+                if projects:
+                    active_projects = [p for p in projects if not p.get('isArchived', False)][:5]  # Топ-5 активных
+                    
+                    if active_projects:
+                        project_info = []
+                        for project in active_projects:
+                            project_id = project.get('id')
+                            project_title = project.get('title', 'Без названия')
+                            
+                            # Получаем задачи проекта
+                            tasks = await get_tasks(project_id=project_id, completed=False, limit=5)
+                            task_list = []
+                            if tasks and tasks.get('tasks'):
+                                for task in tasks['tasks'][:3]:  # Топ-3 задачи
+                                    task_name = task.get('name') or task.get('title', 'Задача')
+                                    task_list.append(f"  • {task_name}")
+                            
+                            project_info.append(f"📋 Проект: {project_title} (ID: {project_id})")
+                            if task_list:
+                                project_info.append("\n".join(task_list))
+                        
+                        if project_info:
+                            weeek_context = f"Активные проекты и задачи в WEEEK:\n\n" + "\n\n".join(project_info) + "\n\n"
+                            log.info(f"✅ Получен контекст из WEEEK: {len(active_projects)} проектов")
+            except Exception as e:
+                log.warning(f"⚠️ Ошибка получения контекста WEEEK: {e}")
+            
+            # Объединяем контексты
+            full_context = ""
+            if rag_context:
+                full_context += rag_context
+            if weeek_context:
+                full_context += weeek_context
+            
+            msg = msg.replace("{{rag_context}}", full_context)
             
             # Используем generate_with_fallback для надежности
             try:
@@ -3564,29 +3638,135 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /summary - суммаризация проекта"""
+    """Команда /summary - суммаризация проекта с использованием WEEEK и RAG"""
     project_name = " ".join(context.args) if context.args else "текущий"
-    
+
     try:
-        from summary_helper import summarize_project_conversation
+        await update.message.reply_text(f"⏳ Суммаризирую проект '{project_name}'...")
+
+        # 1. Получаем данные из WEEEK
+        weeek_data = ""
+        try:
+            from weeek_helper import get_projects, get_tasks
+            
+            projects = await get_projects()
+            target_project = None
+            
+            # Ищем проект по названию
+            if project_name.lower() != "текущий":
+                for project in projects:
+                    if project_name.lower() in project.get('title', '').lower():
+                        target_project = project
+                        break
+            
+            # Если не нашли, берем первый активный
+            if not target_project and projects:
+                target_project = [p for p in projects if not p.get('isArchived', False)][0] if projects else None
+            
+            if target_project:
+                project_id = target_project.get('id')
+                project_title = target_project.get('title', 'Без названия')
+                
+                # Получаем задачи проекта
+                tasks = await get_tasks(project_id=project_id, limit=20)
+                
+                weeek_data = f"Проект: {project_title} (ID: {project_id})\n\n"
+                
+                if tasks and tasks.get('tasks'):
+                    completed = [t for t in tasks['tasks'] if t.get('isCompleted', False)]
+                    active = [t for t in tasks['tasks'] if not t.get('isCompleted', False)]
+                    
+                    weeek_data += f"Задач всего: {len(tasks['tasks'])}\n"
+                    weeek_data += f"Активных: {len(active)}\n"
+                    weeek_data += f"Завершенных: {len(completed)}\n\n"
+                    
+                    if active:
+                        weeek_data += "Активные задачи:\n"
+                        for task in active[:10]:
+                            task_name = task.get('name') or task.get('title', 'Задача')
+                            priority = task.get('priority', 0)
+                            weeek_data += f"  • {task_name} (приоритет: {priority})\n"
+                    
+                    if completed:
+                        weeek_data += "\nЗавершенные задачи:\n"
+                        for task in completed[:5]:
+                            task_name = task.get('name') or task.get('title', 'Задача')
+                            weeek_data += f"  • {task_name}\n"
+                
+                log.info(f"✅ Получены данные из WEEEK для проекта {project_title}")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка получения данных WEEEK: {e}")
         
-        # Здесь должна быть логика получения переписки по проекту
-        # Пока заглушка
-        conversations = [
-            {
-                "role": "user",
-                "content": "Пример сообщения из переписки",
-                "timestamp": datetime.now().isoformat()
-            }
-        ]
+        # 2. Получаем релевантную информацию из RAG
+        rag_context = ""
+        try:
+            from qdrant_helper import get_qdrant_client, generate_embedding_async
+            
+            client = get_qdrant_client()
+            if client:
+                # Ищем по названию проекта
+                search_query = f"{project_name} {target_project.get('title', '') if target_project else ''}"
+                query_embedding = await generate_embedding_async(search_query)
+                
+                if query_embedding:
+                    search_results = client.query_points(
+                        collection_name="hr2137_bot_knowledge_base",
+                        query=query_embedding,
+                        limit=5
+                    )
+                    
+                    if search_results.points:
+                        rag_docs = []
+                        for point in search_results.points:
+                            payload = point.payload if hasattr(point, 'payload') else {}
+                            file_name = payload.get("file_name", "Документ")
+                            text_chunk = payload.get("text", "")
+                            
+                            if text_chunk:
+                                rag_docs.append(f"📄 {file_name}: {text_chunk[:400]}")
+                        
+                        if rag_docs:
+                            rag_context = "Релевантные документы из базы знаний:\n\n" + "\n\n".join(rag_docs) + "\n\n"
+                            log.info(f"✅ Найдено {len(rag_docs)} документов в RAG")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка RAG поиска: {e}")
         
-        await update.message.reply_text(f"⏳ Суммаризирую переписку по проекту '{project_name}'...")
+        # 3. Генерируем суммаризацию через LLM
+        from llm_helper import generate_with_fallback
         
-        summary = await summarize_project_conversation(conversations, project_name=project_name)
+        prompt = f"""Создай подробную суммаризацию проекта на основе следующих данных:
+
+Название проекта: {project_name}
+
+Данные из WEEEK:
+{weeek_data if weeek_data else "Данные из WEEEK недоступны"}
+
+Релевантные документы:
+{rag_context if rag_context else "Релевантные документы не найдены"}
+
+Создай структурированную суммаризацию, включающую:
+1. Общее описание проекта
+2. Текущий статус (активные задачи, прогресс)
+3. Ключевые достижения
+4. Следующие шаги
+5. Рекомендации
+
+Ответь на русском языке, структурированно и подробно."""
         
+        summary = await generate_with_fallback(
+            prompt=prompt,
+            max_tokens=1500,
+            temperature=0.7
+        )
+        
+        if not summary:
+            summary = "Не удалось создать суммаризацию. Проверьте доступность LLM и данных."
+
         await update.message.reply_text(f"*Суммаризация проекта '{project_name}':*\n\n{summary}", parse_mode='Markdown')
     except Exception as e:
         log.error(f"❌ Ошибка суммаризации: {e}")
+        import traceback
+        log.error(traceback.format_exc())
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def weeek_create_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
