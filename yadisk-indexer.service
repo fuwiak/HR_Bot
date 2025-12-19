@@ -1,0 +1,18 @@
+[Unit]
+Description=Yandex Disk Indexer - автоматическая индексация файлов в Qdrant Cloud
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/path/to/HR_Bot
+Environment="PATH=/usr/bin:/usr/local/bin"
+EnvironmentFile=/path/to/HR_Bot/.env
+ExecStart=/usr/bin/python3 /path/to/HR_Bot/yadisk_indexer.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/path/to/HR_Bot/logs/yadisk_indexer.out
+StandardError=append:/path/to/HR_Bot/logs/yadisk_indexer.err
+
+[Install]
+WantedBy=multi-user.target
