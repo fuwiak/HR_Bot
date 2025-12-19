@@ -333,15 +333,18 @@ async def _send_email_resend(to_email: str, subject: str, body: str, is_html: bo
             "Content-Type": "application/json"
         }
         
-        # Для Resend можно использовать подтвержденный домен или их домен
-        # Если домен не подтвержден, можно использовать домен Resend (например, onboarding@resend.dev)
-        # Но для начала пробуем использовать Yandex email - если домен подтвержден в Resend, будет работать
-        from_email = YANDEX_EMAIL
+        # Resend не позволяет использовать бесплатные домены (yandex.ru, gmail.com и т.д.)
+        # Нужно использовать либо подтвержденный домен, либо домен Resend
+        # По умолчанию используем домен Resend (onboarding@resend.dev)
+        from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
         
-        # Можно настроить альтернативный email для Resend через переменную окружения
-        RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL")
-        if RESEND_FROM_EMAIL:
-            from_email = RESEND_FROM_EMAIL
+        # Если установлен RESEND_FROM_EMAIL - используем его
+        # Если нет - используем домен Resend по умолчанию
+        if not os.getenv("RESEND_FROM_EMAIL"):
+            log.info(f"📧 Использую домен Resend по умолчанию: {from_email}")
+            log.info(f"💡 Для использования своего email добавьте RESEND_FROM_EMAIL в Railway Variables")
+            log.info(f"💡 Или подтвердите домен в Resend Dashboard → Domains")
+        else:
             log.info(f"📧 Использую RESEND_FROM_EMAIL: {from_email}")
         
         payload = {
@@ -383,7 +386,13 @@ async def _send_email_resend(to_email: str, subject: str, body: str, is_html: bo
                     
                     # Специальная обработка ошибок
                     if response.status == 403:
-                        log.error("💡 Проверьте API ключ - возможно он неверный или истек")
+                        if "domain is not verified" in error_message.lower() or "free public domains" in error_message.lower():
+                            log.error("💡 Resend не позволяет использовать бесплатные домены (yandex.ru, gmail.com)")
+                            log.error("💡 Решения:")
+                            log.error("   1. Добавьте RESEND_FROM_EMAIL=onboarding@resend.dev в Railway Variables")
+                            log.error("   2. Или подтвердите свой домен в Resend Dashboard → Domains")
+                        else:
+                            log.error("💡 Проверьте API ключ - возможно он неверный или истек")
                     elif response.status == 422:
                         log.error("💡 Проверьте формат email адресов или подтвердите домен в Resend")
                         log.error("💡 Можно использовать RESEND_FROM_EMAIL=onboarding@resend.dev в Railway Variables")
