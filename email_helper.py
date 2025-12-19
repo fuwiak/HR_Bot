@@ -94,6 +94,62 @@ def _check_new_emails_sync(folder: str, since_days: int, limit: int) -> List[Dic
         log.error(f"❌ Ошибка чтения email (sync): {e}")
         return []
 
+def _safe_decode(data: bytes, charset: str = None) -> str:
+    """
+    Безопасное декодирование байтов с поддержкой различных кодировок
+    
+    Args:
+        data: Байты для декодирования
+        charset: Предпочтительная кодировка (если известна)
+    
+    Returns:
+        Декодированная строка
+    """
+    if not data:
+        return ""
+    
+    if not isinstance(data, bytes):
+        return str(data)
+    
+    # Список кодировок для попытки декодирования (в порядке приоритета)
+    encodings = []
+    
+    if charset:
+        encodings.append(charset.lower())
+    
+    # Добавляем стандартные кодировки
+    encodings.extend([
+        "utf-8",
+        "windows-1251",  # Кириллица (Windows)
+        "koi8-r",        # Кириллица (Unix)
+        "cp1251",        # Альтернативное название для windows-1251
+        "iso-8859-1",    # Latin-1
+        "iso-8859-5",    # Кириллица (ISO)
+        "latin1",
+        "ascii"
+    ])
+    
+    # Убираем дубликаты, сохраняя порядок
+    seen = set()
+    unique_encodings = []
+    for enc in encodings:
+        if enc not in seen:
+            seen.add(enc)
+            unique_encodings.append(enc)
+    
+    # Пробуем декодировать с каждой кодировкой
+    for encoding in unique_encodings:
+        try:
+            return data.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    
+    # Если ничего не помогло, используем errors='replace' или 'ignore'
+    try:
+        return data.decode("utf-8", errors="replace")
+    except:
+        return data.decode("utf-8", errors="ignore")
+
 def _parse_email(email_message, email_id: str) -> Dict:
     """Парсинг email сообщения"""
     subject = ""
@@ -103,30 +159,49 @@ def _parse_email(email_message, email_id: str) -> Dict:
     date_str = ""
     
     # Декодирование subject
-    subject_header = decode_header(email_message["Subject"])
-    if subject_header[0][0]:
-        subject = subject_header[0][0]
-        if isinstance(subject, bytes):
-            subject = subject.decode(subject_header[0][1] or "utf-8")
+    try:
+        subject_header = decode_header(email_message.get("Subject", ""))
+        if subject_header and subject_header[0][0]:
+            subject_data = subject_header[0][0]
+            charset = subject_header[0][1] if len(subject_header[0]) > 1 else None
+            if isinstance(subject_data, bytes):
+                subject = _safe_decode(subject_data, charset)
+            else:
+                subject = str(subject_data)
+    except Exception as e:
+        log.warning(f"⚠️ Ошибка декодирования темы письма: {e}")
+        subject = email_message.get("Subject", "Без темы")
     
     # Отправитель
-    from_addr = email_message["From"]
+    from_addr = email_message.get("From", "Неизвестно")
     
     # Получатель
-    to_addr = email_message["To"]
+    to_addr = email_message.get("To", "")
     
     # Дата
-    date_str = email_message["Date"]
+    date_str = email_message.get("Date", "")
     
     # Тело письма
-    if email_message.is_multipart():
-        for part in email_message.walk():
-            content_type = part.get_content_type()
-            if content_type == "text/plain":
-                body = part.get_payload(decode=True).decode()
-                break
-    else:
-        body = email_message.get_payload(decode=True).decode()
+    try:
+        if email_message.is_multipart():
+            for part in email_message.walk():
+                content_type = part.get_content_type()
+                if content_type == "text/plain":
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        # Получаем charset из заголовков части
+                        charset = part.get_content_charset() or "utf-8"
+                        body = _safe_decode(payload, charset)
+                    break
+        else:
+            payload = email_message.get_payload(decode=True)
+            if payload:
+                # Получаем charset из заголовков письма
+                charset = email_message.get_content_charset() or "utf-8"
+                body = _safe_decode(payload, charset)
+    except Exception as e:
+        log.warning(f"⚠️ Ошибка декодирования тела письма: {e}")
+        body = ""
     
     return {
         "id": email_id,
