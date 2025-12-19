@@ -49,7 +49,7 @@ async def create_project(
 ) -> Optional[Dict]:
     """
     Создать новый проект в WEEEK
-    API: POST /pm/projects
+    API: POST /tm/projects
     
     Args:
         name: Название проекта (обязательно)
@@ -64,7 +64,7 @@ async def create_project(
         log.error("❌ WEEEK_API_KEY не установлен")
         return None
     
-    url = f"{WEEEK_API_URL}/pm/projects"
+    url = f"{WEEEK_API_URL}/tm/projects"
     headers = get_headers()
     
     # Формируем данные по документации API
@@ -149,12 +149,12 @@ async def update_project_status(project_id: str, status: str) -> bool:
 async def get_project(project_id: str) -> Optional[Dict]:
     """
     Получить информацию о проекте
-    API: GET /pm/projects/{id}
+    API: GET /tm/projects/{id}
     """
     if not WEEEK_API_KEY:
         return None
     
-    url = f"{WEEEK_API_URL}/pm/projects/{project_id}"
+    url = f"{WEEEK_API_URL}/tm/projects/{project_id}"
     headers = get_headers()
     
     try:
@@ -167,13 +167,54 @@ async def get_project(project_id: str) -> Optional[Dict]:
         log.error(f"❌ [WEEEK] Ошибка получения проекта: {e}")
         return None
 
+async def get_workspace_info() -> Optional[Dict]:
+    """
+    Получить информацию о workspace
+    API: GET /ws
+    
+    Returns:
+        Словарь с данными workspace или None
+    """
+    if not WEEEK_API_KEY:
+        log.error("❌ WEEEK_API_KEY не установлен")
+        return None
+    
+    url = f"{WEEEK_API_URL}/ws"
+    headers = get_headers()
+    
+    try:
+        log.info(f"📤 [WEEEK] Запрос workspace info: {url}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status >= 400:
+                    error_text = await response.text()
+                    log.error(f"❌ [WEEEK] Ошибка получения workspace: {response.status}")
+                    log.error(f"❌ Response: {error_text[:500]}")
+                    return None
+                
+                result = await response.json()
+                
+                if isinstance(result, dict) and "workspace" in result:
+                    workspace = result["workspace"]
+                    log.info(f"✅ [WEEEK] Workspace: {workspace.get('title')} (ID: {workspace.get('id')})")
+                    return workspace
+                else:
+                    log.error(f"❌ Неожиданный формат ответа: {result}")
+                    return None
+    except Exception as e:
+        log.error(f"❌ [WEEEK] Ошибка получения workspace: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return None
+
 async def get_projects(workspace_id: Optional[str] = None) -> List[Dict]:
     """
     Получить список всех проектов
-    API: GET /pm/projects?workspaceId={workspace_id}
+    API: GET /tm/projects (НЕ /pm/projects!)
     
     Args:
-        workspace_id: ID workspace (wymagane dla filtrowania projektów)
+        workspace_id: ID workspace (опционально, для совместимости)
     
     Returns:
         Список словарей с данными проектов
@@ -182,48 +223,31 @@ async def get_projects(workspace_id: Optional[str] = None) -> List[Dict]:
         log.error("❌ WEEEK_API_KEY не установлен")
         return []
     
-    # Używamy workspace_id w query params
-    url = f"{WEEEK_API_URL}/pm/projects"
+    # ПРАВИЛЬНЫЙ endpoint из твоего working code!
+    url = f"{WEEEK_API_URL}/tm/projects"
     headers = get_headers()
     
-    params = {}
-    if workspace_id:
-        params["workspaceId"] = workspace_id
-    
     try:
-        log.info(f"📤 [WEEEK] Запрос проектов: {url} (workspace: {workspace_id or 'all'})")
+        log.info(f"📤 [WEEEK] Запрос проектов: {url}")
         
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, headers=headers, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
-                response_text = await response.text()
-                
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 if response.status >= 400:
+                    error_text = await response.text()
                     log.error(f"❌ [WEEEK] Ошибка получения проектов: {response.status}")
-                    log.error(f"❌ Response: {response_text[:500]}")
+                    log.error(f"❌ Response: {error_text[:500]}")
                     return []
                 
-                result = await response.json() if response_text else {}
+                result = await response.json()
                 
                 # API возвращает {"success": true, "projects": [...]}
-                if isinstance(result, dict):
-                    if "projects" in result:
-                        projects = result["projects"]
-                    elif "data" in result:
-                        projects = result["data"]
-                    elif "success" in result and result["success"]:
-                        # Если просто success: true без projects, возвращаем пустой список
-                        projects = []
-                    else:
-                        log.error(f"❌ Неожиданный формат ответа: {result}")
-                        return []
-                elif isinstance(result, list):
-                    projects = result
+                if isinstance(result, dict) and "projects" in result:
+                    projects = result["projects"]
+                    log.info(f"✅ [WEEEK] Получено проектов: {len(projects)}")
+                    return projects
                 else:
-                    log.error(f"❌ Неожиданный тип ответа: {type(result)}")
+                    log.error(f"❌ Неожиданный формат ответа: {result}")
                     return []
-                
-                log.info(f"✅ [WEEEK] Получено проектов: {len(projects)}")
-                return projects
     except Exception as e:
         log.error(f"❌ [WEEEK] Ошибка получения проектов: {e}")
         import traceback
