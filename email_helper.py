@@ -12,11 +12,19 @@ from typing import List, Dict, Optional
 from datetime import datetime
 import asyncio
 
+# Загружаем переменные окружения из .env
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # dotenv не установлен, используем системные переменные
+
 log = logging.getLogger()
 
 # ===================== CONFIGURATION =====================
 YANDEX_EMAIL = os.getenv("YANDEX_EMAIL")
-YANDEX_PASSWORD = os.getenv("YANDEX_PASSWORD")
+# Поддерживаем YANDEX_IMAP_PASSWORD (приоритет) или YANDEX_PASSWORD
+YANDEX_PASSWORD = os.getenv("YANDEX_IMAP_PASSWORD") or os.getenv("YANDEX_PASSWORD")
 YANDEX_IMAP_SERVER = os.getenv("YANDEX_IMAP_SERVER", "imap.yandex.ru")
 YANDEX_SMTP_SERVER = os.getenv("YANDEX_SMTP_SERVER", "smtp.yandex.ru")
 YANDEX_IMAP_PORT = int(os.getenv("YANDEX_IMAP_PORT", 993))
