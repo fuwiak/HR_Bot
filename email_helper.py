@@ -231,6 +231,37 @@ def _parse_email(email_message, email_id: str) -> Dict:
 
 # ===================== EMAIL SENDING (SMTP) =====================
 
+def _decode_email_address(email_str: str) -> str:
+    """Декодирует email адрес из формата encoded (например, =?UTF-8?B?...)"""
+    if not email_str or "=?" not in email_str:
+        return email_str
+    
+    try:
+        from email.header import decode_header
+        import re
+        
+        decoded_parts = decode_header(email_str)
+        decoded_email = ""
+        for part, encoding in decoded_parts:
+            if isinstance(part, bytes):
+                decoded_email += part.decode(encoding or 'utf-8')
+            else:
+                decoded_email += str(part)
+        
+        # Извлекаем email адрес из строки вида "Имя <email@domain.com>"
+        email_match = re.search(r'<([^>]+)>', decoded_email)
+        if email_match:
+            return email_match.group(1)
+        else:
+            # Пробуем найти email адрес в строке
+            email_match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', decoded_email)
+            if email_match:
+                return email_match.group(0)
+            return decoded_email.split()[-1] if decoded_email.split() else email_str
+    except Exception as e:
+        log.warning(f"⚠️ Ошибка декодирования email адреса: {e}, используем исходный: {email_str}")
+        return email_str
+
 async def send_email(
     to_email: str,
     subject: str,
@@ -239,7 +270,7 @@ async def send_email(
     attachments: Optional[List[str]] = None
 ) -> bool:
     """
-    Отправить email через SMTP (async)
+    Отправить email через SMTP или Resend API (fallback для Railway)
     
     Args:
         to_email: Email получателя
@@ -255,10 +286,116 @@ async def send_email(
         log.error("❌ YANDEX_EMAIL или YANDEX_PASSWORD не установлены")
         return False
     
-    # Всегда используем синхронную версию через asyncio.to_thread
-    # Она работает надежнее и использует ту же логику, что и тестовый скрипт
-    log.info("🔄 Использую синхронную версию SMTP (проверенная и рабочая)...")
-    return await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
+    # Декодируем адрес получателя, если он в формате encoded
+    to_email = _decode_email_address(to_email)
+    
+    # Пробуем сначала через Resend API (если доступен) - работает на Railway
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+    if RESEND_API_KEY:
+        try:
+            result = await _send_email_resend(to_email, subject, body, is_html)
+            if result:
+                return True
+            log.warning("⚠️ Resend API не смог отправить, пробуем SMTP...")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка Resend API: {e}, пробуем SMTP...")
+    
+    # Fallback на SMTP (может не работать на Railway бесплатном плане)
+    log.info("🔄 Использую синхронную версию SMTP...")
+    result = await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
+    
+    # Если SMTP не работает (Railway блокирует порты), логируем предупреждение
+    if not result:
+        log.error("❌ Не удалось отправить email через SMTP")
+        log.error("💡 Railway блокирует порты SMTP (465, 587) на бесплатных планах")
+        log.error("💡 Решения:")
+        log.error("   1. Используйте Resend API (добавьте RESEND_API_KEY в Railway Variables)")
+        log.error("   2. Обновите Railway план до Pro (разблокирует SMTP порты)")
+        log.error("   3. Используйте другой сервис: SendGrid, Mailgun, Postmark")
+    
+    return result
+
+async def _send_email_resend(to_email: str, subject: str, body: str, is_html: bool = False) -> bool:
+    """Отправка email через Resend API (работает на Railway)"""
+    try:
+        import aiohttp
+        import json
+        
+        RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+        if not RESEND_API_KEY:
+            return False
+        
+        # Адрес уже декодирован в send_email()
+        
+        url = "https://api.resend.com/emails"
+        headers = {
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        # Для Resend можно использовать подтвержденный домен или их домен
+        # Если домен не подтвержден, можно использовать домен Resend (например, onboarding@resend.dev)
+        # Но для начала пробуем использовать Yandex email - если домен подтвержден в Resend, будет работать
+        from_email = YANDEX_EMAIL
+        
+        # Можно настроить альтернативный email для Resend через переменную окружения
+        RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL")
+        if RESEND_FROM_EMAIL:
+            from_email = RESEND_FROM_EMAIL
+            log.info(f"📧 Использую RESEND_FROM_EMAIL: {from_email}")
+        
+        payload = {
+            "from": f"HR Bot <{from_email}>",
+            "to": [to_email],
+            "subject": subject,
+        }
+        
+        # Добавляем текст или HTML в зависимости от формата
+        # Resend поддерживает оба формата одновременно
+        if is_html:
+            payload["html"] = body
+            # Resend автоматически создаст text версию из HTML, но можно добавить явно
+            payload["text"] = body  # Простая версия без HTML тегов
+        else:
+            payload["text"] = body
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                if response.status == 200:
+                    response_data = await response.json()
+                    email_id = response_data.get("id", "unknown")
+                    log.info(f"✅ Email отправлен через Resend API (ID: {email_id}): {to_email} - {subject}")
+                    return True
+                else:
+                    # Получаем текст ошибки
+                    error_text = await response.text()
+                    error_message = error_text
+                    
+                    # Пробуем распарсить JSON ошибки
+                    try:
+                        import json
+                        error_json = json.loads(error_text)
+                        error_message = error_json.get("message", error_text)
+                    except:
+                        pass
+                    
+                    log.error(f"❌ Ошибка Resend API ({response.status}): {error_message}")
+                    
+                    # Специальная обработка ошибок
+                    if response.status == 403:
+                        log.error("💡 Проверьте API ключ - возможно он неверный или истек")
+                    elif response.status == 422:
+                        log.error("💡 Проверьте формат email адресов или подтвердите домен в Resend")
+                        log.error("💡 Можно использовать RESEND_FROM_EMAIL=onboarding@resend.dev в Railway Variables")
+                    
+                    return False
+                    
+    except ImportError:
+        log.warning("⚠️ aiohttp не установлен. Для Resend API установите: pip install aiohttp")
+        return False
+    except Exception as e:
+        log.error(f"❌ Ошибка отправки через Resend API: {e}")
+        return False
 
 async def _send_email_async(to_email: str, subject: str, body: str, is_html: bool, attachments: Optional[List[str]]) -> bool:
     """Async версия отправки email через aiosmtplib с fallback на синхронную версию"""
