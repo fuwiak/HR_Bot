@@ -1199,16 +1199,24 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик всех callback запросов от inline кнопок"""
     query = update.callback_query
-    await query.answer()
+    user_id = query.from_user.id if query.from_user else None
     
-    # Главное меню и подменю
-    if query.data == "back_to_menu" or query.data == "menu_main":
-        await show_main_menu(query)
-        return
-    
-    # Подменю "База знаний"
-    elif query.data == "menu_knowledge_base":
+    try:
+        # Логируем нажатие кнопки для отладки
+        log.info(f"🔘 Callback: user_id={user_id}, callback_data={query.data}")
+        
+        # Отвечаем на callback сразу, чтобы убрать индикатор загрузки
+        await query.answer()
+        
+        # Главное меню и подменю
+        if query.data == "back_to_menu" or query.data == "menu_main":
+            await show_main_menu(query)
+            return
+        
+        # Подменю "База знаний"
+        elif query.data == "menu_knowledge_base":
         keyboard = [
             [InlineKeyboardButton("🔍 Поиск в базе знаний", callback_data="rag_search_menu")],
             [InlineKeyboardButton("📚 Список документов", callback_data="rag_docs")],
@@ -1224,9 +1232,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
-    
-    # Подменю "Проекты"
-    elif query.data == "menu_projects":
+        
+        # Подменю "Проекты"
+        elif query.data == "menu_projects":
         keyboard = [
             [InlineKeyboardButton("📋 Мои проекты", callback_data="weeek_list_projects")],
             [InlineKeyboardButton("➕ Создать задачу", callback_data="weeek_create_task_menu")],
@@ -1244,9 +1252,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
-    
-    # Подменю "Инструменты"
-    elif query.data == "menu_tools":
+        
+        # Подменю "Инструменты"
+        elif query.data == "menu_tools":
         keyboard = [
             [InlineKeyboardButton("📝 Сгенерировать КП", callback_data="generate_proposal")],
             [InlineKeyboardButton("📄 Быстрая суммаризация", callback_data="quick_summary_menu")],
@@ -1260,9 +1268,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
-    
-    # Подменю "Помощь"
-    elif query.data == "menu_help":
+        
+        # Подменю "Помощь"
+        elif query.data == "menu_help":
         keyboard = [
             [InlineKeyboardButton("📖 Команды бота", callback_data="help_commands")],
             [InlineKeyboardButton("💡 Примеры использования", callback_data="help_examples")],
@@ -1276,17 +1284,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
-    
-    # Обработчики WEEEK
-    elif query.data == "weeek_list_projects":
+        
+        # Обработчики WEEEK
+        elif query.data == "weeek_list_projects":
         await show_weeek_projects(query)
         return
     
     elif query.data == "weeek_create_task_menu":
         await show_weeek_create_task_menu(query)
         return
-    
-    elif query.data.startswith("weeek_select_project_"):
+        
+        elif query.data.startswith("weeek_select_project_"):
         project_id = query.data.replace("weeek_select_project_", "")
         context.user_data["selected_project_id"] = project_id
         await query.edit_message_text(
@@ -1297,41 +1305,41 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.user_data["waiting_for_task_name"] = True
         return
-    
-    elif query.data.startswith("weeek_view_project_"):
+        
+        elif query.data.startswith("weeek_view_project_"):
         await show_weeek_project_details(query, context)
         return
-    
-    elif query.data.startswith("weeek_update_select_project_"):
+        
+        elif query.data.startswith("weeek_update_select_project_"):
         await show_weeek_tasks_for_update(query, context)
         return
-    
-    elif query.data.startswith("weeek_edit_task_"):
+        
+        elif query.data.startswith("weeek_edit_task_"):
         await show_weeek_task_edit_menu(query, context)
         return
-    
-    elif query.data.startswith("weeek_edit_field_"):
+        
+        elif query.data.startswith("weeek_edit_field_"):
         await handle_weeek_edit_field(query, context)
         return
-    
-    elif query.data.startswith("weeek_complete_"):
+        
+        elif query.data.startswith("weeek_complete_"):
         await handle_weeek_complete_task(query, context)
         return
-    
-    elif query.data.startswith("weeek_delete_"):
+        
+        elif query.data.startswith("weeek_delete_"):
         await handle_weeek_delete_task(query, context)
         return
-    
-    elif query.data.startswith("weeek_set_priority_"):
+        
+        elif query.data.startswith("weeek_set_priority_"):
         await handle_weeek_set_priority(query, context)
         return
-    
-    elif query.data.startswith("weeek_set_type_"):
+        
+        elif query.data.startswith("weeek_set_type_"):
         await handle_weeek_set_type(query, context)
         return
-    
-    # Обработчики помощи
-    elif query.data == "help_commands":
+        
+        # Обработчики помощи
+        elif query.data == "help_commands":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
         await query.edit_message_text(
             "📖 *Команды бота:*\n\n"
@@ -1372,7 +1380,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
-    elif query.data == "help_examples":
+        elif query.data == "help_examples":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
         await query.edit_message_text(
             "💡 *Примеры использования:*\n\n"
@@ -1388,9 +1396,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
-    
-    # Суммаризация
-    elif query.data == "summary_menu":
+        
+        # Суммаризация
+        elif query.data == "summary_menu":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
         await query.edit_message_text(
             "📝 *Суммаризация проекта*\n\n"
@@ -1402,7 +1410,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
-    elif query.data == "quick_summary_menu":
+        elif query.data == "quick_summary_menu":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_tools")]]
         await query.edit_message_text(
             "📄 *Быстрая суммаризация*\n\n"
@@ -1411,9 +1419,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
-    
-    # Новые обработчики для консалтингового меню
-    elif query.data == "rag_search_menu":
+        
+        # Новые обработчики для консалтингового меню
+        elif query.data == "rag_search_menu":
         keyboard = [
             [InlineKeyboardButton("🔙 Назад", callback_data="menu_knowledge_base")],
             [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
@@ -1428,7 +1436,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    elif query.data == "generate_proposal":
+        return
+        elif query.data == "generate_proposal":
         keyboard = [
             [InlineKeyboardButton("🔙 Назад", callback_data="menu_tools")],
             [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
@@ -1442,7 +1451,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    elif query.data == "rag_stats":
+        return
+        elif query.data == "rag_stats":
         try:
             from qdrant_helper import get_collection_stats
             stats = await get_collection_stats()
@@ -1473,7 +1483,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ Ошибка: {str(e)}",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
-    elif query.data == "rag_docs":
+            return
+        elif query.data == "rag_docs":
         try:
             from qdrant_helper import list_documents
             docs = await list_documents(limit=20)
@@ -1506,7 +1517,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ Ошибка: {str(e)}",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
-    elif query.data == "status":
+            return
+        elif query.data == "status":
         keyboard = [
             [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
             [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
@@ -1520,7 +1532,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    elif query.data == "chat":
+        return
+        elif query.data == "chat":
         keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]]
         await query.edit_message_text(
             "💬 *Чат с AI*\n\n"
@@ -1529,18 +1542,24 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
-    # Старые обработчики (для обратной совместимости, можно будет удалить)
-    elif query.data == "services":
+        return
+        # Старые обработчики (для обратной совместимости, можно будет удалить)
+        elif query.data == "services":
         await show_services(query)
-    elif query.data == "masters":
+        return
+        elif query.data == "masters":
         await show_masters(query)
-    elif query.data == "my_records":
+        return
+        elif query.data == "my_records":
         await show_user_records(query)
-    elif query.data == "book_appointment":
+        return
+        elif query.data == "book_appointment":
         await start_booking_process(query)
-    elif query.data == "back_to_menu":
+        return
+        elif query.data == "back_to_menu":
         await show_main_menu(query)
-    elif query.data.startswith("delete_record_"):
+        return
+        elif query.data.startswith("delete_record_"):
         # Старый формат для обратной совместимости
         record_id = query.data.replace("delete_record_", "")
         try:
@@ -1548,53 +1567,89 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await delete_user_record(query, str(record_id_int))
         except ValueError:
             await delete_user_record(query, record_id)
-    elif query.data.startswith("delete_booking_"):
-        # Новый формат с booking_id из Google Sheets
-        booking_id = query.data.replace("delete_booking_", "")
-        await delete_user_record(query, booking_id)
-    elif query.data == "reset_session":
-        await reset_user_session(query)
-    elif query.data.startswith("delete_booking_"):
-        # Новый формат с booking_id из Google Sheets
-        booking_id = query.data.replace("delete_booking_", "")
-        await delete_user_record(query, booking_id)
-    elif query.data == "reset_session":
-        await reset_user_session(query)
-    elif query.data.startswith("services_page_"):
-        await show_services_page(query)
-    
-    # Обработчики для действий с письмами
-    elif query.data == "email_reply_last":
-        # Обработка кнопки "Ответить на последний мейл"
-        await handle_email_reply_last(query)
-    elif query.data.startswith("email_reply_"):
-        email_id = query.data.replace("email_reply_", "")
-        await handle_email_reply(query, email_id)
-    elif query.data.startswith("email_proposal_"):
-        email_id = query.data.replace("email_proposal_", "")
-        await handle_email_proposal(query, email_id)
-    elif query.data.startswith("email_task_"):
-        email_id = query.data.replace("email_task_", "")
-        await handle_email_task(query, email_id)
-    elif query.data.startswith("email_done_"):
-        email_id = query.data.replace("email_done_", "")
-        await handle_email_done(query, email_id)
-    elif query.data.startswith("email_full_"):
-        email_id = query.data.replace("email_full_", "")
-        await handle_email_full(query, email_id)
-    elif query.data.startswith("email_send_reply_"):
-        email_id = query.data.replace("email_send_reply_", "")
-        await handle_email_send_reply(query, email_id)
-    elif query.data.startswith("email_task_create_"):
-        # Формат: email_task_create_{email_id}_{project_id}
-        parts = query.data.replace("email_task_create_", "").split("_", 1)
-        if len(parts) == 2:
-            email_id = parts[0]
-            project_id = int(parts[1])
-            await handle_email_create_task(query, email_id, project_id)
-    elif query.data.startswith("email_cancel_"):
-        email_id = query.data.replace("email_cancel_", "")
-        await handle_email_cancel(query, email_id)
+        return
+        elif query.data.startswith("delete_booking_"):
+            # Новый формат с booking_id из Google Sheets
+            booking_id = query.data.replace("delete_booking_", "")
+            await delete_user_record(query, booking_id)
+            return
+        elif query.data == "reset_session":
+            await reset_user_session(query)
+            return
+        elif query.data.startswith("services_page_"):
+            await show_services_page(query)
+            return
+        
+        # Обработчики для действий с письмами
+        elif query.data == "email_reply_last":
+            # Обработка кнопки "Ответить на последний мейл"
+            await handle_email_reply_last(query)
+            return
+        elif query.data.startswith("email_reply_"):
+            email_id = query.data.replace("email_reply_", "")
+            await handle_email_reply(query, email_id)
+            return
+        elif query.data.startswith("email_proposal_"):
+            email_id = query.data.replace("email_proposal_", "")
+            await handle_email_proposal(query, email_id)
+            return
+        elif query.data.startswith("email_task_"):
+            email_id = query.data.replace("email_task_", "")
+            await handle_email_task(query, email_id)
+            return
+        elif query.data.startswith("email_done_"):
+            email_id = query.data.replace("email_done_", "")
+            await handle_email_done(query, email_id)
+            return
+        elif query.data.startswith("email_full_"):
+            email_id = query.data.replace("email_full_", "")
+            await handle_email_full(query, email_id)
+            return
+        elif query.data.startswith("email_send_reply_"):
+            email_id = query.data.replace("email_send_reply_", "")
+            await handle_email_send_reply(query, email_id)
+            return
+        elif query.data.startswith("email_task_create_"):
+            # Формат: email_task_create_{email_id}_{project_id}
+            parts = query.data.replace("email_task_create_", "").split("_", 1)
+            if len(parts) == 2:
+                email_id = parts[0]
+                project_id = int(parts[1])
+                await handle_email_create_task(query, email_id, project_id)
+            return
+        elif query.data.startswith("email_cancel_"):
+            email_id = query.data.replace("email_cancel_", "")
+            await handle_email_cancel(query, email_id)
+            return
+        
+        # Если callback_data не обработан, логируем и показываем сообщение
+        else:
+            log.warning(f"⚠️ Неизвестный callback_data: {query.data} от user_id={user_id}")
+            keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]]
+            await query.edit_message_text(
+                f"❌ Неизвестная команда: `{query.data}`\n\n"
+                "Попробуйте вернуться в главное меню.",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        
+    except Exception as e:
+        # Общая обработка ошибок
+        import traceback
+        error_trace = traceback.format_exc()
+        log.error(f"❌ Ошибка в button_callback: {e}\n{error_trace}")
+        
+        try:
+            keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]]
+            await query.edit_message_text(
+                f"❌ Произошла ошибка при обработке команды.\n\n"
+                f"Ошибка: {str(e)}\n\n"
+                "Попробуйте вернуться в главное меню или повторить действие позже.",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e2:
+            log.error(f"❌ Критическая ошибка при отправке сообщения об ошибке: {e2}")
 
 async def show_services_page(query: CallbackQuery):
     """Показать конкретную страницу услуг"""

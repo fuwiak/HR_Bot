@@ -174,9 +174,7 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
                 
                 weeek_project = await create_project(
                     name=project_name,
-                    description=project_description,
-                    lead_id=order_id,
-                    status="new"
+                    description=project_description
                 )
                 
                 if weeek_project:
@@ -188,9 +186,8 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
                     # Создаем задачу "Согласовать КП"
                     await create_task(
                         project_id=project_id,
-                        name="Согласовать КП",
-                        description="Проверить и согласовать черновик коммерческого предложения",
-                        due_date=None
+                        title="Согласовать КП",
+                        description="Проверить и согласовать черновик коммерческого предложения"
                     )
                     log.info(f"✅ [Сценарий 1] Задача создана в WEEEK")
             
@@ -348,9 +345,7 @@ async def process_lead_email(email_data: Dict, require_approval: bool = True, te
             
             weeek_project = await create_project(
                 name=project_name,
-                description=project_description,
-                lead_id=None,
-                status="new"
+                description=project_description
             )
             
             if weeek_project:
@@ -439,9 +434,7 @@ async def process_telegram_lead(
             
             weeek_project = await create_project(
                 name=project_name,
-                description=project_description,
-                lead_id=str(user_id),
-                status="new"
+                description=project_description
             )
             
             if weeek_project:
