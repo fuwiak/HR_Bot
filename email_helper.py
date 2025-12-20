@@ -292,7 +292,32 @@ async def send_email(
     # Определяем, какой email использовать для отправки
     RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL")
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+    MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+    MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
     
+    # ПРИОРИТЕТ 1: Пробуем сначала через Mailgun API (если доступен) - работает на Railway, позволяет любой from адрес
+    if MAILGUN_API_KEY and MAILGUN_DOMAIN:
+        try:
+            log.info("🔄 Пробую отправить через Mailgun API...")
+            result = await _send_email_mailgun_api(to_email, subject, body, is_html)
+            if result:
+                return True
+            log.warning("⚠️ Mailgun API не смог отправить, пробуем Resend...")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка Mailgun API: {e}, пробуем Resend...")
+    
+    # ПРИОРИТЕТ 2: Пробуем через Resend API (если доступен) - работает на Railway
+    if RESEND_API_KEY:
+        try:
+            log.info("🔄 Пробую отправить через Resend API...")
+            result = await _send_email_resend(to_email, subject, body, is_html)
+            if result:
+                return True
+            log.warning("⚠️ Resend API не смог отправить, пробуем SMTP...")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка Resend API: {e}, пробуем SMTP...")
+    
+    # ПРИОРИТЕТ 3: Fallback на SMTP (может не работать на Railway бесплатном плане)
     # Проверяем, является ли домен бесплатным (yandex.ru, gmail.com и т.д.)
     # Если RESEND_FROM_EMAIL не установлен или это бесплатный домен, используем SMTP с YANDEX_EMAIL
     use_smtp_directly = False
@@ -308,41 +333,6 @@ async def send_email(
             use_smtp_directly = True
             log.info(f"📧 RESEND_FROM_EMAIL использует бесплатный домен ({domain}), используем SMTP с YANDEX_EMAIL: {YANDEX_EMAIL}")
     
-    # Если нужно использовать SMTP напрямую, пропускаем Resend
-    if use_smtp_directly:
-        log.info("🔄 Использую SMTP напрямую...")
-        result = await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
-        if not result:
-            log.error("❌ Не удалось отправить email через SMTP")
-            log.error("💡 Railway блокирует порты SMTP (465, 587) на бесплатных планах")
-            log.error("💡 Решения:")
-            log.error("   1. Используйте Resend API с подтвержденным доменом (добавьте RESEND_FROM_EMAIL=your@domain.com)")
-            log.error("   2. Обновите Railway план до Pro (разблокирует SMTP порты)")
-        return result
-    
-    # Пробуем сначала через Mailgun API (если доступен) - работает на Railway, позволяет любой from адрес
-    MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
-    MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
-    if MAILGUN_API_KEY and MAILGUN_DOMAIN:
-        try:
-            result = await _send_email_mailgun_api(to_email, subject, body, is_html)
-            if result:
-                return True
-            log.warning("⚠️ Mailgun API не смог отправить, пробуем Resend...")
-        except Exception as e:
-            log.warning(f"⚠️ Ошибка Mailgun API: {e}, пробуем Resend...")
-    
-    # Пробуем через Resend API (если доступен) - работает на Railway
-    if RESEND_API_KEY:
-        try:
-            result = await _send_email_resend(to_email, subject, body, is_html)
-            if result:
-                return True
-            log.warning("⚠️ Resend API не смог отправить, пробуем SMTP...")
-        except Exception as e:
-            log.warning(f"⚠️ Ошибка Resend API: {e}, пробуем SMTP...")
-    
-    # Fallback на SMTP (может не работать на Railway бесплатном плане)
     log.info("🔄 Использую синхронную версию SMTP...")
     result = await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
     
