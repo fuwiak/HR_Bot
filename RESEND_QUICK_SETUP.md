@@ -40,7 +40,7 @@
 
 **ВАЖНО:** Resend НЕ позволяет использовать бесплатные домены (yandex.ru, gmail.com, mail.ru и т.д.)
 
-### Вариант 1: Домен Resend (работает сразу)
+### Вариант 1: Домен Resend (работает сразу, бесплатно)
 
 Добавьте в Railway Variables:
 ```
@@ -49,19 +49,26 @@ RESEND_FROM_EMAIL=onboarding@resend.dev
 
 Это работает сразу, без дополнительной настройки.
 
-### Вариант 2: Подтвердить свой домен
+### Вариант 2: Купить свой домен (рекомендуется для продакшена)
 
-Если у вас есть свой домен (например, `yourdomain.com`):
+**Где купить домен:**
+- **Namecheap** (https://www.namecheap.com) - от $8.88/год
+- **Reg.ru** (https://www.reg.ru) - от 199₽/год (для .ru)
+- **Timeweb** (https://timeweb.com) - от 199₽/год
+- **GoDaddy** (https://www.godaddy.com) - от $11.99/год
 
+**После покупки домена:**
 1. В Resend Dashboard → **Domains**
 2. Нажмите **Add Domain**
 3. Введите ваш домен
 4. Добавьте DNS записи, которые покажет Resend
-5. Дождитесь подтверждения домена
+5. Дождитесь подтверждения домена (5-30 минут)
 6. Добавьте в Railway Variables:
    ```
    RESEND_FROM_EMAIL=noreply@yourdomain.com
    ```
+
+**Подробная инструкция:** см. `RESEND_DOMAIN_SETUP.md`
 
 **Примечание:** Нельзя использовать `a-novoselova07@yandex.ru` - Resend блокирует бесплатные домены.
 

@@ -347,10 +347,16 @@ async def _send_email_resend(to_email: str, subject: str, body: str, is_html: bo
         else:
             log.info(f"📧 Использую RESEND_FROM_EMAIL: {from_email}")
         
+        # Очищаем subject от символов новой строки и лишних пробелов
+        # Resend API не разрешает \n в поле subject
+        clean_subject = subject.replace("\n", " ").replace("\r", " ").strip()
+        # Убираем множественные пробелы
+        clean_subject = " ".join(clean_subject.split())
+        
         payload = {
             "from": f"HR Bot <{from_email}>",
             "to": [to_email],
-            "subject": subject,
+            "subject": clean_subject,
         }
         
         # Добавляем текст или HTML в зависимости от формата
@@ -367,7 +373,7 @@ async def _send_email_resend(to_email: str, subject: str, body: str, is_html: bo
                 if response.status == 200:
                     response_data = await response.json()
                     email_id = response_data.get("id", "unknown")
-                    log.info(f"✅ Email отправлен через Resend API (ID: {email_id}): {to_email} - {subject}")
+                    log.info(f"✅ Email отправлен через Resend API (ID: {email_id}): {to_email} - {clean_subject}")
                     return True
                 else:
                     # Получаем текст ошибки
