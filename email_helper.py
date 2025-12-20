@@ -296,10 +296,14 @@ async def send_email(
     MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
     
     # ПРИОРИТЕТ 1: Пробуем сначала через Mailgun API (если доступен) - работает на Railway, позволяет любой from адрес
-    if MAILGUN_API_KEY and MAILGUN_DOMAIN:
+    # Поддерживаем оба варианта ключей: MAILGUN_API_KEY или MAILGUN_SENDING_API_KEY
+    MAILGUN_SENDING_API_KEY = os.getenv("MAILGUN_SENDING_API_KEY")
+    mailgun_api_key = MAILGUN_API_KEY or MAILGUN_SENDING_API_KEY
+    
+    if mailgun_api_key and MAILGUN_DOMAIN:
         try:
             log.info("🔄 Пробую отправить через Mailgun API...")
-            result = await _send_email_mailgun_api(to_email, subject, body, is_html)
+            result = await _send_email_mailgun_api(to_email, subject, body, is_html, mailgun_api_key)
             if result:
                 return True
             log.warning("⚠️ Mailgun API не смог отправить, пробуем Resend...")
@@ -444,16 +448,21 @@ async def _send_email_resend(to_email: str, subject: str, body: str, is_html: bo
         log.error(f"❌ Ошибка отправки через Resend API: {e}")
         return False
 
-async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_html: bool = False) -> bool:
+async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_html: bool = False, api_key: str = None) -> bool:
     """Отправка email через Mailgun API (работает на Railway, позволяет любой from адрес)"""
     try:
         import aiohttp
         from aiohttp import BasicAuth
         
-        MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+        # Используем переданный ключ или получаем из переменных окружения
+        if not api_key:
+            MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+            MAILGUN_SENDING_API_KEY = os.getenv("MAILGUN_SENDING_API_KEY")
+            api_key = MAILGUN_API_KEY or MAILGUN_SENDING_API_KEY
+        
         MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
         
-        if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
+        if not api_key or not MAILGUN_DOMAIN:
             return False
         
         # Адрес уже декодирован в send_email()
@@ -461,7 +470,7 @@ async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_htm
         url = f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages"
         
         # Mailgun использует Basic Auth с username "api" и password = API key
-        auth = BasicAuth("api", MAILGUN_API_KEY)
+        auth = BasicAuth("api", api_key)
         
         # Используем YANDEX_EMAIL как from адрес (можно указать любой адрес)
         from_email = YANDEX_EMAIL or "a-novoselova07@yandex.ru"
@@ -511,7 +520,14 @@ async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_htm
                     elif response.status == 402:
                         log.error("💡 Превышен лимит отправки в Mailgun (проверьте тарифный план)")
                     elif response.status == 403:
-                        log.error("💡 Проверьте MAILGUN_DOMAIN - возможно домен не подтвержден")
+                        if "authorized recipients" in error_message.lower() or "sandbox" in error_message.lower():
+                            log.error("💡 Sandbox домен Mailgun может отправлять ТОЛЬКО на авторизованные адреса")
+                            log.error("💡 Решения:")
+                            log.error("   1. Добавьте получателя в Mailgun Dashboard → Sending → Authorized Recipients")
+                            log.error("   2. Или используйте подтвержденный домен (bettercallbober.ru) вместо sandbox")
+                            log.error("   3. Или обновите Mailgun план до платного")
+                        else:
+                            log.error("💡 Проверьте MAILGUN_DOMAIN - возможно домен не подтвержден")
                     
                     return False
                     
