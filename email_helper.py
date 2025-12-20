@@ -289,8 +289,50 @@ async def send_email(
     # Декодируем адрес получателя, если он в формате encoded
     to_email = _decode_email_address(to_email)
     
-    # Пробуем сначала через Resend API (если доступен) - работает на Railway
+    # Определяем, какой email использовать для отправки
+    RESEND_FROM_EMAIL = os.getenv("RESEND_FROM_EMAIL")
     RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+    
+    # Проверяем, является ли домен бесплатным (yandex.ru, gmail.com и т.д.)
+    # Если RESEND_FROM_EMAIL не установлен или это бесплатный домен, используем SMTP с YANDEX_EMAIL
+    use_smtp_directly = False
+    if not RESEND_FROM_EMAIL:
+        # Если RESEND_FROM_EMAIL не установлен, используем YANDEX_EMAIL через SMTP
+        use_smtp_directly = True
+        log.info(f"📧 RESEND_FROM_EMAIL не установлен, используем SMTP с YANDEX_EMAIL: {YANDEX_EMAIL}")
+    else:
+        # Проверяем, является ли домен бесплатным
+        free_domains = ['yandex.ru', 'gmail.com', 'mail.ru', 'yahoo.com', 'hotmail.com', 'outlook.com']
+        domain = RESEND_FROM_EMAIL.split('@')[-1].lower()
+        if domain in free_domains:
+            use_smtp_directly = True
+            log.info(f"📧 RESEND_FROM_EMAIL использует бесплатный домен ({domain}), используем SMTP с YANDEX_EMAIL: {YANDEX_EMAIL}")
+    
+    # Если нужно использовать SMTP напрямую, пропускаем Resend
+    if use_smtp_directly:
+        log.info("🔄 Использую SMTP напрямую...")
+        result = await asyncio.to_thread(_send_email_sync, to_email, subject, body, is_html, attachments)
+        if not result:
+            log.error("❌ Не удалось отправить email через SMTP")
+            log.error("💡 Railway блокирует порты SMTP (465, 587) на бесплатных планах")
+            log.error("💡 Решения:")
+            log.error("   1. Используйте Resend API с подтвержденным доменом (добавьте RESEND_FROM_EMAIL=your@domain.com)")
+            log.error("   2. Обновите Railway план до Pro (разблокирует SMTP порты)")
+        return result
+    
+    # Пробуем сначала через Mailgun API (если доступен) - работает на Railway, позволяет любой from адрес
+    MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+    MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
+    if MAILGUN_API_KEY and MAILGUN_DOMAIN:
+        try:
+            result = await _send_email_mailgun_api(to_email, subject, body, is_html)
+            if result:
+                return True
+            log.warning("⚠️ Mailgun API не смог отправить, пробуем Resend...")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка Mailgun API: {e}, пробуем Resend...")
+    
+    # Пробуем через Resend API (если доступен) - работает на Railway
     if RESEND_API_KEY:
         try:
             result = await _send_email_resend(to_email, subject, body, is_html)
@@ -412,6 +454,86 @@ async def _send_email_resend(to_email: str, subject: str, body: str, is_html: bo
         log.error(f"❌ Ошибка отправки через Resend API: {e}")
         return False
 
+async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_html: bool = False) -> bool:
+    """Отправка email через Mailgun API (работает на Railway, позволяет любой from адрес)"""
+    try:
+        import aiohttp
+        from aiohttp import BasicAuth
+        
+        MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+        MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
+        
+        if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
+            return False
+        
+        # Адрес уже декодирован в send_email()
+        
+        url = f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}/messages"
+        
+        # Mailgun использует Basic Auth с username "api" и password = API key
+        auth = BasicAuth("api", MAILGUN_API_KEY)
+        
+        # Используем YANDEX_EMAIL как from адрес (можно указать любой адрес)
+        from_email = YANDEX_EMAIL or "a-novoselova07@yandex.ru"
+        log.info(f"📧 Использую Mailgun API: от={from_email}, к={to_email}")
+        
+        # Очищаем subject от символов новой строки и лишних пробелов
+        clean_subject = subject.replace("\n", " ").replace("\r", " ").strip()
+        clean_subject = " ".join(clean_subject.split())
+        
+        # Mailgun API использует form-data, а не JSON
+        data = aiohttp.FormData()
+        data.add_field("from", f"HR Bot <{from_email}>")
+        data.add_field("to", to_email)
+        data.add_field("subject", clean_subject)
+        
+        # Добавляем текст или HTML в зависимости от формата
+        if is_html:
+            data.add_field("html", body)
+        else:
+            data.add_field("text", body)
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, auth=auth, data=data) as response:
+                if response.status == 200:
+                    response_data = await response.json()
+                    message_id = response_data.get("id", "unknown")
+                    log.info(f"✅ Email отправлен через Mailgun API (ID: {message_id}): {to_email} - {clean_subject}")
+                    return True
+                else:
+                    # Получаем текст ошибки
+                    error_text = await response.text()
+                    error_message = error_text
+                    
+                    # Пробуем распарсить JSON ошибки
+                    try:
+                        import json
+                        error_json = json.loads(error_text)
+                        error_message = error_json.get("message", error_text)
+                    except:
+                        pass
+                    
+                    log.error(f"❌ Ошибка Mailgun API ({response.status}): {error_message}")
+                    
+                    # Специальная обработка ошибок
+                    if response.status == 401:
+                        log.error("💡 Проверьте MAILGUN_API_KEY - возможно он неверный")
+                    elif response.status == 402:
+                        log.error("💡 Превышен лимит отправки в Mailgun (проверьте тарифный план)")
+                    elif response.status == 403:
+                        log.error("💡 Проверьте MAILGUN_DOMAIN - возможно домен не подтвержден")
+                    
+                    return False
+                    
+    except ImportError:
+        log.warning("⚠️ aiohttp не установлен. Для Mailgun API установите: pip install aiohttp")
+        return False
+    except Exception as e:
+        log.error(f"❌ Ошибка отправки через Mailgun API: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        return False
+
 async def _send_email_async(to_email: str, subject: str, body: str, is_html: bool, attachments: Optional[List[str]]) -> bool:
     """Async версия отправки email через aiosmtplib с fallback на синхронную версию"""
     try:
@@ -526,7 +648,29 @@ def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, atta
         log.error(f"   Проверьте Railway Variables: YANDEX_EMAIL и YANDEX_IMAP_PASSWORD должны быть установлены!")
         return False
     
-    log.info(f"📧 Отправка email: от={YANDEX_EMAIL}, к={to_email}, тема={subject}, server={YANDEX_SMTP_SERVER}, port=465/587")
+    # Определяем SMTP сервер и порт
+    smtp_server = YANDEX_SMTP_SERVER
+    smtp_port = YANDEX_SMTP_PORT
+    
+    # Если используется SMTP relay (Mailgun, SendGrid), используем их настройки
+    SMTP_RELAY_SERVER = os.getenv("SMTP_RELAY_SERVER")  # Например: smtp.mailgun.org
+    SMTP_RELAY_PORT = os.getenv("SMTP_RELAY_PORT")  # Например: 587 или 465
+    SMTP_RELAY_USER = os.getenv("SMTP_RELAY_USER")  # Username для relay
+    SMTP_RELAY_PASSWORD = os.getenv("SMTP_RELAY_PASSWORD")  # Password для relay
+    
+    if SMTP_RELAY_SERVER:
+        smtp_server = SMTP_RELAY_SERVER
+        if SMTP_RELAY_PORT:
+            smtp_port = int(SMTP_RELAY_PORT)
+        # Используем relay credentials, если указаны
+        smtp_user = SMTP_RELAY_USER if SMTP_RELAY_USER else YANDEX_EMAIL
+        smtp_password = SMTP_RELAY_PASSWORD if SMTP_RELAY_PASSWORD else YANDEX_PASSWORD
+        log.info(f"📧 Использую SMTP Relay: {smtp_server}:{smtp_port}")
+    else:
+        smtp_user = YANDEX_EMAIL
+        smtp_password = YANDEX_PASSWORD
+    
+    log.info(f"📧 Отправка email: от={YANDEX_EMAIL}, к={to_email}, тема={subject}, server={smtp_server}, port={smtp_port}")
     
     message = MIMEMultipart()
     message["From"] = YANDEX_EMAIL
@@ -538,44 +682,46 @@ def _send_email_sync(to_email: str, subject: str, body: str, is_html: bool, atta
     # Устанавливаем таймаут для соединения
     socket.setdefaulttimeout(30)  # 30 секунд
     
-    # Попытка 1: Порт 465 (SMTP_SSL) - точно как в тестовом скрипте
-    log.info(f"🔄 Попытка 1: Порт 465 (SMTP_SSL)...")
-    try:
-        server = smtplib.SMTP_SSL(YANDEX_SMTP_SERVER, 465, timeout=30)
-        server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
-        server.send_message(message)
-        server.quit()
-        log.info(f"✅ Email отправлен (sync, порт 465): {to_email} - {subject}")
-        return True
-    except socket.timeout as e:
-        log.warning(f"⚠️ Таймаут на порту 465: {e}")
-    except OSError as e:
-        log.warning(f"⚠️ Ошибка сети на порту 465: {e}")
-    except smtplib.SMTPAuthenticationError as e:
-        log.error(f"❌ Ошибка авторизации на порту 465: {e}")
-        return False  # Авторизация не пройдет и на другом порту
-    except Exception as e:
-        log.warning(f"⚠️ Ошибка на порту 465: {e}")
+    # Попытка 1: Порт 465 (SMTP_SSL) или указанный порт
+    if smtp_port == 465:
+        log.info(f"🔄 Попытка 1: Порт 465 (SMTP_SSL)...")
+        try:
+            server = smtplib.SMTP_SSL(smtp_server, 465, timeout=30)
+            server.login(smtp_user, smtp_password)
+            server.send_message(message)
+            server.quit()
+            log.info(f"✅ Email отправлен (sync, порт 465): {to_email} - {subject}")
+            return True
+        except socket.timeout as e:
+            log.warning(f"⚠️ Таймаут на порту 465: {e}")
+        except OSError as e:
+            log.warning(f"⚠️ Ошибка сети на порту 465: {e}")
+        except smtplib.SMTPAuthenticationError as e:
+            log.error(f"❌ Ошибка авторизации на порту 465: {e}")
+            return False  # Авторизация не пройдет и на другом порту
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка на порту 465: {e}")
     
     # Попытка 2: Порт 587 (STARTTLS) - точно как в тестовом скрипте
-    log.info(f"🔄 Попытка 2: Порт 587 (STARTTLS)...")
-    try:
-        server = smtplib.SMTP(YANDEX_SMTP_SERVER, 587, timeout=30)
-        server.starttls()
-        server.login(YANDEX_EMAIL, YANDEX_PASSWORD)
-        server.send_message(message)
-        server.quit()
-        log.info(f"✅ Email отправлен (sync, порт 587): {to_email} - {subject}")
-        return True
-    except socket.timeout as e:
-        log.error(f"❌ Таймаут на порту 587: {e}")
-    except OSError as e:
-        log.error(f"❌ Ошибка сети на порту 587: {e}")
-    except smtplib.SMTPAuthenticationError as e:
-        log.error(f"❌ Ошибка авторизации на порту 587: {e}")
-        return False
-    except Exception as e:
-        log.error(f"❌ Ошибка на порту 587: {e}")
+    if smtp_port == 587 or smtp_port == 465:  # Пробуем 587 если 465 не сработал
+        log.info(f"🔄 Попытка 2: Порт 587 (STARTTLS)...")
+        try:
+            server = smtplib.SMTP(smtp_server, 587, timeout=30)
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.send_message(message)
+            server.quit()
+            log.info(f"✅ Email отправлен (sync, порт 587): {to_email} - {subject}")
+            return True
+        except socket.timeout as e:
+            log.error(f"❌ Таймаут на порту 587: {e}")
+        except OSError as e:
+            log.error(f"❌ Ошибка сети на порту 587: {e}")
+        except smtplib.SMTPAuthenticationError as e:
+            log.error(f"❌ Ошибка авторизации на порту 587: {e}")
+            return False
+        except Exception as e:
+            log.error(f"❌ Ошибка на порту 587: {e}")
     
     # Если дошли сюда - не удалось отправить
     log.error(f"❌ Не удалось отправить email через оба порта")
