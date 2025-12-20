@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from fastapi import FastAPI, Request, Form, HTTPException, UploadFile, File, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
@@ -25,6 +26,15 @@ WEB_INTERFACE_PORT = int(os.getenv("WEB_INTERFACE_PORT", 8081))
 
 # FastAPI app
 app = FastAPI(title="HR2137 Bot Demo Interface", version="1.0.0")
+
+# CORS middleware для работы с Next.js frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # В production укажите конкретные домены
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Templates
 templates = Jinja2Templates(directory="templates")
@@ -76,12 +86,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
         
         # Проверяем аутентификацию для всех остальных путей
         if not is_authenticated(request):
+            # Разрешаем доступ к API endpoints без аутентификации (для frontend Next.js)
             if path.startswith("/api/") or path.startswith("/demo/") or path.startswith("/rag/"):
-                # Для API возвращаем JSON ошибку
-                return JSONResponse(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    content={"error": "Unauthorized"}
-                )
+                # Пропускаем API запросы без проверки аутентификации
+                return await call_next(request)
             else:
                 # Для HTML страниц редиректим на логин
                 return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
