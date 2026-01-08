@@ -3090,7 +3090,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             db_set_user_phone(user_id, text)
         # Fallback на память
         if not REDIS_AVAILABLE_IMPORT and not DATABASE_AVAILABLE:
-        UserPhone[user_id] = text
+            UserPhone[user_id] = text
         await update.message.reply_text(
             f"✅ *Номер телефона {text} сохранен!*\n\n"
             f"Теперь вы можете создавать записи.\n"
