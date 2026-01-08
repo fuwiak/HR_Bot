@@ -265,7 +265,7 @@ async def test_all_functions_are_async():
 
 def test_bot_has_all_commands():
     """Проверка, что все команды зарегистрированы в боте"""
-    from telegram.app import main
+    from telegram_bot.app import main
     
     # Список ожидаемых команд
     expected_commands = [

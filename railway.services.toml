@@ -6,7 +6,7 @@
 [service.telegram-bot]
 name = "Telegram Bot"
 description = "Основной Telegram бот с webhook поддержкой"
-dockerfile = "telegram/Dockerfile"
+dockerfile = "Dockerfile"
 port = 8080
 
 # Переменные окружения

@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from telegram.app import (
+from telegram_bot.app import (
     rag_search_command,
     rag_stats_command,
     rag_docs_command,

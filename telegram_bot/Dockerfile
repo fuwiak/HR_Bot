@@ -25,12 +25,12 @@ RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # Copy application code
-COPY telegram/ ./telegram/
+COPY telegram_bot/ ./telegram_bot/
 COPY backend/ ./backend/
 COPY services/ ./services/
 COPY tests/ ./tests/
 COPY config.yaml .
-COPY templates/ ./templates/ 2>/dev/null || true
+COPY templates/ ./templates/
 
 # Expose port for Telegram webhook
 EXPOSE 8080
@@ -44,7 +44,7 @@ if [ "$RUN_TESTS" = "true" ]; then\n\
     echo "🧪 Запуск тестов перед стартом приложения..."\n\
     python tests/run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\
 fi\n\
-exec python -u telegram/app.py\n\
+exec python -u telegram_bot/app.py\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Используем entrypoint для условного запуска тестов

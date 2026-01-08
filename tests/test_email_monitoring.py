@@ -45,7 +45,7 @@ async def test_check_new_emails():
 @pytest.mark.asyncio
 async def test_send_email_notification():
     """Тест отправки уведомления о письме"""
-    from telegram.app import send_email_notification, email_cache
+    from telegram_bot.app import send_email_notification, email_cache
     
     # Очищаем кэш
     email_cache.clear()
@@ -89,7 +89,7 @@ async def test_send_email_notification():
 @pytest.mark.asyncio
 async def test_handle_email_reply():
     """Тест подготовки ответа на письмо"""
-    from telegram.app import handle_email_reply, email_cache
+    from telegram_bot.app import handle_email_reply, email_cache
     from telegram import CallbackQuery, Message, User, Chat
     
     # Подготавливаем тестовые данные
@@ -126,7 +126,7 @@ async def test_handle_email_reply():
 @pytest.mark.asyncio
 async def test_handle_email_proposal():
     """Тест создания КП из письма"""
-    from telegram.app import handle_email_proposal, email_cache
+    from telegram_bot.app import handle_email_proposal, email_cache
     
     # Подготавливаем тестовые данные
     test_email = {
@@ -162,7 +162,7 @@ async def test_handle_email_proposal():
 @pytest.mark.asyncio
 async def test_handle_email_task():
     """Тест создания задачи в WEEEK из письма"""
-    from telegram.app import handle_email_task, email_cache
+    from telegram_bot.app import handle_email_task, email_cache
     
     # Подготавливаем тестовые данные
     test_email = {
@@ -198,7 +198,7 @@ async def test_handle_email_task():
 @pytest.mark.asyncio
 async def test_handle_email_create_task():
     """Тест создания задачи в WEEEK"""
-    from telegram.app import handle_email_create_task, email_cache
+    from telegram_bot.app import handle_email_create_task, email_cache
     
     # Подготавливаем тестовые данные
     test_email = {
@@ -237,7 +237,7 @@ async def test_handle_email_create_task():
 @pytest.mark.asyncio
 async def test_email_monitor_task():
     """Тест фоновой задачи мониторинга почты"""
-    from telegram.app import email_monitor_task, processed_email_ids, send_email_notification
+    from telegram_bot.app import email_monitor_task, processed_email_ids, send_email_notification
     
     # Очищаем список обработанных писем
     processed_email_ids.clear()
@@ -296,7 +296,7 @@ async def test_email_monitor_task():
 @pytest.mark.asyncio
 async def test_email_check_command():
     """Тест команды /email_check"""
-    from telegram.app import email_check_command, processed_email_ids
+    from telegram_bot.app import email_check_command, processed_email_ids
     
     # Очищаем список обработанных
     processed_email_ids.clear()
@@ -339,7 +339,7 @@ async def test_email_check_command():
 @pytest.mark.asyncio
 async def test_email_workflow_integration():
     """Интеграционный тест полного workflow обработки письма"""
-    from telegram.app import (
+    from telegram_bot.app import (
         email_check_command,
         handle_email_reply,
         handle_email_proposal,
