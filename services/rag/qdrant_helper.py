@@ -76,9 +76,26 @@ RAILWAY_QDRANT_URL = None
 
 # Проверяем Railway Qdrant сервис
 if RAILWAY_QDRANT_HOST:
-    # Railway предоставляет внутренний домен для сервисов
-    RAILWAY_QDRANT_URL = f"http://{RAILWAY_QDRANT_HOST}:{RAILWAY_QDRANT_PORT}"
-    log.info(f"🔧 Обнаружен Railway Qdrant сервис: {RAILWAY_QDRANT_URL}")
+    # Определяем, является ли домен публичным (Railway public domain)
+    is_public_domain = (
+        ".up.railway.app" in RAILWAY_QDRANT_HOST or
+        ".railway.app" in RAILWAY_QDRANT_HOST or
+        RAILWAY_QDRANT_HOST.startswith("https://")
+    )
+    
+    if is_public_domain:
+        # Публичный домен Railway - используем HTTPS без порта
+        if RAILWAY_QDRANT_HOST.startswith("https://"):
+            RAILWAY_QDRANT_URL = RAILWAY_QDRANT_HOST
+        elif RAILWAY_QDRANT_HOST.startswith("http://"):
+            RAILWAY_QDRANT_URL = RAILWAY_QDRANT_HOST.replace("http://", "https://")
+        else:
+            RAILWAY_QDRANT_URL = f"https://{RAILWAY_QDRANT_HOST}"
+        log.info(f"🔧 Обнаружен публичный Railway Qdrant домен: {RAILWAY_QDRANT_URL}")
+    else:
+        # Приватный домен Railway - используем HTTP с портом
+        RAILWAY_QDRANT_URL = f"http://{RAILWAY_QDRANT_HOST}:{RAILWAY_QDRANT_PORT}"
+        log.info(f"🔧 Обнаружен приватный Railway Qdrant сервис: {RAILWAY_QDRANT_URL}")
 else:
     # Локальный сервер для разработки
     RAILWAY_QDRANT_URL = _qdrant_settings.get("local_url") or os.getenv("QDRANT_URL", "http://localhost:6333")
@@ -106,14 +123,43 @@ def get_qdrant_client():
         return _qdrant_client
     
     try:
-        # Создаем клиент для Railway Qdrant (без API ключа, внутренняя сеть)
-        _qdrant_client = QdrantClient(url=QDRANT_URL)
-        log.info(f"🔗 Подключение к Railway Qdrant: {QDRANT_URL}")
+        # Определяем, является ли URL публичным доменом
+        is_public = QDRANT_URL.startswith("https://")
         
-        # Проверяем подключение
-        _qdrant_client.get_collections()
-        log.info(f"✅ Qdrant клиент успешно подключен: {QDRANT_URL}")
-        log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
+        # Для публичных доменов используем больший таймаут
+        timeout_seconds = 30.0 if is_public else 10.0
+        
+        # Проверяем, нужен ли API ключ для публичных доменов
+        qdrant_api_key = os.getenv("QDRANT_API_KEY")
+        
+        # Создаем клиент для Railway Qdrant
+        if is_public and qdrant_api_key:
+            # Публичный домен с API ключом
+            _qdrant_client = QdrantClient(
+                url=QDRANT_URL,
+                api_key=qdrant_api_key,
+                timeout=timeout_seconds
+            )
+            log.info(f"🔗 Подключение к публичному Railway Qdrant с API ключом: {QDRANT_URL}")
+        else:
+            # Приватный домен или без API ключа
+            _qdrant_client = QdrantClient(
+                url=QDRANT_URL,
+                timeout=timeout_seconds
+            )
+            if is_public:
+                log.info(f"🔗 Подключение к публичному Railway Qdrant: {QDRANT_URL}")
+            else:
+                log.info(f"🔗 Подключение к Railway Qdrant: {QDRANT_URL}")
+        
+        # Проверяем подключение с таймаутом
+        try:
+            _qdrant_client.get_collections()
+            log.info(f"✅ Qdrant клиент успешно подключен: {QDRANT_URL}")
+            log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
+        except Exception as conn_e:
+            log.warning(f"⚠️ Предупреждение при проверке подключения: {conn_e}")
+            # Не возвращаем None, так как клиент может работать, просто проверка не прошла
         
         return _qdrant_client
     except Exception as e:
@@ -391,12 +437,19 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
         return []
     
     try:
-        # Проверяем, что коллекция существует
-        collections = client.get_collections()
-        collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
-        if not collection_exists:
-            log.warning(f"⚠️ Коллекция '{COLLECTION_NAME}' не существует в Qdrant")
-            return []
+        # Проверяем, что коллекция существует (с обработкой таймаутов)
+        try:
+            collections = client.get_collections()
+            collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
+            if not collection_exists:
+                log.warning(f"⚠️ Коллекция '{COLLECTION_NAME}' не существует в Qdrant")
+                return []
+        except (TimeoutError, ConnectionError, Exception) as e:
+            error_str = str(e).lower()
+            if "timeout" in error_str or "timed out" in error_str or "connect" in error_str:
+                log.error(f"❌ Таймаут подключения к Qdrant при проверке коллекций: {e}")
+                return []
+            raise  # Пробрасываем другие ошибки
         
         # Генерируем эмбеддинг для запроса через API
         query_embedding = generate_embedding(query)
@@ -419,21 +472,35 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
                 ]
             )
             
-            # Ищем с фильтром
-            search_results = client.query_points(
-                collection_name=COLLECTION_NAME,
-                query=query_embedding,
-                limit=limit * 2,  # Берем больше, чтобы после фильтрации осталось достаточно
-                query_filter=service_filter
-            )
+            # Ищем с фильтром (с обработкой таймаутов)
+            try:
+                search_results = client.query_points(
+                    collection_name=COLLECTION_NAME,
+                    query=query_embedding,
+                    limit=limit * 2,  # Берем больше, чтобы после фильтрации осталось достаточно
+                    query_filter=service_filter
+                )
+            except (TimeoutError, ConnectionError, Exception) as e:
+                error_str = str(e).lower()
+                if "timeout" in error_str or "timed out" in error_str or "connect" in error_str:
+                    log.error(f"❌ Таймаут при поиске в Qdrant: {e}")
+                    return []
+                raise  # Пробрасываем другие ошибки
         except Exception as e:
             # Если фильтр не работает (старые данные без source_type), ищем без фильтра
             log.debug(f"⚠️ Фильтр не применился, используем поиск без фильтра: {e}")
-            search_results = client.query_points(
-                collection_name=COLLECTION_NAME,
-                query=query_embedding,
-                limit=limit * 2
-            )
+            try:
+                search_results = client.query_points(
+                    collection_name=COLLECTION_NAME,
+                    query=query_embedding,
+                    limit=limit * 2
+                )
+            except (TimeoutError, ConnectionError, Exception) as e:
+                error_str = str(e).lower()
+                if "timeout" in error_str or "timed out" in error_str or "connect" in error_str:
+                    log.error(f"❌ Таймаут при поиске в Qdrant (без фильтра): {e}")
+                    return []
+                raise  # Пробрасываем другие ошибки
         
         results = []
         # QueryResponse содержит points
@@ -478,6 +545,13 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
         
         return results
         
+    except (TimeoutError, ConnectionError) as e:
+        error_str = str(e).lower()
+        if "timeout" in error_str or "timed out" in error_str or "connect" in error_str:
+            log.error(f"❌ Таймаут подключения к Qdrant: {e}")
+            return []
+        log.error(f"❌ Ошибка подключения к Qdrant: {e}")
+        return []
     except Exception as e:
         log.error(f"❌ Ошибка поиска в Qdrant: {e}")
         import traceback

@@ -1,9 +1,11 @@
 # Конфигурация Qdrant векторной базы данных
 qdrant:
   # Подключение
-  host: "${QDRANT_HOST}"  # Private domain Qdrant сервиса в Railway
-  port: "${QDRANT_PORT:-6333}"  # Порт Qdrant (по умолчанию 6333)
-  url: "http://${QDRANT_HOST}:${QDRANT_PORT:-6333}"  # Автоматически формируется
+  # Для приватных доменов Railway: используйте только host (например: "qdrant-service.railway.internal")
+  # Для публичных доменов Railway: используйте полный URL с https:// (например: "https://qdrant-production-bf97.up.railway.app")
+  host: "${QDRANT_HOST}"  # Private domain или полный URL (https://) Qdrant сервиса в Railway
+  port: "${QDRANT_PORT:-6333}"  # Порт Qdrant (по умолчанию 6333, не используется для публичных доменов)
+  url: "http://${QDRANT_HOST}:${QDRANT_PORT:-6333}"  # Автоматически формируется (переопределяется для публичных доменов)
   
   # Коллекция
   collection_name: "hr2137_bot_knowledge_base"
