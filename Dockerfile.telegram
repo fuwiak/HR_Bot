@@ -36,6 +36,19 @@ COPY dashboard_static/ ./dashboard_static/ 2>/dev/null || true
 # Expose port for Telegram webhook
 EXPOSE 8080
 
-# Run only Telegram bot (прямой запуск, без start.sh)
-# Это важно для Railway - избегаем проблем с trap в sh
-CMD ["python", "-u", "app.py"]
+# Опциональный запуск тестов перед стартом (можно отключить через RUN_TESTS=false)
+# Тесты запускаются только если установлена переменная RUN_TESTS=true
+# Результаты логируются в stdout/stderr и доступны в Railway logs
+ENV RUN_TESTS=${RUN_TESTS:-false}
+
+# Создаем entrypoint скрипт для условного запуска тестов
+RUN echo '#!/bin/sh\n\
+if [ "$RUN_TESTS" = "true" ]; then\n\
+    echo "🧪 Запуск тестов перед стартом приложения..."\n\
+    python run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\
+fi\n\
+exec python -u app.py\n\
+' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+# Используем entrypoint для условного запуска тестов
+ENTRYPOINT ["/entrypoint.sh"]

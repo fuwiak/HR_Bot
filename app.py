@@ -3390,6 +3390,13 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 msg = CONSULTING_PROMPT.replace("{{history}}", get_history(user_id)).replace("{{message}}", text)
                 
+                # Показываем статус "печатает..." для всех запросов
+                from telegram import ChatAction
+                await context.bot.send_chat_action(
+                    chat_id=update.effective_chat.id,
+                    action=ChatAction.TYPING
+                )
+                
                 # Улучшенный RAG поиск + контекст из WEEEK
                 rag_context = ""
                 weeek_context = ""
@@ -3404,7 +3411,14 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if is_pricing_query:
                     try:
                         from rag_langgraph import query_with_langgraph
+                        from telegram import ChatAction
                         log.info("💰 Обнаружен запрос о ценах, используем LangGraph RAG")
+                        
+                        # Показываем статус "печатает..." (typing indicator)
+                        await context.bot.send_chat_action(
+                            chat_id=update.effective_chat.id,
+                            action=ChatAction.TYPING
+                        )
                         
                         # Используем LangGraph для точного извлечения цен
                         langgraph_result = await query_with_langgraph(text, thread_id=str(user_id))

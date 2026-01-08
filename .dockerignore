@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Media files (большие файлы)
+media/*.pdf
+media/*.docx
+media/*.xlsx
+
+# Frontend (для backend/telegram сервисов)
+frontend/
+node_modules/
+
+# Local development
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Railway
+.railway/
+
+# Test results (будут созданы в контейнере)
+/tmp/test_results.json
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore

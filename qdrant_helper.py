@@ -315,7 +315,8 @@ def index_services(services: List[Dict]) -> bool:
                 "type": service.get("type", ""),
                 "additional_services": service.get("additional_services", ""),
                 "row_number": service.get("row_number", 0),
-                "indexed_at": datetime.now().isoformat()
+                "indexed_at": datetime.now().isoformat(),
+                "source_type": "service"  # Маркер для фильтрации услуг
             }
             
             # Генерируем ID
@@ -383,12 +384,35 @@ def search_service(query: str, limit: int = 3) -> List[Dict]:
             return []
         
         # Ищем в Qdrant - используем правильный метод query_points
-        # query может быть list[float] напрямую
-        search_results = client.query_points(
-            collection_name=COLLECTION_NAME,
-            query=query_embedding,
-            limit=limit
-        )
+        # Фильтруем только услуги (source_type="service" или есть поле id)
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        
+        # Фильтр: только услуги (source_type="service")
+        try:
+            service_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="source_type",
+                        match=MatchValue(value="service")
+                    )
+                ]
+            )
+            
+            # Ищем с фильтром
+            search_results = client.query_points(
+                collection_name=COLLECTION_NAME,
+                query=query_embedding,
+                limit=limit * 2,  # Берем больше, чтобы после фильтрации осталось достаточно
+                query_filter=service_filter
+            )
+        except Exception as e:
+            # Если фильтр не работает (старые данные без source_type), ищем без фильтра
+            log.debug(f"⚠️ Фильтр не применился, используем поиск без фильтра: {e}")
+            search_results = client.query_points(
+                collection_name=COLLECTION_NAME,
+                query=query_embedding,
+                limit=limit * 2
+            )
         
         results = []
         # QueryResponse содержит points
@@ -398,6 +422,15 @@ def search_service(query: str, limit: int = 3) -> List[Dict]:
             # Преобразуем payload обратно в формат услуги
             payload = result.payload if hasattr(result, 'payload') else {}
             score = result.score if hasattr(result, 'score') else 0.0
+            
+            # Пропускаем документы (если нет id или title пустой)
+            if not payload.get("id") and not payload.get("title"):
+                continue
+            
+            # Пропускаем документы базы знаний (если есть file_name или text, но нет source_type="service")
+            if payload.get("file_name") or payload.get("text"):
+                if payload.get("source_type") != "service":
+                    continue
             
             service = {
                 "id": payload.get("id", 0),
@@ -413,6 +446,9 @@ def search_service(query: str, limit: int = 3) -> List[Dict]:
                 "score": score  # Схожесть (0-1)
             }
             results.append(service)
+        
+        # Ограничиваем количество результатов
+        results = results[:limit]
         
         if results:
             log.info(f"🔍 Найдено {len(results)} услуг в Qdrant для запроса '{query}'")
