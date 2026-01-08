@@ -29,8 +29,11 @@ COPY backend/ ./backend/
 COPY services/ ./services/
 COPY tests/ ./tests/
 COPY config.yaml .
+COPY config/ ./config/
 COPY templates/ ./templates/
 COPY dashboard_static/ ./dashboard_static/
+COPY alembic.ini .
+COPY alembic/ ./alembic/
 
 # Expose port for backend API
 EXPOSE 8081
@@ -38,8 +41,10 @@ EXPOSE 8081
 # Опциональный запуск тестов перед стартом
 ENV RUN_TESTS=${RUN_TESTS:-false}
 
-# Создаем entrypoint скрипт для условного запуска тестов
+# Создаем entrypoint скрипт для запуска миграций и тестов
 RUN echo '#!/bin/sh\n\
+echo "🔄 Запуск миграций Alembic..."\n\
+alembic upgrade head || echo "⚠️ Миграции завершились с ошибками, но продолжаем запуск"\n\
 if [ "$RUN_TESTS" = "true" ]; then\n\
     echo "🧪 Запуск тестов перед стартом приложения..."\n\
     python tests/run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\
@@ -47,5 +52,5 @@ fi\n\
 exec python -u backend/web_interface.py\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
-# Используем entrypoint для условного запуска тестов
+# Используем entrypoint для запуска миграций и условного запуска тестов
 ENTRYPOINT ["/entrypoint.sh"]
