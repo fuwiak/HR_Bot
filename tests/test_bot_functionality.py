@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 async def test_rag_search_works():
     """Проверка, что RAG поиск работает"""
     try:
-        from qdrant_helper import search_with_preview
+        from services.rag.qdrant_helper import search_with_preview
         
         # Пытаемся выполнить поиск
         results = await search_with_preview("подбор персонала", limit=3)
