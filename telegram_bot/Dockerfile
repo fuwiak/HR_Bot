@@ -29,7 +29,9 @@ COPY telegram_bot/ ./telegram_bot/
 COPY backend/ ./backend/
 COPY services/ ./services/
 COPY tests/ ./tests/
+COPY scripts/ ./scripts/
 COPY config.yaml .
+COPY config/ ./config/
 COPY templates/ ./templates/
 
 # Expose port for Telegram webhook
@@ -38,8 +40,10 @@ EXPOSE 8080
 # Опциональный запуск тестов перед стартом
 ENV RUN_TESTS=${RUN_TESTS:-false}
 
-# Создаем entrypoint скрипт для условного запуска тестов
+# Создаем entrypoint скрипт для инициализации Qdrant и условного запуска тестов
 RUN echo '#!/bin/sh\n\
+echo "🔧 Инициализация Qdrant коллекции..."\n\
+python scripts/init_qdrant.py || echo "⚠️ Инициализация Qdrant завершилась с ошибками, но продолжаем запуск"\n\
 if [ "$RUN_TESTS" = "true" ]; then\n\
     echo "🧪 Запуск тестов перед стартом приложения..."\n\
     python tests/run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\
