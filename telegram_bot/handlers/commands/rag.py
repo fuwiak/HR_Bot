@@ -15,7 +15,7 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         await update.message.reply_text(f"🔍 Ищу в базе знаний: *{query}*...", parse_mode='Markdown')
         
-        from qdrant_helper import get_qdrant_client, generate_embedding_async
+        from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
         from services.helpers.llm_helper import generate_with_fallback
         
         client = get_qdrant_client()
@@ -159,7 +159,7 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def rag_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /rag_stats - статистика RAG базы знаний"""
     try:
-        from qdrant_helper import get_collection_stats
+        from services.rag.qdrant_helper import get_collection_stats
         stats = await get_collection_stats()
         
         if "error" in stats:
@@ -185,7 +185,7 @@ async def rag_docs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     limit = int(context.args[0]) if context.args and context.args[0].isdigit() else 20
     
     try:
-        from qdrant_helper import list_documents
+        from services.rag.qdrant_helper import list_documents
         docs = await list_documents(limit=limit)
         
         if docs:
