@@ -4,9 +4,9 @@
 
 [build]
 builder = "DOCKERFILE"
-# По умолчанию используется Dockerfile.telegram для Telegram Bot сервиса
+# По умолчанию используется telegram/Dockerfile для Telegram Bot сервиса
 # Для других сервисов настройте в Dashboard: Settings → Build → Dockerfile Path
-dockerfilePath = "Dockerfile.telegram"
+dockerfilePath = "telegram/Dockerfile"
 
 [deploy]
 numReplicas = 1

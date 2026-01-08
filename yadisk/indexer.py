@@ -48,16 +48,16 @@ SUPPORTED_EXTENSIONS = {
 # ===================== IMPORTS =====================
 
 try:
-    from yandex_disk_helper import (
+    from services.helpers.yandex_disk_helper import (
         list_files, 
         download_file_content,
         get_file_type
     )
-    from qdrant_helper import (
+    from services.rag.qdrant_helper import (
         get_qdrant_client,
         generate_embedding_async
     )
-    from text_splitter import RecursiveCharacterTextSplitter
+    from services.helpers.text_splitter import RecursiveCharacterTextSplitter
     log.info("✅ Все модули импортированы")
 except ImportError as e:
     log.error(f"❌ Ошибка импорта: {e}")

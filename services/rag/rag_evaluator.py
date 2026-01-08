@@ -14,8 +14,8 @@ from pathlib import Path
 from dataclasses import dataclass, asdict
 from datetime import datetime
 import asyncio
-from rag_chain import RAGChain
-from qdrant_loader import QdrantLoader
+from services.rag.rag_chain import RAGChain
+from services.rag.qdrant_loader import QdrantLoader
 
 logger = logging.getLogger(__name__)
 

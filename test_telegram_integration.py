@@ -10,13 +10,13 @@ from telegram import Update, Message, User, Chat
 from telegram.ext import ContextTypes
 
 # Импорты для тестирования
-from scenario_workflows import (
+from services.agents.scenario_workflows import (
     process_hrtime_order,
     process_lead_email,
     process_telegram_lead,
     check_upcoming_deadlines
 )
-from integrate_scenarios import (
+from services.agents.integrate_scenarios import (
     monitor_hrtime_orders,
     monitor_emails,
     start_background_tasks

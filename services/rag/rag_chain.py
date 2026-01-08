@@ -5,8 +5,8 @@ RAG цепочка для генерации ответов на основе п
 
 import logging
 from typing import List, Dict, Any, Optional
-from qdrant_loader import QdrantLoader
-from llm_api import LLMClient, LLMResponse
+from services.rag.qdrant_loader import QdrantLoader
+from services.helpers.llm_api import LLMClient, LLMResponse
 import yaml
 
 logger = logging.getLogger(__name__)

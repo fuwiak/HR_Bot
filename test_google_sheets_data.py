@@ -14,7 +14,7 @@ load_dotenv()
 # Добавляем текущую директорию в путь для импорта
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from google_sheets_helper import get_services, get_masters
+from services.helpers.google_sheets_helper import get_services, get_masters
 
 def test_all_services_loaded():
     """Тест: проверяем, что все услуги загружены из Google Sheets"""

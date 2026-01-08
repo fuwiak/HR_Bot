@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
-from qdrant_loader import QdrantLoader
+from services.rag.qdrant_loader import QdrantLoader
 
 logging.basicConfig(
     level=logging.INFO,

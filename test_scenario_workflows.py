@@ -7,7 +7,7 @@ from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from datetime import datetime, timedelta
 
 # Импорты модулей для тестирования
-from scenario_workflows import (
+from services.agents.scenario_workflows import (
     process_hrtime_order,
     process_lead_email,
     process_telegram_lead,

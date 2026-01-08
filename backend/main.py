@@ -165,7 +165,7 @@ async def rag_search(request: Request):
             )
         
         # Импортируем qdrant_helper
-        from qdrant_helper import search_service
+        from services.rag.qdrant_helper import search_service
         
         results = search_service(query, limit=limit)
         

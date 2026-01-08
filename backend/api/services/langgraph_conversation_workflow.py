@@ -173,7 +173,7 @@ class LangGraphConversationWorkflow:
             
             # Импортируем qdrant_helper
             try:
-                from qdrant_helper import search_service
+                from services.rag.qdrant_helper import search_service
                 
                 # Выполняем поиск
                 limit = 5 if task_type == "pricing" else 3

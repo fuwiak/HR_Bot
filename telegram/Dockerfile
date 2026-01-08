@@ -1,4 +1,4 @@
-# Dockerfile для Backend API сервиса
+# Dockerfile для Telegram Bot сервиса
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -25,14 +25,14 @@ RUN pip install --upgrade pip && \
     pip install -r requirements.txt
 
 # Copy application code
-# Копируем все Python файлы и необходимые директории
-COPY *.py ./
-COPY templates/ ./templates/
-COPY dashboard_static/ ./dashboard_static/
+COPY telegram/ ./telegram/
+COPY backend/ ./backend/
+COPY services/ ./services/
 COPY config.yaml .
+COPY templates/ ./templates/ 2>/dev/null || true
 
-# Expose port for backend API
-EXPOSE 8081
+# Expose port for Telegram webhook
+EXPOSE 8080
 
 # Опциональный запуск тестов перед стартом
 ENV RUN_TESTS=${RUN_TESTS:-false}
@@ -43,9 +43,8 @@ if [ "$RUN_TESTS" = "true" ]; then\n\
     echo "🧪 Запуск тестов перед стартом приложения..."\n\
     python run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\
 fi\n\
-exec python -u web_interface.py\n\
+exec python -u telegram/app.py\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Используем entrypoint для условного запуска тестов
 ENTRYPOINT ["/entrypoint.sh"]
-

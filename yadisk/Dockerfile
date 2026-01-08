@@ -16,15 +16,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Копируем необходимые файлы
-COPY yadisk_indexer.py .
-COPY yandex_disk_helper.py .
-COPY qdrant_helper.py .
-COPY text_splitter.py .
-COPY llm_helper.py .
-COPY .env .
+COPY yadisk/ ./yadisk/
+COPY services/ ./services/
+COPY config.yaml .
 
 # Создаем директорию для логов
 RUN mkdir -p logs
 
 # Запускаем индексатор
-CMD ["python", "-u", "yadisk_indexer.py"]
+CMD ["python", "-u", "yadisk/indexer.py"]

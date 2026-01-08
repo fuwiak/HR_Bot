@@ -607,7 +607,7 @@ async def openrouter_chat(messages, use_system_message=False, system_content="")
         return "Извините, сервис временно недоступен."
 
 # ===================== GOOGLE SHEETS INTEGRATION ===========
-from google_sheets_helper import (
+from services.helpers.google_sheets_helper import (
     get_masters as get_masters_from_sheets,
     get_services as get_services_from_sheets,
     create_booking as create_booking_in_sheets,
@@ -619,7 +619,7 @@ from google_sheets_helper import (
 
 # ===================== QDRANT VECTOR DATABASE ===========
 try:
-    from qdrant_helper import search_service, index_services
+    from services.rag.qdrant_helper import search_service, index_services
     QDRANT_AVAILABLE = True
     log.info("✅ Qdrant модуль загружен")
 except ImportError as e:

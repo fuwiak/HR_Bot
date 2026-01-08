@@ -11,7 +11,7 @@ import uuid
 # Добавляем путь к модулям
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from google_sheets_helper import get_sheets_client, GOOGLE_SHEETS_SPREADSHEET_ID
+from services.helpers.google_sheets_helper import get_sheets_client, GOOGLE_SHEETS_SPREADSHEET_ID
 
 load_dotenv()
 

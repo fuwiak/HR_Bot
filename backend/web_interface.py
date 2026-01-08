@@ -8,7 +8,7 @@ from typing import Optional, TYPE_CHECKING
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from rag_chain import RAGChain
+    from services.rag.rag_chain import RAGChain
 
 from fastapi import FastAPI, Request, Form, HTTPException, UploadFile, File, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -100,12 +100,12 @@ app.add_middleware(AuthMiddleware)
 
 # ===================== IMPORTS =====================
 try:
-    from qdrant_helper import search_with_preview, get_collection_stats, list_documents
-    from lead_processor import generate_proposal, validate_lead, classify_request
-    from email_helper import send_email
+    from services.rag.qdrant_helper import search_with_preview, get_collection_stats, list_documents
+    from services.agents.lead_processor import generate_proposal, validate_lead, classify_request
+    from services.helpers.email_helper import send_email
     # Новая RAG система
-    from rag_chain import RAGChain
-    from qdrant_loader import QdrantLoader
+    from services.rag.rag_chain import RAGChain
+    from services.rag.qdrant_loader import QdrantLoader
     INTEGRATIONS_AVAILABLE = True
     RAG_AVAILABLE = True
 except ImportError as e:
@@ -123,7 +123,7 @@ def get_rag_chain():
         return None
     if _rag_chain_instance is None:
         try:
-            from rag_chain import RAGChain
+            from services.rag.rag_chain import RAGChain
             _rag_chain_instance = RAGChain()
         except Exception as e:
             log.error(f"❌ Ошибка инициализации RAGChain: {e}")

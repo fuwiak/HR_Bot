@@ -21,6 +21,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
+# Импорты RAG сервисов
+from services.rag.qdrant_loader import QdrantLoader
+from services.rag.rag_chain import RAGChain
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)

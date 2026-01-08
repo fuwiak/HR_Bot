@@ -6,7 +6,7 @@
 [service.telegram-bot]
 name = "Telegram Bot"
 description = "Основной Telegram бот с webhook поддержкой"
-dockerfile = "Dockerfile.telegram"
+dockerfile = "telegram/Dockerfile"
 port = 8080
 
 # Переменные окружения
@@ -20,7 +20,7 @@ PORT = "8080"
 [service.backend]
 name = "Backend API"
 description = "FastAPI backend с веб-интерфейсом и RAG Dashboard"
-dockerfile = "Dockerfile.backend"
+dockerfile = "backend/Dockerfile"
 port = 8081
 
 # Переменные окружения
@@ -33,7 +33,7 @@ SECRET_KEY = "required"
 [service.frontend]
 name = "Frontend"
 description = "Next.js frontend приложение"
-dockerfile = "Dockerfile.frontend"
+dockerfile = "frontend/Dockerfile"
 root_directory = "/"
 port = 3000
 
@@ -55,3 +55,17 @@ HRTIME_API_KEY = "optional"
 YANDEX_EMAIL = "optional"
 YANDEX_PASSWORD = "optional"
 
+# ===================== СЕРВИС 4: Yandex Disk Indexer =====================
+[service.yadisk-indexer]
+name = "Yandex Disk Indexer"
+description = "Фоновая индексация файлов с Яндекс.Диска в Qdrant"
+dockerfile = "yadisk/Dockerfile"
+port = 0  # Фоновый сервис без порта
+
+# Переменные окружения
+[service.yadisk-indexer.env]
+YADISK_TOKEN = "required"
+QDRANT_URL = "required"
+QDRANT_API_KEY = "optional"
+YADISK_SCAN_INTERVAL = "300"
+YADISK_MAX_FILE_SIZE = "50"

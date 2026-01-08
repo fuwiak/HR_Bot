@@ -9,8 +9,8 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 import operator
 
-from qdrant_helper import search_service
-from llm_api import LLMClient
+from services.rag.qdrant_helper import search_service
+from services.helpers.llm_api import LLMClient
 
 logger = logging.getLogger(__name__)
 

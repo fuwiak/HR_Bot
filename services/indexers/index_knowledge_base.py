@@ -49,7 +49,7 @@ except ImportError:
     PDF_AVAILABLE = False
     log.warning("⚠️ pypdf не установлен. Установите: pip install pypdf")
 
-from qdrant_helper import (
+from services.rag.qdrant_helper import (
     get_qdrant_client,
     generate_embedding,
     ensure_collection,
