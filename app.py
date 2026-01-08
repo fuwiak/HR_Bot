@@ -391,7 +391,7 @@ def get_email_subscribers() -> set:
         subscribers = set(db_get_email_subscribers())
     # 3. Fallback на файл
     if not subscribers:
-    subscribers = load_email_subscribers()
+        subscribers = load_email_subscribers()
     # Всегда добавляем администраторов
     subscribers.update(ADMIN_USER_IDS)
     return subscribers
