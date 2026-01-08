@@ -60,7 +60,7 @@ async def test_qdrant_connection():
     print("\n🔍 Тест 3: Подключение к Qdrant")
     print("-" * 60)
     
-    from qdrant_helper import get_qdrant_client
+    from services.rag.qdrant_helper import get_qdrant_client
     
     client = get_qdrant_client()
     
@@ -95,7 +95,7 @@ async def test_embedding():
     print("\n🔍 Тест 4: Создание эмбеддинга")
     print("-" * 60)
     
-    from qdrant_helper import generate_embedding_async
+    from services.rag.qdrant_helper import generate_embedding_async
     
     test_text = "Это тестовый текст для проверки эмбеддингов"
     

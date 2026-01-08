@@ -221,7 +221,7 @@ async def test_all_functions_are_async():
     
     # RAG функции
     try:
-        from qdrant_helper import search_with_preview, get_collection_stats, list_documents
+        from services.rag.qdrant_helper import search_with_preview, get_collection_stats, list_documents
         functions_to_check.extend([search_with_preview, get_collection_stats, list_documents])
     except ImportError:
         pass

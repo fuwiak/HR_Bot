@@ -104,7 +104,7 @@ class QdrantLoader:
         # Инициализация embeddings через API (как в qdrant_helper)
         # Используем асинхронную функцию напрямую, как в Telegram боте
         try:
-            from qdrant_helper import generate_embedding_async, EMBEDDING_DIMENSION
+            from services.rag.qdrant_helper import generate_embedding_async, EMBEDDING_DIMENSION
             self._qdrant_embedding_async = generate_embedding_async
             # Используем размерность из конфигурации
             self.embedding_dim = EMBEDDING_DIMENSION

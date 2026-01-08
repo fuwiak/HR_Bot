@@ -132,7 +132,7 @@ async def test_forsight_price_direct_search():
     print("ТЕСТ 2: ПРЯМОЙ ПОИСК УСЛУГИ В QDRANT")
     print("="*70 + "\n")
     
-    from qdrant_helper import search_service
+    from services.rag.qdrant_helper import search_service
     
     test_queries = [
         "Форсайт - сессия",
@@ -223,7 +223,7 @@ async def test_forsight_price_in_database():
     print("ТЕСТ 3: ПРОВЕРКА НАЛИЧИЯ УСЛУГИ В БАЗЕ ДАННЫХ")
     print("="*70 + "\n")
     
-    from qdrant_helper import get_qdrant_client
+    from services.rag.qdrant_helper import get_qdrant_client
     
     client = get_qdrant_client()
     if not client:

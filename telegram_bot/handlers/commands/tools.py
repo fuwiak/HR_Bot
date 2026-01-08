@@ -99,7 +99,7 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 2. Получаем релевантную информацию из RAG
         rag_context = ""
         try:
-            from qdrant_helper import get_qdrant_client, generate_embedding_async
+            from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
             
             client = get_qdrant_client()
             if client:

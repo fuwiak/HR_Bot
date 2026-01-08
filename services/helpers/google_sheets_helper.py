@@ -364,7 +364,7 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 import threading
                 def update_qdrant_index():
                     try:
-                        from qdrant_helper import index_services as qdrant_index
+                        from services.rag.qdrant_helper import index_services as qdrant_index
                         if qdrant_index(services):
                             log.info(f"✅ Индекс Qdrant обновлен автоматически ({len(services)} услуг)")
                     except Exception as e:
