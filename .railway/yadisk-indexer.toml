@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "yadisk/Dockerfile"
+dockerfilePath = "Dockerfile.yadisk"
 
 [deploy]
 numReplicas = 1
