@@ -107,17 +107,13 @@ except ImportError as e:
     LANGGRAPH_CONV_AVAILABLE = False
     log.warning(f"⚠️ LangGraph Conversation Workflow не доступен: {e}")
 
-# Email monitoring state (временно из старого файла)
-# TODO: Перенести в отдельный модуль
-import importlib.util
-spec = importlib.util.spec_from_file_location("app_old", Path(__file__).parent / "app_old.py")
-app_old = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(app_old)
-
-processed_email_ids = app_old.processed_email_ids
-email_check_interval = app_old.email_check_interval
-email_reply_state = app_old.email_reply_state
-email_monitor_task = app_old.email_monitor_task
+# Email monitoring state
+from telegram_bot.services.email_monitor import (
+    processed_email_ids,
+    email_check_interval,
+    email_reply_state,
+    email_monitor_task
+)
 
 # ===================== RUN BOT ========================
 def main():
