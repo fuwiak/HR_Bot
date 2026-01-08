@@ -1,6 +1,7 @@
 """
 Email команды
 """
+from typing import Dict
 from telegram import Update
 from telegram.ext import ContextTypes
 import logging
@@ -11,6 +12,7 @@ async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Команда /email_check - проверка новых писем с уведомлениями"""
     try:
         from services.helpers.email_helper import check_new_emails
+        from telegram_bot.services.email_monitor import processed_email_ids, send_email_notification
 
         await update.message.reply_text("⏳ Проверяю самое новое письмо...")
 
@@ -25,7 +27,7 @@ async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             # Проверяем, не обрабатывали ли уже это письмо
             if email_id and email_id not in processed_email_ids:
                 # Отправляем уведомление только о самом новом письме
-                await send_email_notification(app.bot, email_data)
+                await send_email_notification(context.bot, email_data)
                 processed_email_ids.add(email_id)
                 
                 await update.message.reply_text(
@@ -93,6 +95,8 @@ email_cache: Dict[str, Dict] = {}
 async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /unsubscribe - отписаться от уведомлений о почте"""
     try:
+        from telegram_bot.storage.email_subscribers import remove_email_subscriber
+        
         user_id = update.message.from_user.id
         username = update.message.from_user.username or "без username"
         
