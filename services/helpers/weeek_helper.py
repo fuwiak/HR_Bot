@@ -606,7 +606,7 @@ async def get_tasks(
     if project_id:
         params["projectId"] = project_id
     if completed is not None:
-        params["completed"] = str(completed).lower()
+        params["completed"] = completed  # Передаем булево значение напрямую
     if board_id:
         params["boardId"] = board_id
     if board_column_id:

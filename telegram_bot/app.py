@@ -599,7 +599,7 @@ async def openrouter_chat(messages, use_system_message=False, system_content="")
     Использует DeepSeek (primary) с fallback на GigaChat
     """
     try:
-        from llm_helper import generate_with_fallback
+        from services.helpers.llm_helper import generate_with_fallback
         return await generate_with_fallback(
             messages=messages,
             use_system_message=use_system_message,
@@ -3778,7 +3778,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Используем generate_with_fallback для надежности
                 try:
-                    from llm_helper import generate_with_fallback
+                    from services.helpers.llm_helper import generate_with_fallback
                     system_message = """Ты AI-ассистент HR консультанта Анастасии Новосёловой. Отвечай профессионально и по делу.
 
 КРИТИЧЕСКИ ВАЖНО - ПРАВИЛА ОБЩЕНИЯ:
@@ -4139,7 +4139,7 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text(f"🔍 Ищу в базе знаний: *{query}*...", parse_mode='Markdown')
         
         from qdrant_helper import get_qdrant_client, generate_embedding_async
-        from llm_helper import generate_with_fallback
+        from services.helpers.llm_helper import generate_with_fallback
         
         client = get_qdrant_client()
         if not client:
@@ -4517,7 +4517,7 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             log.warning(f"⚠️ Ошибка RAG поиска: {e}")
         
         # 3. Генерируем суммаризацию через LLM
-        from llm_helper import generate_with_fallback
+        from services.helpers.llm_helper import generate_with_fallback
         
         prompt = f"""Создай подробную суммаризацию проекта на основе следующих данных:
 

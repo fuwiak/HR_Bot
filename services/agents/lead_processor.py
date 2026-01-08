@@ -10,7 +10,7 @@ log = logging.getLogger()
 
 # Импорты для LLM и RAG
 try:
-    from llm_helper import generate_with_fallback
+    from services.helpers.llm_helper import generate_with_fallback
     from qdrant_helper import search_service
     LLM_AVAILABLE = True
 except ImportError:

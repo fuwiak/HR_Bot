@@ -10,7 +10,7 @@ log = logging.getLogger()
 
 # Импорты для LLM
 try:
-    from llm_helper import generate_with_fallback
+    from services.helpers.llm_helper import generate_with_fallback
     LLM_AVAILABLE = True
 except ImportError:
     LLM_AVAILABLE = False
