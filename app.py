@@ -2119,8 +2119,8 @@ async def reset_user_session(query: CallbackQuery):
             # Записи в PostgreSQL не очищаем (они хранятся в Google Sheets)
             pass
         else:
-        if user_id in UserRecords:
-            UserRecords[user_id] = []
+            if user_id in UserRecords:
+                UserRecords[user_id] = []
         
         # Очищаем частично собранные данные для записи
         if REDIS_AVAILABLE_IMPORT:
