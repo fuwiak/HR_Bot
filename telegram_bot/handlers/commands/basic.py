@@ -68,6 +68,31 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+async def show_main_menu(query):
+    """Показать главное меню"""
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    
+    keyboard = [
+        [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
+        [InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")],
+        [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
+        [InlineKeyboardButton("📧 Ответить на последний мейл", callback_data="email_reply_last")],
+        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
+        [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(
+        "🏠 *Главное меню*\n\n"
+        "📚 *База знаний* - поиск, документы, статистика\n"
+        "📋 *Проекты* - управление проектами и задачами\n"
+        "🛠 *Инструменты* - генерация КП, суммаризация\n"
+        "📧 *Ответить на последний мейл* - быстрый ответ на последнее письмо\n"
+        "💬 *Чат с AI* - общение с AI-помощником\n"
+        "❓ *Помощь* - справочная информация",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /status - статус проектов"""
     try:
