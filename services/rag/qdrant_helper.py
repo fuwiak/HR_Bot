@@ -7,10 +7,20 @@ import os
 import json
 import logging
 import asyncio
+import sys
 from typing import List, Dict, Optional, Tuple, Any
 from datetime import datetime
+from pathlib import Path
 import hashlib
 import aiohttp
+
+# Добавляем корневую директорию проекта в sys.path для импорта config
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+# Импортируем config loader
+from config import load_config
 
 # Получаем логгер, но не используем до настройки логирования в основном приложении
 def get_logger():
@@ -32,41 +42,30 @@ except ImportError:
     QDRANT_AVAILABLE = False
     log.warning("⚠️ Qdrant библиотеки не установлены. Установите: pip install qdrant-client")
 
-# Конфигурация для эмбеддингов через OpenRouter (Qwen3-Embedding-8B) или OpenAI
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+# Конфигурация для эмбеддингов из config.yaml
+_llm_config = load_config("llm")
+_embeddings_config = _llm_config.get("llm", {}).get("embeddings", {})
+
+OPENROUTER_API_KEY = _embeddings_config.get("api_key") or os.getenv("OPENROUTER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 EMBEDDING_API_KEY = OPENROUTER_API_KEY or OPENAI_API_KEY  # Приоритет OpenRouter
 
-# ВАЖНО: Коллекция в Qdrant создана с размерностью 1536
+# ВАЖНО: Коллекция в Qdrant создана с размерностью из конфига
 # Поэтому всегда используем модель с этой размерностью или дополняем вектор
-TARGET_DIMENSION = 1536  # Размерность коллекции в Qdrant
+TARGET_DIMENSION = _qdrant_settings.get("target_dimension", 1536)  # Размерность коллекции в Qdrant
 
-# Определяем URL и модель в зависимости от того, какой API ключ используется
+# Определяем URL и модель из конфига
+EMBEDDING_API_URL = _embeddings_config.get("api_url") or os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
+EMBEDDING_MODEL = _embeddings_config.get("model") or os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")
+EMBEDDING_DIMENSION = _embeddings_config.get("dimension") or int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))
+
 if OPENROUTER_API_KEY:
-    # Используем OpenRouter с Qwen3-Embedding-8B (приоритет)
-    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")
-    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))  # Целевая размерность
     log.info(f"🔧 Используется OpenRouter (модель: {EMBEDDING_MODEL})")
     log.info(f"🔧 Вектора будут дополнены до {TARGET_DIMENSION} для совместимости с Qdrant")
 elif OPENAI_API_KEY:
-    # Используем OpenAI напрямую (если нет OpenRouter)
-    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://api.openai.com/v1/embeddings")
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))
     log.info(f"🔧 Используется OpenAI API для эмбеддингов (модель: {EMBEDDING_MODEL}, размерность: {EMBEDDING_DIMENSION})")
-elif False:  # Старый код OpenRouter
-    # Используем OpenRouter с Qwen3-Embedding-8B (нужно дополнять до 1536)
-    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://openrouter.ai/api/v1/embeddings")
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "qwen/qwen3-embedding-8b")
-    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))  # Целевая размерность
-    log.warning(f"⚠️ Используется OpenRouter (модель: {EMBEDDING_MODEL}, нативная размерность: 1024)")
-    log.warning(f"⚠️ Вектора будут дополнены до {TARGET_DIMENSION} для совместимости с Qdrant")
 else:
-    # Значения по умолчанию
-    EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "https://api.openai.com/v1/embeddings")
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-    EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))
+    log.warning(f"⚠️ API ключ для эмбеддингов не установлен")
 
 # Конфигурация Qdrant из config.yaml
 from config import load_config
@@ -380,7 +379,7 @@ def index_services(services: List[Dict]) -> bool:
         log.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
 
-def search_service(query: str, limit: int = 3) -> List[Dict]:
+def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
     """
     Поиск в базе знаний по семантическому запросу в Qdrant
     (обновлено для работы с базой знаний консультанта)

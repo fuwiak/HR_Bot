@@ -30,32 +30,45 @@ class LLMClient:
     
     def __init__(
         self,
-        primary_provider: str = "openrouter",
-        primary_model: str = "deepseek/deepseek-chat",
+        primary_provider: Optional[str] = None,
+        primary_model: Optional[str] = None,
         fallback_chain: Optional[List[Dict[str, str]]] = None,
-        confidence_threshold: float = 0.7,
-        timeout: int = 30
+        confidence_threshold: Optional[float] = None,
+        timeout: Optional[int] = None
     ):
-        self.primary_provider = primary_provider
-        self.primary_model = primary_model
-        self.confidence_threshold = confidence_threshold
-        self.timeout = timeout
+        # Загружаем конфигурацию из config.yaml
+        from pathlib import Path
+        import sys
+        project_root = Path(__file__).parent.parent.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        
+        from config import load_config
+        _llm_config = load_config("llm")
+        _llm_settings = _llm_config.get("llm", {})
+        
+        # Используем значения из конфига или переданные параметры
+        self.primary_provider = primary_provider or _llm_settings.get("primary_provider", "openrouter")
+        self.primary_model = primary_model or _llm_settings.get("primary_model", "deepseek/deepseek-chat")
+        self.confidence_threshold = confidence_threshold or _llm_settings.get("confidence_threshold", 0.7)
+        self.timeout = timeout or _llm_settings.get("openrouter", {}).get("timeout", 30)
         
         # Цепочка fallback моделей (только OpenRouter)
         if fallback_chain is None:
-            # Дефолтная цепочка fallback (только OpenRouter модели)
-            self.fallback_chain = [
+            # Используем fallback из конфига
+            self.fallback_chain = _llm_settings.get("fallback_chain", [
                 {"provider": "openrouter", "model": "deepseek/deepseek-chat"},
                 {"provider": "openrouter", "model": "meta-llama/llama-3.3-70b-instruct"}
-            ]
+            ])
         else:
             self.fallback_chain = fallback_chain
         
-        # Загружаем конфигурацию из ENV (только OpenRouter)
-        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        # Загружаем конфигурацию из конфига или ENV
+        _openrouter_config = _llm_settings.get("openrouter", {})
+        openrouter_key = _openrouter_config.get("api_key") or os.getenv("OPENROUTER_API_KEY")
         self.openrouter_api_key = openrouter_key.strip() if openrouter_key else None
         
-        openrouter_url = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
+        openrouter_url = _openrouter_config.get("api_url") or os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
         self.openrouter_api_url = openrouter_url.strip()
         
         # Для локального qroq/ollama можно установить через ENV
