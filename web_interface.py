@@ -469,6 +469,42 @@ async def rag_query(request_data: dict):
     if not user_query:
         raise HTTPException(status_code=400, detail="Поле 'query' обязательно")
     
+    # Проверяем, является ли запрос запросом о ценах
+    is_pricing_query = any(kw in user_query.lower() for kw in [
+        "цена", "стоимость", "стоит", "рублей", "руб", "прайс", "сколько",
+        "коммерческое предложение", "кп", "расценки", "тарифы"
+    ])
+    
+    # Если это запрос о ценах, используем LangGraph
+    if is_pricing_query:
+        try:
+            from rag_langgraph import query_with_langgraph
+            log.info("💰 Используем LangGraph RAG для запроса о ценах")
+            
+            thread_id = request_data.get("thread_id", "default")
+            result = await query_with_langgraph(user_query, thread_id=thread_id)
+            
+            return JSONResponse({
+                "status": "success",
+                "query": user_query,
+                "answer": result.get("answer", ""),
+                "sources": result.get("sources", []),
+                "query_type": result.get("query_type", "pricing"),
+                "validated": result.get("validated", False),
+                "validation_errors": result.get("validation_errors", []),
+                "retry_count": result.get("retry_count", 0),
+                "pricing_info": result.get("pricing_info", {}),
+                "metadata": result.get("metadata", {}),
+                "method": "langgraph",
+                "timestamp": datetime.now().isoformat()
+            })
+        except ImportError:
+            log.warning("⚠️ LangGraph не установлен, используем стандартный RAG")
+        except Exception as e:
+            log.error(f"❌ Ошибка LangGraph RAG: {e}")
+            # Fallback на стандартный RAG
+    
+    # Стандартный RAG для не-ценовых запросов или fallback
     top_k = request_data.get("top_k", 5)
     min_score = request_data.get("min_score", None)
     
@@ -495,6 +531,7 @@ async def rag_query(request_data: dict):
             "confidence": result.get("confidence", 0.0),
             "tokens_used": result.get("tokens_used", 0),
             "error": result.get("error"),
+            "method": "standard",
             "timestamp": datetime.now().isoformat()
         })
     except Exception as e:

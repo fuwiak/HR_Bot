@@ -1215,11 +1215,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📊 Статистика RAG", callback_data="rag_stats")],
             [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
         ]
-        await query.edit_message_text(
+        message_text = (
             "📚 *База знаний*\n\n"
             "🔍 *Поиск* - семантический поиск по методикам, кейсам, шаблонам\n"
             "📚 *Документы* - список всех документов в базе\n"
-            "📊 *Статистика* - информация о базе знаний",
+            "📊 *Статистика* - информация о базе знаний"
+        )
+        await query.edit_message_text(
+            message_text,
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -3391,8 +3394,50 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 rag_context = ""
                 weeek_context = ""
                 
+                # Проверяем, является ли запрос запросом о ценах
+                is_pricing_query = any(kw in text.lower() for kw in [
+                    "цена", "стоимость", "стоит", "рублей", "руб", "прайс", "сколько",
+                    "коммерческое предложение", "кп", "расценки", "тарифы"
+                ])
+                
+                # Если это запрос о ценах, используем LangGraph для точного извлечения
+                if is_pricing_query:
+                    try:
+                        from rag_langgraph import query_with_langgraph
+                        log.info("💰 Обнаружен запрос о ценах, используем LangGraph RAG")
+                        
+                        # Используем LangGraph для точного извлечения цен
+                        langgraph_result = await query_with_langgraph(text, thread_id=str(user_id))
+                        
+                        if langgraph_result and langgraph_result.get("answer"):
+                            answer = langgraph_result["answer"]
+                            validated = langgraph_result.get("validated", False)
+                            
+                            # Формируем ответ с информацией о валидации
+                            response_text = answer
+                            
+                            if not validated and langgraph_result.get("validation_errors"):
+                                log.warning(f"⚠️ Валидация цен не прошла: {langgraph_result['validation_errors']}")
+                            
+                            # Добавляем источники если есть
+                            sources = langgraph_result.get("sources", [])
+                            if sources:
+                                response_text += f"\n\n📋 Найдено услуг: {len(sources)}"
+                            
+                            await update.message.reply_text(response_text)
+                            log.info(f"✅ Ответ через LangGraph отправлен (валидация: {validated})")
+                            return
+                        else:
+                            log.warning("⚠️ LangGraph не вернул ответ, используем стандартный RAG")
+                    except ImportError:
+                        log.warning("⚠️ LangGraph не установлен, используем стандартный RAG")
+                    except Exception as e:
+                        log.error(f"❌ Ошибка LangGraph RAG: {e}")
+                        import traceback
+                        log.error(f"❌ Traceback: {traceback.format_exc()}")
+                
                 try:
-                    # 1. Поиск в Qdrant (RAG)
+                    # 1. Поиск в Qdrant (RAG) - стандартный для не-ценовых запросов
                     if QDRANT_AVAILABLE:
                         from qdrant_helper import get_qdrant_client, generate_embedding_async
                         
