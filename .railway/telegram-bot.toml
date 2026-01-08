@@ -1,9 +1,6 @@
-# Railway конфигурация для Telegram Bot сервиса
-# Этот файл используется Railway CLI для автоматической настройки
-
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.telegram"
+dockerfilePath = "telegram/Dockerfile"
 
 [deploy]
 numReplicas = 1

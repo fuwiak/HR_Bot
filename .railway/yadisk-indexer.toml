@@ -1,8 +1,8 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.yadisk"
+dockerfilePath = "yadisk/Dockerfile"
 
 [deploy]
-startCommand = "python -u yadisk_indexer.py"
+numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10

@@ -1,9 +1,6 @@
-# Railway конфигурация для Backend сервиса
-# Этот файл используется Railway CLI для автоматической настройки
-
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.backend"
+dockerfilePath = "backend/Dockerfile"
 
 [deploy]
 numReplicas = 1

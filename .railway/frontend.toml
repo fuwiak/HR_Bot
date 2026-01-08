@@ -1,9 +1,6 @@
-# Railway конфигурация для Frontend сервиса
-# Этот файл используется Railway CLI для автоматической настройки
-
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.frontend"
+dockerfilePath = "frontend/Dockerfile"
 
 [deploy]
 numReplicas = 1
