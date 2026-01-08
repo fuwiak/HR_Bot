@@ -1,0 +1,205 @@
+"""
+Rag команды
+"""
+from telegram import Update
+from telegram.ext import ContextTypes
+from telegram_bot.nlp.text_utils import remove_markdown
+import logging
+
+log = logging.getLogger(__name__)
+
+async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /rag_search - поиск в RAG базе знаний с генерацией ответа"""
+    query = " ".join(context.args) if context.args else "помощь"
+    
+    try:
+        await update.message.reply_text(f"🔍 Ищу в базе знаний: *{query}*...", parse_mode='Markdown')
+        
+        from qdrant_helper import get_qdrant_client, generate_embedding_async
+        from services.helpers.llm_helper import generate_with_fallback
+        
+        client = get_qdrant_client()
+        if not client:
+            await update.message.reply_text("❌ Qdrant недоступен")
+            return
+        
+        # Генерируем эмбеддинг для запроса
+        query_embedding = await generate_embedding_async(query)
+        if not query_embedding:
+            await update.message.reply_text("❌ Ошибка создания эмбеддинга")
+            return
+        
+        # Ищем в Qdrant
+        search_results = client.query_points(
+            collection_name="hr2137_bot_knowledge_base",
+            query=query_embedding,
+            limit=5
+        )
+        
+        if not search_results.points:
+            await update.message.reply_text(f"❌ По запросу '{query}' ничего не найдено в базе знаний.")
+            return
+        
+        # Собираем результаты и источники
+        results = []
+        sources = {}
+        
+        for point in search_results.points:
+            payload = point.payload if hasattr(point, 'payload') else {}
+            score = point.score if hasattr(point, 'score') else 0.0
+            
+            # Извлекаем информацию о документе
+            file_name = payload.get("file_name", "Документ")
+            file_path = payload.get("file_path", "")
+            text = payload.get("text", "")
+            source = payload.get("source", "")
+            
+            if text:  # Только если есть текст
+                results.append({
+                    "file_name": file_name,
+                    "text": text,
+                    "file_path": file_path,
+                    "source": source,
+                    "score": score
+                })
+                
+                # Собираем уникальные источники
+                if file_name and file_name not in sources:
+                    sources[file_name] = file_path
+        
+        if not results:
+            await update.message.reply_text(f"❌ Найдены документы, но без текстового содержимого.")
+            return
+        
+        # Формируем контекст для LLM
+        context = "\n\n".join([
+            f"Источник: {r['file_name']}\n{r['text'][:500]}"
+            for r in results[:3]  # Берем топ-3 для контекста
+        ])
+        
+        # Генерируем ответ через LLM
+        prompt = f"""На основе следующих документов из базы знаний ответь на вопрос пользователя.
+
+Вопрос: {query}
+
+Документы:
+{context}
+
+Ответь подробно и структурированно, ссылаясь на источники. Если информации недостаточно, укажи это.
+
+ВАЖНО: Не используй Markdown форматирование (**, ###, __ и т.д.). Пиши обычным текстом."""
+        
+        answer = await generate_with_fallback(
+            messages=[{"role": "user", "content": prompt}],
+            use_system_message=True,
+            system_content="Ты AI-ассистент HR консультанта. Отвечай профессионально и по делу на основе предоставленных документов.",
+            max_tokens=1000,
+            temperature=0.7
+        )
+        
+        # Убираем Markdown из ответа
+        if answer:
+            answer_clean = remove_markdown(answer)
+        else:
+            answer_clean = "Не удалось сгенерировать ответ. Проверьте доступность LLM."
+        
+        # Формируем ответ пользователю
+        text = f"🔍 Результаты поиска: {query}\n\n"
+        
+        # Ответ на основе документов
+        if answer_clean:
+            text += f"💡 Ответ на основе документов:\n\n"
+            text += f"{answer_clean}\n\n"
+        
+        # Источники
+        if sources:
+            text += f"📚 Источники ({len(sources)}):\n\n"
+            for i, (name, path) in enumerate(sources.items(), 1):
+                text += f"{i}. 📄 {name}\n"
+                if path:
+                    text += f"   {path}\n"
+                text += "\n"
+        
+        # Релевантные фрагменты
+        text += f"\n📋 Релевантные фрагменты:\n\n"
+        for i, r in enumerate(results[:3], 1):
+            text += f"{i}. {r['file_name']} (релевантность: {r['score']:.2f})\n"
+            snippet = r['text'][:200] + "..." if len(r['text']) > 200 else r['text']
+            text += f"   {snippet}\n\n"
+        
+        # Если сообщение слишком длинное, разбиваем на части
+        max_length = 4000
+        if len(text) > max_length:
+            # Разбиваем на части
+            parts = []
+            current_part = ""
+            
+            lines = text.split('\n')
+            for line in lines:
+                if len(current_part) + len(line) + 1 > max_length:
+                    parts.append(current_part)
+                    current_part = ""
+                current_part += line + "\n"
+            
+            if current_part:
+                parts.append(current_part)
+            
+            # Отправляем все части
+            for part in parts:
+                await update.message.reply_text(part)
+        else:
+            await update.message.reply_text(text)
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка поиска в RAG: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        await update.message.reply_text(f"❌ Ошибка поиска: {str(e)}")
+
+async def rag_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /rag_stats - статистика RAG базы знаний"""
+    try:
+        from qdrant_helper import get_collection_stats
+        stats = await get_collection_stats()
+        
+        if "error" in stats:
+            await update.message.reply_text(f"❌ Ошибка: {stats['error']}")
+            return
+        
+        text = f"📊 *Статистика RAG базы знаний*\n\n"
+        text += f"Коллекция: `{stats.get('collection_name', 'N/A')}`\n"
+        text += f"Существует: {'✅' if stats.get('exists') else '❌'}\n"
+        
+        if stats.get('exists'):
+            text += f"Документов: {stats.get('points_count', 0)}\n"
+            text += f"Размерность векторов: {stats.get('vector_size', 'N/A')}\n"
+            text += f"Метрика расстояния: {stats.get('distance', 'N/A')}\n"
+        
+        await update.message.reply_text(text, parse_mode='Markdown')
+    except Exception as e:
+        log.error(f"❌ Ошибка получения статистики: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+async def rag_docs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /rag_docs - список документов в базе знаний"""
+    limit = int(context.args[0]) if context.args and context.args[0].isdigit() else 20
+    
+    try:
+        from qdrant_helper import list_documents
+        docs = await list_documents(limit=limit)
+        
+        if docs:
+            text = f"📚 *Документы в базе знаний* (показано: {len(docs)})\n\n"
+            
+            for i, doc in enumerate(docs[:limit], 1):
+                title = doc.get("title", "Без названия")
+                category = doc.get("category", "Неизвестно")
+                text += f"*{i}. {title}*\n"
+                text += f"   Категория: {category}\n\n"
+            
+            await update.message.reply_text(text, parse_mode='Markdown')
+        else:
+            await update.message.reply_text("❌ В базе знаний нет документов.")
+    except Exception as e:
+        log.error(f"❌ Ошибка получения списка документов: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
