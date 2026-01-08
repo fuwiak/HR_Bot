@@ -304,6 +304,22 @@ except ImportError as e:
     def sync_all_to_postgres(*args, **kwargs): return None
     def clear_user_memory_redis(*args, **kwargs): return False
 
+# Попытка импорта LangGraph Conversation Workflow
+try:
+    from backend.api.services.langgraph_conversation_workflow import (
+        get_conversation_workflow,
+        query_with_conversation_workflow,
+        LANGGRAPH_AVAILABLE as LANGGRAPH_CONV_AVAILABLE
+    )
+    log.info("✅ LangGraph Conversation Workflow загружен")
+except ImportError as e:
+    LANGGRAPH_CONV_AVAILABLE = False
+    log.warning(f"⚠️ LangGraph Conversation Workflow не доступен: {e}")
+    async def query_with_conversation_workflow(*args, **kwargs):
+        return {"response": "LangGraph недоступен", "error": "not_available"}
+    def get_conversation_workflow():
+        return None
+
 # ===================== EMAIL MONITORING =====================
 # ID администраторов для уведомлений о новых письмах (можно указать несколько через запятую)
 ADMIN_USER_IDS_STR = os.getenv("TELEGRAM_ADMIN_IDS", os.getenv("TELEGRAM_ADMIN_ID", "5305427956"))
@@ -3091,14 +3107,15 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Fallback на память
         if not REDIS_AVAILABLE_IMPORT and not DATABASE_AVAILABLE:
             UserPhone[user_id] = text
-            await update.message.reply_text(
-                f"✅ *Номер телефона {text} сохранен!*\n\n"
-                f"Теперь вы можете создавать записи.\n"
-                f"Напишите `хочу записаться` для начала.",
-                parse_mode='Markdown'
-            )
-            response_sent = True
-            return 
+        
+        await update.message.reply_text(
+            f"✅ *Номер телефона {text} сохранен!*\n\n"
+            f"Теперь вы можете создавать записи.\n"
+            f"Напишите `хочу записаться` для начала.",
+            parse_mode='Markdown'
+        )
+        response_sent = True
+        return 
 
     # БЫСТРАЯ ПРОВЕРКА: Если есть мастер, время и услуга/цена - это точно запрос на запись
     # Это работает лучше чем сложный классификатор для очевидных случаев
