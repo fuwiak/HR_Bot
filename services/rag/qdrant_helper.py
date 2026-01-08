@@ -62,6 +62,4 @@ def index_message_to_qdrant(text: str, metadata: Optional[Dict[str, Any]] = None
         
     except Exception as e:
         log.error(f"❌ Ошибка индексации сообщения в Qdrant: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
