@@ -13,7 +13,7 @@ import requests
 import aiohttp
 from dotenv import load_dotenv
 from telegram import Update, Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode
+from telegram.constants import ParseMode, ChatAction
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -3391,7 +3391,6 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg = CONSULTING_PROMPT.replace("{{history}}", get_history(user_id)).replace("{{message}}", text)
                 
                 # Показываем статус "печатает..." для всех запросов
-                from telegram import ChatAction
                 await context.bot.send_chat_action(
                     chat_id=update.effective_chat.id,
                     action=ChatAction.TYPING
@@ -3411,14 +3410,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if is_pricing_query:
                     try:
                         from rag_langgraph import query_with_langgraph
-                        from telegram import ChatAction
                         log.info("💰 Обнаружен запрос о ценах, используем LangGraph RAG")
-                        
-                        # Показываем статус "печатает..." (typing indicator)
-                        await context.bot.send_chat_action(
-                            chat_id=update.effective_chat.id,
-                            action=ChatAction.TYPING
-                        )
                         
                         # Используем LangGraph для точного извлечения цен
                         langgraph_result = await query_with_langgraph(text, thread_id=str(user_id))
@@ -3570,6 +3562,12 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if has_said_goodbye_before and not is_pure_goodbye:
                             system_message += "\n\nВАЖНО: Ты уже прощался с пользователем ранее. НЕ повторяй прощание в ответе."
                     
+                    # Обновляем typing indicator перед генерацией ответа (может занять время)
+                    await context.bot.send_chat_action(
+                        chat_id=update.effective_chat.id,
+                        action=ChatAction.TYPING
+                    )
+                    
                     answer = await generate_with_fallback([{"role": "user", "content": msg}], use_system_message=True, system_content=system_message)
                 except Exception as e:
                     log.error(f"❌ Ошибка вызова generate_with_fallback: {e}")
@@ -3591,6 +3589,13 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         answer = remove_markdown(answer)
     
     add_memory(user_id, "assistant", answer)
+    
+    # Обновляем typing indicator перед отправкой ответа
+    if answer and not response_sent:
+        await context.bot.send_chat_action(
+            chat_id=update.effective_chat.id,
+            action=ChatAction.TYPING
+        )
     
     # КРИТИЧЕСКОЕ: Проверяем ответ AI на подтверждение записи
     # Если AI подтвердил запись (даже если is_booking() вернул False), создаем запись автоматически
