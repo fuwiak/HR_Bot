@@ -34,8 +34,8 @@ async def run_test_suite():
     
     # Список тестов для запуска
     test_files = [
-        ("test_forsight_price", "test_forsight_price.py"),
-        ("test_langgraph_rag", "test_langgraph_rag.py"),
+        ("test_forsight_price", "tests/test_forsight_price.py"),
+        ("test_langgraph_rag", "tests/test_langgraph_rag.py"),
     ]
     
     logger.info("="*70)
@@ -61,7 +61,9 @@ async def run_test_suite():
         try:
             # Импортируем и запускаем тест
             if test_name == "test_forsight_price":
-                from test_forsight_price import main as test_main
+                import sys
+                sys.path.insert(0, str(Path(__file__).parent))
+                from tests.test_forsight_price import main as test_main
                 passed = await test_main()
             elif test_name == "test_langgraph_rag":
                 # Для test_langgraph_rag нужно запустить через asyncio

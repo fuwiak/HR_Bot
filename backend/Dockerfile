@@ -27,6 +27,7 @@ RUN pip install --upgrade pip && \
 # Copy application code
 COPY backend/ ./backend/
 COPY services/ ./services/
+COPY tests/ ./tests/
 COPY config.yaml .
 COPY templates/ ./templates/
 COPY dashboard_static/ ./dashboard_static/
@@ -41,7 +42,7 @@ ENV RUN_TESTS=${RUN_TESTS:-false}
 RUN echo '#!/bin/sh\n\
 if [ "$RUN_TESTS" = "true" ]; then\n\
     echo "🧪 Запуск тестов перед стартом приложения..."\n\
-    python run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\
+    python tests/run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\
 fi\n\
 exec python -u backend/web_interface.py\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh

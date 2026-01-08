@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from app import (
+from telegram.app import (
     upload_document_command,
     handle_document,
     extract_text_from_file,

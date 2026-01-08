@@ -46,7 +46,7 @@ def check_telegram_bot_async():
     print("\n🔍 Проверка Telegram бота...")
     
     try:
-        import app
+        import telegram.app as app
         
         # Проверяем основные handlers
         handlers_to_check = [

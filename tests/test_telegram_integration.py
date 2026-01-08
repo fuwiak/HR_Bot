@@ -397,7 +397,7 @@ async def test_telegram_bot_commands_integration():
     """Тест: проверка что команды бота работают async"""
     
     # Проверяем, что команды используют async
-    import app
+    import telegram.app as app
     import inspect
     
     # Проверяем основные команды
