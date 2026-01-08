@@ -30,7 +30,10 @@ COPY backend/ ./backend/
 COPY services/ ./services/
 COPY tests/ ./tests/
 COPY config.yaml .
+COPY config/ ./config/
 COPY templates/ ./templates/
+COPY alembic.ini .
+COPY alembic/ ./alembic/
 
 # Expose port for Telegram webhook
 EXPOSE 8080
@@ -39,8 +42,10 @@ EXPOSE 8080
 ARG RUN_TESTS=false
 ENV RUN_TESTS=${RUN_TESTS}
 
-# Создаем entrypoint скрипт для условного запуска тестов
+# Создаем entrypoint скрипт для запуска миграций и условного запуска тестов
 RUN echo '#!/bin/sh\n\
+echo "🔄 Запуск миграций Alembic..."\n\
+alembic upgrade head || echo "⚠️ Миграции завершились с ошибками, но продолжаем запуск"\n\
 if [ "$RUN_TESTS" = "true" ]; then\n\
     echo "🧪 Запуск тестов перед стартом приложения..."\n\
     python tests/run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\

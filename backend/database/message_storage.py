@@ -10,7 +10,12 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend.database.models_sqlalchemy import TelegramUser, TelegramMessage, get_session, get_engine
 from services.helpers.redis_helper import get_redis_client, add_memory_redis
-from services.rag.qdrant_helper import index_message_to_qdrant
+try:
+    from services.rag.qdrant_helper import index_message_to_qdrant
+except ImportError:
+    log.warning("⚠️ qdrant_helper не доступен, индексация в Qdrant отключена")
+    def index_message_to_qdrant(*args, **kwargs):
+        return False
 
 log = logging.getLogger(__name__)
 
