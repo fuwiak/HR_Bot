@@ -69,36 +69,28 @@ else:
     EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))
 
 # Конфигурация Qdrant
-# Приоритет подключения: Railway Qdrant -> Qdrant Cloud -> Локальный сервер
+# Используем только Railway Qdrant (без Qdrant Cloud)
 
-# Railway Qdrant сервис (если доступен)
-RAILWAY_QDRANT_HOST = os.getenv("QDRANT_HOST") or os.getenv("RAILWAY_PRIVATE_DOMAIN")
-RAILWAY_QDRANT_PORT = os.getenv("QDRANT_PORT") or os.getenv("PORT", "6333")
+# Railway Qdrant сервис
+# Railway предоставляет переменные для подключения к другим сервисам
+# Для Qdrant сервиса нужно использовать его private domain
+RAILWAY_QDRANT_HOST = os.getenv("QDRANT_HOST")  # Должен быть установлен в Railway
+RAILWAY_QDRANT_PORT = os.getenv("QDRANT_PORT", "6333")  # Порт Qdrant сервиса
 RAILWAY_QDRANT_URL = None
 
 # Проверяем Railway Qdrant сервис
-if RAILWAY_QDRANT_HOST and RAILWAY_QDRANT_PORT:
+if RAILWAY_QDRANT_HOST:
     # Railway предоставляет внутренний домен для сервисов
     RAILWAY_QDRANT_URL = f"http://{RAILWAY_QDRANT_HOST}:{RAILWAY_QDRANT_PORT}"
     log.info(f"🔧 Обнаружен Railway Qdrant сервис: {RAILWAY_QDRANT_URL}")
-
-# Qdrant Cloud (если есть API ключ)
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", None)
-QDRANT_CLOUD_URL = os.getenv("QDRANT_URL", None)
-
-# Определяем URL для подключения (приоритет: Railway -> Cloud -> Локальный)
-if RAILWAY_QDRANT_URL:
-    # Используем Railway Qdrant сервис (основной для продакшена)
-    QDRANT_URL = RAILWAY_QDRANT_URL
-    log.info(f"✅ Используется Railway Qdrant: {QDRANT_URL}")
-elif QDRANT_API_KEY and QDRANT_CLOUD_URL:
-    # Используем Qdrant Cloud (если Railway недоступен)
-    QDRANT_URL = QDRANT_CLOUD_URL
-    log.info(f"✅ Используется Qdrant Cloud: {QDRANT_URL}")
 else:
     # Локальный сервер для разработки
-    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-    log.info(f"✅ Используется локальный Qdrant: {QDRANT_URL}")
+    RAILWAY_QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+    log.info(f"⚠️ QDRANT_HOST не установлен, используется локальный Qdrant: {RAILWAY_QDRANT_URL}")
+
+# Используем только Railway Qdrant
+QDRANT_URL = RAILWAY_QDRANT_URL
+log.info(f"✅ Используется Qdrant: {QDRANT_URL}")
 
 COLLECTION_NAME = "hr2137_bot_knowledge_base"
 
@@ -118,49 +110,29 @@ def get_qdrant_client():
         return _qdrant_client
     
     try:
-        # Создаем клиент в зависимости от типа подключения
-        if RAILWAY_QDRANT_URL:
-            # Railway Qdrant сервис (без API ключа, внутренняя сеть)
-            _qdrant_client = QdrantClient(url=QDRANT_URL)
-            log.info(f"🔗 Подключение к Railway Qdrant: {QDRANT_URL}")
-        elif QDRANT_API_KEY:
-            # Qdrant Cloud (с API ключом)
-            _qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
-            log.info(f"🔗 Подключение к Qdrant Cloud: {QDRANT_URL}")
-        else:
-            # Локальный сервер (для разработки)
-            _qdrant_client = QdrantClient(url=QDRANT_URL)
-            log.info(f"🔗 Подключение к локальному Qdrant: {QDRANT_URL}")
+        # Создаем клиент для Railway Qdrant (без API ключа, внутренняя сеть)
+        _qdrant_client = QdrantClient(url=QDRANT_URL)
+        log.info(f"🔗 Подключение к Railway Qdrant: {QDRANT_URL}")
         
         # Проверяем подключение
         _qdrant_client.get_collections()
         log.info(f"✅ Qdrant клиент успешно подключен: {QDRANT_URL}")
-        
-        if RAILWAY_QDRANT_URL:
-            log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
-        elif QDRANT_API_KEY:
-            log.info("✅ Используется Qdrant Cloud")
-        else:
-            log.info("✅ Используется локальный Qdrant (для разработки)")
+        log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
         
         return _qdrant_client
     except Exception as e:
         log.error(f"❌ Ошибка подключения к Qdrant ({QDRANT_URL}): {e}")
         
-        if RAILWAY_QDRANT_URL:
+        if RAILWAY_QDRANT_HOST:
             log.error(f"❌ Проверьте Railway Qdrant сервис:")
-            log.error(f"   - Убедитесь что Qdrant сервис запущен")
-            log.error(f"   - Проверьте переменные QDRANT_HOST и QDRANT_PORT")
-            log.error(f"   - Railway должен предоставить RAILWAY_PRIVATE_DOMAIN")
-        elif QDRANT_API_KEY:
-            log.error(f"❌ Проверьте Qdrant Cloud:")
-            log.error(f"   - Проверьте QDRANT_URL и QDRANT_API_KEY в переменных окружения")
-            log.error(f"   - Qdrant Cloud URL должен быть: https://...cloud.qdrant.io")
+            log.error(f"   - Убедитесь что Qdrant сервис запущен в Railway")
+            log.error(f"   - Проверьте переменную QDRANT_HOST в HR_Bot сервисе")
+            log.error(f"   - QDRANT_HOST должен указывать на private domain Qdrant сервиса")
+            log.error(f"   - QDRANT_PORT должен быть установлен (по умолчанию 6333)")
         else:
             log.error(f"❌ Для локальной разработки:")
             log.error(f"   - Запустите: docker run -p 6333:6333 qdrant/qdrant")
-            log.error(f"   - Или используйте Railway Qdrant сервис")
-            log.error(f"   - Или используйте Qdrant Cloud: установите QDRANT_URL и QDRANT_API_KEY")
+            log.error(f"   - Или установите QDRANT_HOST для Railway Qdrant сервиса")
         
         return None
 
