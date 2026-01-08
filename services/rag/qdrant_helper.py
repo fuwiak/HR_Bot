@@ -384,6 +384,10 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
     Поиск в базе знаний по семантическому запросу в Qdrant
     (обновлено для работы с базой знаний консультанта)
     """
+    # Используем дефолтный limit из конфига если не указан
+    if limit is None:
+        limit = _qdrant_settings.get("default_limit", 3)
+    
     client = get_qdrant_client()
     
     if not client:

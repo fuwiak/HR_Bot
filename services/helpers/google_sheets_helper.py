@@ -20,11 +20,23 @@ except ImportError:
     GOOGLE_SHEETS_AVAILABLE = False
     log.warning("⚠️ Google Sheets библиотеки не установлены. Используется placeholder режим.")
 
-# Конфигурация
-GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
-GOOGLE_SHEETS_CREDENTIALS_JSON = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")  # JSON напрямую из переменной (для Railway)
+# Загружаем конфигурацию из config.yaml
+from pathlib import Path
+import sys
+project_root = Path(__file__).parent.parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from config import load_config
+
+_gs_config = load_config("google_sheets")
+_gs_settings = _gs_config.get("google_sheets", {})
+
+# Конфигурация из config.yaml
+GOOGLE_SHEETS_CREDENTIALS_PATH = _gs_settings.get("credentials_path") or os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
+GOOGLE_SHEETS_CREDENTIALS_JSON = _gs_settings.get("credentials_json") or os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")  # JSON напрямую из переменной (для Railway)
 # Spreadsheet ID из URL пользователя
-GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU")
+GOOGLE_SHEETS_SPREADSHEET_ID = _gs_settings.get("spreadsheet_id") or os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU")
 
 # Кэш для данных (чтобы не читать каждый раз)
 _services_cache = None
