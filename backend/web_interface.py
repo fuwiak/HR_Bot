@@ -3,9 +3,16 @@ Web Interface for Demonstration
 FastAPI веб-интерфейс для демонстрации функционала инвесторам
 """
 import os
+import sys
 import logging
 from typing import Optional, TYPE_CHECKING
 from datetime import datetime
+from pathlib import Path
+
+# Добавляем корневую директорию проекта в sys.path для импорта модулей
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 if TYPE_CHECKING:
     from services.rag.rag_chain import RAGChain

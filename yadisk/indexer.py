@@ -12,6 +12,11 @@ from typing import List, Dict, Optional, Set
 from datetime import datetime
 import hashlib
 
+# Добавляем корневую директорию проекта в sys.path для импорта модулей
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,

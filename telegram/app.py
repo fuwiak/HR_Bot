@@ -1,5 +1,6 @@
 # bot.py
 import os
+import sys
 import re
 import time
 import json
@@ -8,6 +9,12 @@ import asyncio
 from collections import defaultdict, deque
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Deque, List, Tuple
+from pathlib import Path
+
+# Добавляем корневую директорию проекта в sys.path для импорта модулей
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 import requests
 import aiohttp
