@@ -66,9 +66,7 @@ npm run build
 npm start
 ```
 
-## Деплой
-
-Next.js приложение можно задеплоить на:
+## ДеплойNext.js приложение можно задеплоить на:
 - Vercel (рекомендуется)
 - Railway
 - Docker

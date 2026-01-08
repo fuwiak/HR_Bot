@@ -5,6 +5,7 @@
 
 import os
 import logging
+import asyncio
 from typing import List, Dict, Any, Optional, Set
 from pathlib import Path
 from qdrant_client import QdrantClient
@@ -101,17 +102,17 @@ class QdrantLoader:
         self.client = QdrantClient(**client_kwargs)
         
         # Инициализация embeddings через API (как в qdrant_helper)
-        # Используем глобальные функции из qdrant_helper для единообразия
+        # Используем асинхронную функцию напрямую, как в Telegram боте
         try:
-            from qdrant_helper import generate_embedding as qdrant_generate_embedding, EMBEDDING_DIMENSION
-            self._qdrant_embedding_func = qdrant_generate_embedding
+            from qdrant_helper import generate_embedding_async, EMBEDDING_DIMENSION
+            self._qdrant_embedding_async = generate_embedding_async
             # Используем размерность из конфигурации
             self.embedding_dim = EMBEDDING_DIMENSION
             logger.info(f"Используется API для эмбеддингов (размерность: {self.embedding_dim})")
         except ImportError:
             logger.error("Не удалось импортировать функции из qdrant_helper")
             self.embedding_dim = 1536
-            self._qdrant_embedding_func = None
+            self._qdrant_embedding_async = None
         
         # Инициализация text splitter
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -189,17 +190,47 @@ class QdrantLoader:
         chunks = self.text_splitter.split_text(text)
         logger.info(f"Split document into {len(chunks)} chunks")
         
-        # Генерируем embeddings через API
-        if self._qdrant_embedding_func is None:
+        # Генерируем embeddings через API (асинхронно, как в Telegram боте)
+        if self._qdrant_embedding_async is None:
             logger.error("Embedding функция не доступна")
             return 0
+        
         embeddings_data = []
-        for i, chunk in enumerate(chunks):
-            embedding = self._qdrant_embedding_func(chunk)
-            if embedding:
-                embeddings_data.append((i, chunk, embedding))
-            else:
-                logger.warning(f"Не удалось сгенерировать эмбеддинг для чанка {i}")
+        
+        # Генерируем эмбеддинги асинхронно (как в Telegram боте)
+        async def generate_all_embeddings():
+            tasks = [self._qdrant_embedding_async(chunk) for chunk in chunks]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            return results
+        
+        # Запускаем асинхронную генерацию
+        try:
+            # Проверяем, есть ли уже запущенный event loop
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Если loop уже запущен, создаем новый в потоке
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, generate_all_embeddings())
+                        embeddings_results = future.result(timeout=300)  # 5 минут таймаут
+                else:
+                    embeddings_results = loop.run_until_complete(generate_all_embeddings())
+            except RuntimeError:
+                # Нет event loop, создаем новый
+                embeddings_results = asyncio.run(generate_all_embeddings())
+            
+            # Обрабатываем результаты
+            for i, (chunk, embedding_result) in enumerate(zip(chunks, embeddings_results)):
+                if isinstance(embedding_result, Exception):
+                    logger.warning(f"Не удалось сгенерировать эмбеддинг для чанка {i}: {embedding_result}")
+                elif embedding_result:
+                    embeddings_data.append((i, chunk, embedding_result))
+                else:
+                    logger.warning(f"Не удалось сгенерировать эмбеддинг для чанка {i}")
+        except Exception as e:
+            logger.error(f"Ошибка при генерации эмбеддингов: {e}")
+            return 0
         
         if not embeddings_data:
             logger.error("Не удалось сгенерировать ни одного эмбеддинга")
@@ -442,10 +473,26 @@ class QdrantLoader:
             return self._bm25_search(query, top_k, filter_by_whitelist)
         
         # Dense search - генерируем эмбеддинг запроса
-        if self._qdrant_embedding_func is None:
+        if self._qdrant_embedding_async is None:
             logger.error("Embedding функция не доступна")
             return []
-        query_embedding = self._qdrant_embedding_func(query)
+        
+        # Генерируем эмбеддинг асинхронно
+        try:
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(asyncio.run, self._qdrant_embedding_async(query))
+                        query_embedding = future.result(timeout=30)
+                else:
+                    query_embedding = loop.run_until_complete(self._qdrant_embedding_async(query))
+            except RuntimeError:
+                query_embedding = asyncio.run(self._qdrant_embedding_async(query))
+        except Exception as e:
+            logger.error(f"Ошибка при генерации эмбеддинга для запроса: {e}")
+            return []
         if not query_embedding:
             logger.error("Не удалось сгенерировать эмбеддинг запроса")
             return []
