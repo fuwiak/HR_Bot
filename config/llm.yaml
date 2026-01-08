@@ -1,0 +1,32 @@
+# Конфигурация LLM провайдеров
+llm:
+  # Основной провайдер
+  primary_provider: "openrouter"
+  primary_model: "deepseek/deepseek-chat"
+  
+  # Fallback цепочка (только OpenRouter)
+  fallback_chain:
+    - provider: "openrouter"
+      model: "deepseek/deepseek-chat"
+    - provider: "openrouter"
+      model: "meta-llama/llama-3.3-70b-instruct"
+  
+  # API настройки
+  openrouter:
+    api_key: "${OPENROUTER_API_KEY}"
+    api_url: "${OPENROUTER_API_URL:-https://openrouter.ai/api/v1/chat/completions}"
+    default_model: "deepseek/deepseek-chat"
+    timeout: 30
+  
+  # Параметры генерации
+  default_temperature: 0.7
+  pricing_temperature: 0.3  # Низкая температура для точных цен
+  default_max_tokens: 2048
+  confidence_threshold: 0.7
+  
+  # Эмбеддинги
+  embeddings:
+    api_key: "${OPENROUTER_API_KEY}"
+    api_url: "${EMBEDDING_API_URL:-https://openrouter.ai/api/v1/embeddings}"
+    model: "${EMBEDDING_MODEL:-qwen/qwen3-embedding-8b}"
+    dimension: 1536  # Целевая размерность (дополняется до этого значения)

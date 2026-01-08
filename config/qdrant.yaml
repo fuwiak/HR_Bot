@@ -1,0 +1,19 @@
+# Конфигурация Qdrant векторной базы данных
+qdrant:
+  # Подключение
+  host: "${QDRANT_HOST}"  # Private domain Qdrant сервиса в Railway
+  port: "${QDRANT_PORT:-6333}"  # Порт Qdrant (по умолчанию 6333)
+  url: "http://${QDRANT_HOST}:${QDRANT_PORT:-6333}"  # Автоматически формируется
+  
+  # Коллекция
+  collection_name: "hr2137_bot_knowledge_base"
+  
+  # Размерность векторов
+  target_dimension: 1536  # Размерность коллекции в Qdrant
+  
+  # Параметры поиска
+  default_limit: 5  # Дефолтное количество результатов поиска
+  pricing_limit: 10  # Количество результатов для запросов о ценах
+  
+  # Локальная разработка (fallback)
+  local_url: "http://localhost:6333"

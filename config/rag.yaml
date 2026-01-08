@@ -1,0 +1,18 @@
+# Конфигурация RAG системы
+rag:
+  # Разбиение текста
+  chunking:
+    chunk_size: 500
+    chunk_overlap: 50
+  
+  # Поиск
+  search:
+    default_limit: 5
+    pricing_limit: 10
+    min_score: 0.5  # Минимальный score для использования результата
+  
+  # LangGraph
+  langgraph:
+    enabled: true
+    max_retries: 3
+    validation_enabled: true

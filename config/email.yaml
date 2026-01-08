@@ -1,0 +1,29 @@
+# Конфигурация Email
+email:
+  # Yandex
+  yandex:
+    email: "${YANDEX_EMAIL}"
+    password: "${YANDEX_PASSWORD}"
+    imap:
+      server: "${YANDEX_IMAP_SERVER:-imap.yandex.ru}"
+      port: "${YANDEX_IMAP_PORT:-993}"
+      password: "${YANDEX_IMAP_PASSWORD}"
+    smtp:
+      server: "${YANDEX_SMTP_SERVER:-smtp.yandex.ru}"
+      port: "${YANDEX_SMTP_PORT:-465}"
+  
+  # Mailgun
+  mailgun:
+    api_key: "${MAILGUN_API_KEY}"
+    domain: "${MAILGUN_DOMAIN}"
+    sending_api_key: "${MAILGUN_SENDING_API_KEY}"
+  
+  # Resend
+  resend:
+    api_key: "${RESEND_API_KEY}"
+    from_email: "${RESEND_FROM_EMAIL}"
+  
+  # Мониторинг
+  monitoring:
+    check_interval: "${EMAIL_CHECK_INTERVAL:-10}"  # секунды
+    subscribers_file: "${EMAIL_SUBSCRIBERS_FILE:-email_subscribers.json}"

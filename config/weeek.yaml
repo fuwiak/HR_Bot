@@ -1,0 +1,8 @@
+# Конфигурация WEEEK (проекты и задачи)
+weeek:
+  api:
+    url: "${WEEEK_API_URL:-https://api.weeek.net/public/v1}"
+    key: "${WEEEK_API_KEY}"
+    email: "${WEEEK_EMAIL}"
+    password: "${WEEEK_PASSWORD}"
+    workspace_id: "${WEEEK_WORKSPACE_ID}"

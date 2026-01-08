@@ -1,0 +1,8 @@
+# Конфигурация HRTime
+hrtime:
+  api:
+    url: "${HRTIME_API_URL:-https://api.hrtime.ru/v1}"
+    key: "${HRTIME_API_KEY}"
+    email: "${HRTIME_EMAIL}"
+    password: "${HRTIME_PASSWORD}"
+    profile_id: "${HRTIME_PROFILE_ID}"

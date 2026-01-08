@@ -1,0 +1,26 @@
+# Конфигурация Telegram бота
+telegram:
+  # Токен
+  bot_token: "${TELEGRAM_TOKEN}"
+  
+  # Webhook настройки
+  webhook:
+    enabled: "${USE_WEBHOOK:-false}"
+    url: "${WEBHOOK_URL}"
+    port: "${PORT:-8080}"
+  
+  # Память
+  memory:
+    turns: "${MEMORY_TURNS:-10}"  # Количество последних сообщений в памяти
+  
+  # Промпты
+  prompts:
+    booking: "${BOOKING_PROMPT}"
+    chat: "${CHAT_PROMPT}"
+    complaint: "${COMPLAINT_PROMPT}"
+    consulting: "${CONSULTING_PROMPT}"
+  
+  # Администраторы
+  admin:
+    user_ids: "${ADMIN_USER_IDS_STR}"  # Список ID через запятую
+    default_user_id: "${ADMIN_USER_ID:-5305427956}"

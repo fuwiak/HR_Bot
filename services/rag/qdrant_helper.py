@@ -68,14 +68,15 @@ else:
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
     EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", str(TARGET_DIMENSION)))
 
-# Конфигурация Qdrant
-# Используем только Railway Qdrant (без Qdrant Cloud)
+# Конфигурация Qdrant из config.yaml
+from config import load_config
+
+_qdrant_config = load_config("qdrant")
+_qdrant_settings = _qdrant_config.get("qdrant", {})
 
 # Railway Qdrant сервис
-# Railway предоставляет переменные для подключения к другим сервисам
-# Для Qdrant сервиса нужно использовать его private domain
-RAILWAY_QDRANT_HOST = os.getenv("QDRANT_HOST")  # Должен быть установлен в Railway
-RAILWAY_QDRANT_PORT = os.getenv("QDRANT_PORT", "6333")  # Порт Qdrant сервиса
+RAILWAY_QDRANT_HOST = _qdrant_settings.get("host") or os.getenv("QDRANT_HOST")
+RAILWAY_QDRANT_PORT = _qdrant_settings.get("port") or os.getenv("QDRANT_PORT", "6333")
 RAILWAY_QDRANT_URL = None
 
 # Проверяем Railway Qdrant сервис
@@ -85,14 +86,14 @@ if RAILWAY_QDRANT_HOST:
     log.info(f"🔧 Обнаружен Railway Qdrant сервис: {RAILWAY_QDRANT_URL}")
 else:
     # Локальный сервер для разработки
-    RAILWAY_QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+    RAILWAY_QDRANT_URL = _qdrant_settings.get("local_url") or os.getenv("QDRANT_URL", "http://localhost:6333")
     log.info(f"⚠️ QDRANT_HOST не установлен, используется локальный Qdrant: {RAILWAY_QDRANT_URL}")
 
 # Используем только Railway Qdrant
 QDRANT_URL = RAILWAY_QDRANT_URL
 log.info(f"✅ Используется Qdrant: {QDRANT_URL}")
 
-COLLECTION_NAME = "hr2137_bot_knowledge_base"
+COLLECTION_NAME = _qdrant_settings.get("collection_name", "hr2137_bot_knowledge_base")
 
 # Глобальные переменные
 _qdrant_client = None

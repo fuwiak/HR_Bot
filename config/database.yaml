@@ -1,0 +1,24 @@
+# Конфигурация базы данных
+database:
+  # PostgreSQL
+  postgresql:
+    url: "${DATABASE_URL}"
+    host: "${PGHOST}"
+    port: "${PGPORT:-5432}"
+    database: "${PGDATABASE:-railway}"
+    user: "${PGUSER:-postgres}"
+    password: "${PGPASSWORD}"
+  
+  # Redis
+  redis:
+    url: "${REDIS_URL}"
+    public_url: "${REDIS_PUBLIC_URL}"
+    host: "${REDISHOST}"
+    port: "${REDISPORT:-6379}"
+    password: "${REDISPASSWORD}"
+    user: "${REDISUSER:-default}"
+  
+  # Пул соединений
+  pool:
+    min_connections: 1
+    max_connections: 10

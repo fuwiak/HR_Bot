@@ -1,0 +1,22 @@
+# Конфигурация Google Sheets
+google_sheets:
+  # Credentials
+  credentials_path: "${GOOGLE_SHEETS_CREDENTIALS_PATH:-./credentials.json}"
+  credentials_json: "${GOOGLE_SHEETS_CREDENTIALS_JSON}"  # JSON из переменной окружения (для Railway)
+  
+  # Таблица
+  spreadsheet_id: "${GOOGLE_SHEETS_SPREADSHEET_ID}"
+  
+  # Листы
+  sheets:
+    services: "Услуги"  # Лист с услугами
+    masters: "Мастера"  # Лист с мастерами
+    bookings: "Записи"  # Лист с записями
+  
+  # Scopes
+  scopes:
+    - "https://www.googleapis.com/auth/spreadsheets"
+    - "https://www.googleapis.com/auth/drive.readonly"
+  
+  # Использование
+  enabled: "${USE_GOOGLE_SHEETS:-true}"

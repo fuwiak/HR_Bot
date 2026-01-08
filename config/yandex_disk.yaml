@@ -1,0 +1,5 @@
+# Конфигурация Yandex Disk
+yandex_disk:
+  token: "${YANDEX_TOKEN}"
+  folder_url: "${YANDEX_DISK_FOLDER_URL}"
+  email: "${YANDEX_EMAIL}"
