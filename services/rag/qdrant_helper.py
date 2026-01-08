@@ -69,12 +69,6 @@ elif OPENAI_API_KEY:
 else:
     log.warning(f"⚠️ API ключ для эмбеддингов не установлен")
 
-# Конфигурация Qdrant из config.yaml
-from config import load_config
-
-_qdrant_config = load_config("qdrant")
-_qdrant_settings = _qdrant_config.get("qdrant", {})
-
 # Railway Qdrant сервис
 RAILWAY_QDRANT_HOST = _qdrant_settings.get("host") or os.getenv("QDRANT_HOST")
 RAILWAY_QDRANT_PORT = _qdrant_settings.get("port") or os.getenv("QDRANT_PORT", "6333")
