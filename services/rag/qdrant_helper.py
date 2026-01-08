@@ -42,7 +42,9 @@ except ImportError:
     QDRANT_AVAILABLE = False
     log.warning("⚠️ Qdrant библиотеки не установлены. Установите: pip install qdrant-client")
 
-# Конфигурация для эмбеддингов из config.yaml
+# Загружаем конфигурации из YAML файлов
+_qdrant_config = load_config("qdrant")
+_qdrant_settings = _qdrant_config.get("qdrant", {})
 _llm_config = load_config("llm")
 _embeddings_config = _llm_config.get("llm", {}).get("embeddings", {})
 
