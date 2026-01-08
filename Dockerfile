@@ -30,7 +30,7 @@ COPY backend/ ./backend/
 COPY services/ ./services/
 COPY tests/ ./tests/
 COPY config.yaml .
-COPY templates/ ./templates/ 2>/dev/null || true
+COPY templates/ ./templates/
 
 # Expose port for Telegram webhook
 EXPOSE 8080

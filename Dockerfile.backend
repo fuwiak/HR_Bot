@@ -36,7 +36,8 @@ COPY dashboard_static/ ./dashboard_static/
 EXPOSE 8081
 
 # Опциональный запуск тестов перед стартом
-ENV RUN_TESTS=${RUN_TESTS:-false}
+ARG RUN_TESTS=false
+ENV RUN_TESTS=${RUN_TESTS}
 
 # Создаем entrypoint скрипт для условного запуска тестов
 RUN echo '#!/bin/sh\n\
