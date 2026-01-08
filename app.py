@@ -391,7 +391,7 @@ def get_email_subscribers() -> set:
         subscribers = set(db_get_email_subscribers())
     # 3. Fallback на файл
     if not subscribers:
-        subscribers = load_email_subscribers()
+    subscribers = load_email_subscribers()
     # Всегда добавляем администраторов
     subscribers.update(ADMIN_USER_IDS)
     return subscribers
@@ -408,7 +408,7 @@ def add_memory(user_id, role, text):
     
     # 3. Fallback на память если Redis и PostgreSQL недоступны
     if not REDIS_AVAILABLE_IMPORT and not DATABASE_AVAILABLE:
-        UserMemory[user_id].append((role, text))
+    UserMemory[user_id].append((role, text))
 
 def get_history(user_id):
     """Получить историю чата (Redis -> PostgreSQL -> RAM)"""
@@ -2119,8 +2119,8 @@ async def reset_user_session(query: CallbackQuery):
             # Записи в PostgreSQL не очищаем (они хранятся в Google Sheets)
             pass
         else:
-            if user_id in UserRecords:
-                UserRecords[user_id] = []
+        if user_id in UserRecords:
+            UserRecords[user_id] = []
         
         # Очищаем частично собранные данные для записи
         if REDIS_AVAILABLE_IMPORT:
