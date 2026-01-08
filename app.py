@@ -261,6 +261,49 @@ except ImportError as e:
     def db_get_user_auth(*args, **kwargs): return None
     def db_set_user_auth(*args, **kwargs): return False
 
+# Попытка импорта Redis модуля
+try:
+    from redis_helper import (
+        add_memory_redis,
+        get_history_redis,
+        get_recent_history_redis,
+        get_user_phone_redis,
+        set_user_phone_redis,
+        get_user_booking_data_redis,
+        set_user_booking_data_redis,
+        get_email_subscribers_redis,
+        add_email_subscriber_redis,
+        remove_email_subscriber_redis,
+        sync_memory_to_postgres,
+        sync_user_data_to_postgres,
+        sync_email_subscribers_to_postgres,
+        sync_all_to_postgres,
+        clear_user_memory_redis,
+        REDIS_AVAILABLE
+    )
+    REDIS_AVAILABLE_IMPORT = REDIS_AVAILABLE
+    if REDIS_AVAILABLE_IMPORT:
+        log.info("✅ Redis модуль загружен")
+except ImportError as e:
+    REDIS_AVAILABLE_IMPORT = False
+    log.warning(f"⚠️ Redis модуль не доступен: {e}")
+    # Создаем заглушки для функций
+    def add_memory_redis(*args, **kwargs): return False
+    def get_history_redis(*args, **kwargs): return ""
+    def get_recent_history_redis(*args, **kwargs): return ""
+    def get_user_phone_redis(*args, **kwargs): return None
+    def set_user_phone_redis(*args, **kwargs): return False
+    def get_user_booking_data_redis(*args, **kwargs): return None
+    def set_user_booking_data_redis(*args, **kwargs): return False
+    def get_email_subscribers_redis(*args, **kwargs): return []
+    def add_email_subscriber_redis(*args, **kwargs): return False
+    def remove_email_subscriber_redis(*args, **kwargs): return False
+    def sync_memory_to_postgres(*args, **kwargs): return False
+    def sync_user_data_to_postgres(*args, **kwargs): return False
+    def sync_email_subscribers_to_postgres(*args, **kwargs): return False
+    def sync_all_to_postgres(*args, **kwargs): return None
+    def clear_user_memory_redis(*args, **kwargs): return False
+
 # ===================== EMAIL MONITORING =====================
 # ID администраторов для уведомлений о новых письмах (можно указать несколько через запятую)
 ADMIN_USER_IDS_STR = os.getenv("TELEGRAM_ADMIN_IDS", os.getenv("TELEGRAM_ADMIN_ID", "5305427956"))
@@ -306,54 +349,82 @@ def save_email_subscribers(subscribers: set):
         log.error(f"❌ Ошибка сохранения подписчиков: {e}")
 
 def add_email_subscriber(user_id: int):
-    """Добавить пользователя в список подписчиков (PostgreSQL или файл)"""
+    """Добавить пользователя в список подписчиков (Redis -> PostgreSQL -> файл)"""
+    # 1. Сохраняем в Redis (быстрое кэширование)
+    if REDIS_AVAILABLE_IMPORT:
+        add_email_subscriber_redis(user_id)
+    # 2. Сохраняем в PostgreSQL (постоянное хранилище)
     if DATABASE_AVAILABLE:
         if db_add_email_subscriber(user_id):
             log.info(f"✅ Пользователь {user_id} подписан на уведомления о почте (PostgreSQL)")
             return
-        # Fallback на файл если PostgreSQL недоступен
+    # 3. Fallback на файл
     subscribers = load_email_subscribers()
     subscribers.add(user_id)
     save_email_subscribers(subscribers)
     log.info(f"✅ Пользователь {user_id} подписан на уведомления о почте")
 
 def remove_email_subscriber(user_id: int):
-    """Удалить пользователя из списка подписчиков (PostgreSQL или файл)"""
+    """Удалить пользователя из списка подписчиков (Redis -> PostgreSQL -> файл)"""
+    # 1. Удаляем из Redis
+    if REDIS_AVAILABLE_IMPORT:
+        remove_email_subscriber_redis(user_id)
+    # 2. Удаляем из PostgreSQL
     if DATABASE_AVAILABLE:
         if db_remove_email_subscriber(user_id):
             log.info(f"❌ Пользователь {user_id} отписан от уведомлений о почте (PostgreSQL)")
             return
-        # Fallback на файл если PostgreSQL недоступен
+    # 3. Fallback на файл
     subscribers = load_email_subscribers()
     subscribers.discard(user_id)
     save_email_subscribers(subscribers)
     log.info(f"❌ Пользователь {user_id} отписан от уведомлений о почте")
 
 def get_email_subscribers() -> set:
-    """Получить список всех подписчиков (PostgreSQL или файл)"""
-    if DATABASE_AVAILABLE:
+    """Получить список всех подписчиков (Redis -> PostgreSQL -> файл)"""
+    subscribers = set()
+    # 1. Пытаемся получить из Redis (быстрое чтение)
+    if REDIS_AVAILABLE_IMPORT:
+        subscribers = set(get_email_subscribers_redis())
+    # 2. Если нет в Redis, пытаемся получить из PostgreSQL
+    if not subscribers and DATABASE_AVAILABLE:
         subscribers = set(db_get_email_subscribers())
-    else:
-        subscribers = load_email_subscribers()
+    # 3. Fallback на файл
+    if not subscribers:
+    subscribers = load_email_subscribers()
     # Всегда добавляем администраторов
     subscribers.update(ADMIN_USER_IDS)
     return subscribers
 
 def add_memory(user_id, role, text):
-    """Добавить сообщение в память (PostgreSQL или RAM)"""
+    """Добавить сообщение в память (Redis -> PostgreSQL -> RAM)"""
+    # 1. Записываем в Redis (быстрое кэширование)
+    if REDIS_AVAILABLE_IMPORT:
+        add_memory_redis(user_id, role, text)
+    
+    # 2. Записываем в PostgreSQL (постоянное хранилище) - асинхронно
     if DATABASE_AVAILABLE:
-        if db_add_memory(user_id, role, text):
-            return
-        # Fallback на память если PostgreSQL недоступен
+        db_add_memory(user_id, role, text)
+    
+    # 3. Fallback на память если Redis и PostgreSQL недоступны
+    if not REDIS_AVAILABLE_IMPORT and not DATABASE_AVAILABLE:
     UserMemory[user_id].append((role, text))
 
 def get_history(user_id):
-    """Получить историю чата (PostgreSQL или RAM)"""
+    """Получить историю чата (Redis -> PostgreSQL -> RAM)"""
+    # 1. Пытаемся получить из Redis (быстрое чтение)
+    if REDIS_AVAILABLE_IMPORT:
+        history = get_history_redis(user_id)
+        if history:
+            return history
+    
+    # 2. Пытаемся получить из PostgreSQL
     if DATABASE_AVAILABLE:
         history = db_get_history(user_id)
         if history:
             return history
-        # Fallback на память если PostgreSQL недоступен
+    
+    # 3. Fallback на память
     return "\n".join([f"{r}: {t}" for r, t in UserMemory[user_id]])
 
 # ===================== NLP ============================
@@ -1027,14 +1098,20 @@ def parse_booking_message(message: str, history: str) -> Dict:
     return result
 
 def get_recent_history(user_id: int, limit: int = 50) -> str:
-    """Получить недавнюю историю (PostgreSQL или RAM)"""
+    """Получить недавнюю историю (Redis -> PostgreSQL -> RAM)"""
+    # 1. Пытаемся получить из Redis (быстрое чтение)
+    if REDIS_AVAILABLE_IMPORT:
+        history = get_recent_history_redis(user_id, limit)
+        if history:
+            return history
+    
+    # 2. Пытаемся получить из PostgreSQL
     if DATABASE_AVAILABLE:
         history = db_get_recent_history(user_id, limit)
         if history:
             return history
-        # Fallback на память если PostgreSQL недоступен
     
-    # Старая реализация из памяти (fallback)
+    # 3. Fallback на память
     if user_id not in UserMemory:
         return ""
     
@@ -2029,27 +2106,29 @@ async def reset_user_session(query: CallbackQuery):
     user_id = query.from_user.id
     
     try:
-        # Очищаем память разговора
+        # Очищаем память разговора (Redis -> PostgreSQL -> RAM)
+        if REDIS_AVAILABLE_IMPORT:
+            clear_user_memory_redis(user_id)
         if DATABASE_AVAILABLE:
             db_clear_user_memory(user_id)
-        else:
-            if user_id in UserMemory:
-                UserMemory[user_id] = deque(maxlen=MEMORY_TURNS)
+        if user_id in UserMemory:
+            UserMemory[user_id] = deque(maxlen=MEMORY_TURNS)
         
         # Очищаем локальные записи (но не удаляем из Google Sheets)
         if DATABASE_AVAILABLE:
             # Записи в PostgreSQL не очищаем (они хранятся в Google Sheets)
             pass
         else:
-            if user_id in UserRecords:
-                UserRecords[user_id] = []
+        if user_id in UserRecords:
+            UserRecords[user_id] = []
         
         # Очищаем частично собранные данные для записи
+        if REDIS_AVAILABLE_IMPORT:
+            set_user_booking_data_redis(user_id, {})
         if DATABASE_AVAILABLE:
             db_set_user_booking_data(user_id, {})
-        else:
-            if user_id in UserBookingData:
-                del UserBookingData[user_id]
+        if user_id in UserBookingData:
+            del UserBookingData[user_id]
         
         # Очищаем имя и телефон (опционально, можно оставить)
         # if user_id in UserName:
@@ -3003,10 +3082,15 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Проверяем, является ли сообщение номером телефона
     if text.startswith("+") and len(text) >= 10:
+        # Сохраняем в Redis (быстрое кэширование)
+        if REDIS_AVAILABLE_IMPORT:
+            set_user_phone_redis(user_id, text)
+        # Сохраняем в PostgreSQL (постоянное хранилище)
         if DATABASE_AVAILABLE:
             db_set_user_phone(user_id, text)
-        else:
-            UserPhone[user_id] = text
+        # Fallback на память
+        if not REDIS_AVAILABLE_IMPORT and not DATABASE_AVAILABLE:
+        UserPhone[user_id] = text
         await update.message.reply_text(
             f"✅ *Номер телефона {text} сохранен!*\n\n"
             f"Теперь вы можете создавать записи.\n"
@@ -3129,9 +3213,14 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Если пользователь отвечает на вопрос бота (например, просто "Роман"), 
             # нужно использовать сохраненные данные и попытаться создать запись
             saved_booking_data = None
-            if DATABASE_AVAILABLE:
+            # Пытаемся получить из Redis (быстрое чтение)
+            if REDIS_AVAILABLE_IMPORT:
+                saved_booking_data = get_user_booking_data_redis(user_id)
+            # Если нет в Redis, пытаемся получить из PostgreSQL
+            if not saved_booking_data and DATABASE_AVAILABLE:
                 saved_booking_data = db_get_user_booking_data(user_id)
-            else:
+            # Fallback на память
+            if not saved_booking_data:
                 saved_booking_data = UserBookingData.get(user_id)
             
             if saved_booking_data:
@@ -3149,10 +3238,12 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if parsed_data.get("datetime"):
                     saved_booking_data["datetime"] = parsed_data.get("datetime")
                 
-                # Сохраняем обновленные данные
+                # Сохраняем обновленные данные (Redis -> PostgreSQL -> RAM)
+                if REDIS_AVAILABLE_IMPORT:
+                    set_user_booking_data_redis(user_id, saved_booking_data)
                 if DATABASE_AVAILABLE:
                     db_set_user_booking_data(user_id, saved_booking_data)
-                else:
+                if not REDIS_AVAILABLE_IMPORT and not DATABASE_AVAILABLE:
                     UserBookingData[user_id] = saved_booking_data
                 
                 # Объединяем сохраненные данные с текущими
@@ -6133,6 +6224,25 @@ def main():
         index_thread = threading.Thread(target=index_services_background, daemon=True)
         index_thread.start()
         log.info("🔄 Запущена фоновая индексация Qdrant (бот запускается, не ждет завершения)")
+    
+    # Запускаем фоновую синхронизацию Redis -> PostgreSQL
+    if REDIS_AVAILABLE_IMPORT and DATABASE_AVAILABLE:
+        def sync_redis_to_postgres_background():
+            """Фоновая синхронизация Redis -> PostgreSQL каждые 5 минут"""
+            import time
+            while True:
+                try:
+                    time.sleep(300)  # 5 минут
+                    log.info("🔄 Начало фоновой синхронизации Redis -> PostgreSQL...")
+                    sync_all_to_postgres()
+                    log.info("✅ Фоновая синхронизация Redis -> PostgreSQL завершена")
+                except Exception as e:
+                    log.error(f"❌ Ошибка фоновой синхронизации: {e}")
+        
+        import threading
+        sync_thread = threading.Thread(target=sync_redis_to_postgres_background, daemon=True)
+        sync_thread.start()
+        log.info("🔄 Запущена фоновая синхронизация Redis -> PostgreSQL (каждые 5 минут)")
     
     # Start Telegram bot с поддержкой concurrent updates для масштабирования
     # concurrent_updates=True позволяет обрабатывать до 100+ одновременных пользователей
