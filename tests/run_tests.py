@@ -8,6 +8,11 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 
+# Добавляем корневую директорию проекта в sys.path для импорта модулей
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
