@@ -181,7 +181,17 @@ class LLMClient:
         }
         
         try:
-            logger.info(f"Calling {provider} API with model {model}")
+            logger.info(f"🔵 [LLM API] Вызов {provider} API с моделью {model}")
+            logger.info(f"🔵 [LLM API] URL: {api_url}")
+            logger.info(f"🔵 [LLM API] Параметры: temperature={temperature}, max_tokens={max_tokens}")
+            
+            # Логируем промпты (первые 500 символов для читаемости)
+            for idx, msg in enumerate(cleaned_messages):
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                preview = content[:500] + "..." if len(content) > 500 else content
+                logger.info(f"🔵 [LLM API] Сообщение {idx+1} ({role}): {preview}")
+            
             start_time = time.time()
             
             # Обеспечиваем наличие рабочего клиента
@@ -218,7 +228,7 @@ class LLMClient:
                     raise
             
             elapsed_time = time.time() - start_time
-            logger.info(f"{provider} API response in {elapsed_time:.2f}s")
+            logger.info(f"✅ [LLM API] Ответ получен за {elapsed_time:.2f}s")
             
             response.raise_for_status()
             data = response.json()
@@ -226,8 +236,14 @@ class LLMClient:
             content = data["choices"][0]["message"]["content"]
             tokens_used = data.get("usage", {}).get("total_tokens")
             
+            # Логируем ответ LLM (первые 500 символов)
+            content_preview = content[:500] + "..." if len(content) > 500 else content
+            logger.info(f"✅ [LLM API] Ответ от {provider}/{model}: {content_preview}")
+            logger.info(f"✅ [LLM API] Использовано токенов: {tokens_used}")
+            
             # Простая оценка уверенности (можно улучшить)
             confidence = 1.0 if len(content) > 50 else 0.5
+            logger.info(f"✅ [LLM API] Уверенность: {confidence:.2f}")
             
             return LLMResponse(
                 content=content,
@@ -238,7 +254,7 @@ class LLMClient:
             )
             
         except httpx.TimeoutException:
-            logger.error(f"{provider} API timeout")
+            logger.error(f"❌ [LLM API] Таймаут при вызове {provider} API (модель: {model})")
             return LLMResponse(
                 content="",
                 provider=provider,
@@ -257,7 +273,7 @@ class LLMClient:
                 except:
                     pass
             
-            logger.error(f"{provider} API error: {e.response.status_code}{error_detail}")
+            logger.error(f"❌ [LLM API] Ошибка {provider} API: HTTP {e.response.status_code}{error_detail}")
             return LLMResponse(
                 content="",
                 provider=provider,
@@ -266,7 +282,9 @@ class LLMClient:
                 error=f"HTTP {e.response.status_code}{error_detail}"
             )
         except Exception as e:
-            logger.error(f"{provider} API exception: {str(e)}")
+            logger.error(f"❌ [LLM API] Исключение при вызове {provider} API: {str(e)}")
+            import traceback
+            logger.error(f"❌ [LLM API] Traceback: {traceback.format_exc()}")
             return LLMResponse(
                 content="",
                 provider=provider,
@@ -314,7 +332,13 @@ class LLMClient:
         primary_model = model or self.primary_model
         
         # Пытаемся вызвать основной провайдер
-        logger.info(f"Trying primary provider: {self.primary_provider} with model: {primary_model}")
+        logger.info(f"🚀 [LLM GENERATE] Начало генерации ответа")
+        logger.info(f"🚀 [LLM GENERATE] Основной провайдер: {self.primary_provider}, модель: {primary_model}")
+        logger.info(f"🚀 [LLM GENERATE] Параметры: temperature={temperature}, max_tokens={max_tokens}")
+        logger.info(f"🚀 [LLM GENERATE] Промпт (первые 300 символов): {cleaned_prompt[:300]}...")
+        if cleaned_system_prompt:
+            logger.info(f"🚀 [LLM GENERATE] System промпт (первые 300 символов): {cleaned_system_prompt[:300]}...")
+        
         response = await self._call_api(
             provider=self.primary_provider,
             model=primary_model,
@@ -325,14 +349,16 @@ class LLMClient:
         
         # Если успешно и уверенность достаточна - возвращаем
         if response.error is None and response.confidence >= self.confidence_threshold:
-            logger.info(f"Primary provider {self.primary_provider} with model {primary_model} succeeded")
+            logger.info(f"✅ [LLM GENERATE] Основной провайдер успешно вернул ответ (уверенность: {response.confidence:.2f})")
+            logger.info(f"✅ [LLM GENERATE] Финальный ответ (первые 500 символов): {response.content[:500]}...")
             return response
         
         # Если нужен fallback - пробуем цепочку fallback моделей
         if use_fallback and self.fallback_chain:
             logger.warning(
-                f"Primary model {primary_model} failed (error: {response.error}, "
-                f"confidence: {response.confidence:.2f}). Trying fallback chain..."
+                f"⚠️ [LLM GENERATE] Основная модель {primary_model} не прошла проверку "
+                f"(ошибка: {response.error}, уверенность: {response.confidence:.2f}). "
+                f"Пробую fallback цепочку из {len(self.fallback_chain)} моделей..."
             )
             
             # Пробуем каждую модель в цепочке fallback
@@ -344,7 +370,7 @@ class LLMClient:
                     logger.warning(f"Fallback {idx} skipped: model not specified")
                     continue
                 
-                logger.info(f"Trying fallback {idx}: {fallback_provider} with model {fallback_model}")
+                logger.info(f"🔄 [LLM GENERATE] Пробую fallback {idx}/{len(self.fallback_chain)}: {fallback_provider}/{fallback_model}")
                 
                 fallback_response = await self._call_api(
                     provider=fallback_provider,
@@ -356,18 +382,19 @@ class LLMClient:
                 
                 # Если успешно - возвращаем ответ
                 if fallback_response.error is None:
-                    logger.info(f"Fallback {idx} ({fallback_provider}/{fallback_model}) succeeded")
+                    logger.info(f"✅ [LLM GENERATE] Fallback {idx} ({fallback_provider}/{fallback_model}) успешно вернул ответ")
+                    logger.info(f"✅ [LLM GENERATE] Финальный ответ (первые 500 символов): {fallback_response.content[:500]}...")
                     return fallback_response
                 else:
                     logger.warning(
-                        f"Fallback {idx} ({fallback_provider}/{fallback_model}) failed: "
+                        f"❌ [LLM GENERATE] Fallback {idx} ({fallback_provider}/{fallback_model}) не сработал: "
                         f"{fallback_response.error}"
                     )
             
-            logger.error("All models in fallback chain failed")
+            logger.error("❌ [LLM GENERATE] Все модели в fallback цепочке не сработали")
         
         # Если все модели не сработали, возвращаем последний ответ (или primary)
-        logger.error("All providers and fallback models failed")
+        logger.error(f"❌ [LLM GENERATE] Все провайдеры и fallback модели не сработали. Возвращаю последний ответ (ошибка: {response.error})")
         return response
     
     def _get_default_model(self, provider: str) -> str:

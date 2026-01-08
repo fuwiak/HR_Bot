@@ -3071,7 +3071,9 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
     
     # Логируем ВСЕ входящие сообщения для отладки
-    log.info(f"📨 ВХОДЯЩЕЕ СООБЩЕНИЕ: user_id={user_id}, username=@{username}, name={first_name}, text='{text[:100]}'")
+    log.info(f"📨 [TELEGRAM] ВХОДЯЩЕЕ СООБЩЕНИЕ: user_id={user_id}, username=@{username}, name={first_name}")
+    log.info(f"📨 [TELEGRAM] Текст сообщения: '{text}'")
+    log.info(f"📨 [TELEGRAM] Длина сообщения: {len(text)} символов")
     
     add_memory(user_id, "user", text)
     
@@ -3477,8 +3479,14 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - Если услуга есть в списке - используй ТОЧНУЮ цену
 - Если видишь блок "НАЙДЕНА УСЛУГА" - используй ТОЧНО эти данные"""
                 
+                log.info(f"💬 [TELEGRAM] Вызов LLM для генерации ответа (openrouter_chat)")
+                log.info(f"💬 [TELEGRAM] Промпт (первые 500 символов): {msg[:500]}...")
+                log.info(f"💬 [TELEGRAM] System промпт: {system_msg[:300]}...")
+                
                 answer = await openrouter_chat([{"role": "user", "content": msg}], use_system_message=True, system_content=system_msg)
-                log.info(f"🤖 AI RESPONSE: {answer[:300]}...")  # Логируем больше для проверки
+                
+                log.info(f"✅ [TELEGRAM] Ответ от LLM получен (длина: {len(answer) if answer else 0} символов)")
+                log.info(f"✅ [TELEGRAM] Ответ (первые 500 символов): {answer[:500] if answer else 'None'}...")
             
             # ИНТЕГРАЦИЯ СЦЕНАРИЙ 3: Обработка лида через Telegram (до обычной логики)
             # Проверяем, является ли это потенциальным лидом (не запись на услугу)
@@ -3802,9 +3810,20 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         action=ChatAction.TYPING
                     )
                     
+                    log.info(f"💬 [TELEGRAM] Вызов LLM для генерации ответа (generate_with_fallback)")
+                    log.info(f"💬 [TELEGRAM] Промпт (первые 500 символов): {msg[:500]}...")
+                    log.info(f"💬 [TELEGRAM] System промпт (первые 500 символов): {system_message[:500]}...")
+                    if history:
+                        log.info(f"💬 [TELEGRAM] История разговора (первые 500 символов): {history[:500]}...")
+                    
                     answer = await generate_with_fallback([{"role": "user", "content": msg}], use_system_message=True, system_content=system_message)
+                    
+                    log.info(f"✅ [TELEGRAM] Ответ от LLM получен (длина: {len(answer) if answer else 0} символов)")
+                    log.info(f"✅ [TELEGRAM] Ответ (первые 500 символов): {answer[:500] if answer else 'None'}...")
                 except Exception as e:
-                    log.error(f"❌ Ошибка вызова generate_with_fallback: {e}")
+                    log.error(f"❌ [TELEGRAM] Ошибка вызова generate_with_fallback: {e}")
+                    import traceback
+                    log.error(f"❌ [TELEGRAM] Traceback: {traceback.format_exc()}")
                     answer = None
                 
                 # Если LLM недоступен, используем fallback ответ

@@ -165,11 +165,12 @@ class RAGChain:
         sources = []
         
         if use_rag:
-            logger.info(f"Searching RAG for query: {user_query}")
+            logger.info(f"🔍 [RAG] Начало поиска в RAG для запроса: '{user_query}'")
             
             # Определяем стратегию поиска
             # Для запросов о ценах/КП - используем более точный поиск
             is_pricing_query = self._is_pricing_query(user_query)
+            logger.info(f"🔍 [RAG] Тип запроса: {'pricing/commercial proposal' if is_pricing_query else 'general'}")
             
             if is_pricing_query and self.pricing_search_enabled:
                 # Используем параметры для поиска цен/КП
@@ -178,7 +179,8 @@ class RAGChain:
                 search_min_score = self.pricing_min_score
                 search_dense_weight = self.pricing_dense_weight
                 search_bm25_weight = self.pricing_bm25_weight
-                logger.info(f"Using pricing/commercial proposal search strategy: {search_strategy}")
+                logger.info(f"🔍 [RAG] Используется стратегия поиска цен/КП: {search_strategy}")
+                logger.info(f"🔍 [RAG] Параметры поиска: top_k={search_top_k}, min_score={search_min_score}, dense_weight={search_dense_weight}, bm25_weight={search_bm25_weight}")
             else:
                 # Используем обычные параметры
                 search_strategy = self.search_strategy
@@ -186,6 +188,8 @@ class RAGChain:
                 search_min_score = min_score or self.min_score
                 search_dense_weight = self.dense_weight
                 search_bm25_weight = self.bm25_weight
+                logger.info(f"🔍 [RAG] Используется обычная стратегия поиска: {search_strategy}")
+                logger.info(f"🔍 [RAG] Параметры поиска: top_k={search_top_k}, min_score={search_min_score}, dense_weight={search_dense_weight}, bm25_weight={search_bm25_weight}")
             
             context_docs = self.qdrant_loader.search(
                 query=user_query,
@@ -197,11 +201,18 @@ class RAGChain:
                 bm25_weight=search_bm25_weight
             )
             
-            logger.info(f"Found {len(context_docs)} relevant documents")
+            logger.info(f"🔍 [RAG] Найдено документов: {len(context_docs)}")
+            
+            # Логируем найденные документы
+            for idx, doc in enumerate(context_docs[:5], 1):  # Логируем первые 5
+                score = doc.get("score", 0)
+                source = doc.get("source_url", "unknown")
+                title = doc.get("title", doc.get("text", "")[:50])
+                logger.info(f"🔍 [RAG] Документ {idx}: score={score:.3f}, source={source}, title={title[:100]}")
             
             # Если нет результатов, пробуем без фильтра whitelist и с низким порогом
             if len(context_docs) == 0 and use_rag:
-                logger.warning("⚠️ No documents found, retrying with lower threshold and no whitelist filter...")
+                logger.warning("⚠️ [RAG] Документы не найдены, повторный поиск с низким порогом и без whitelist фильтра...")
                 context_docs = self.qdrant_loader.search(
                     query=user_query,
                     top_k=search_top_k * 2,
@@ -211,7 +222,7 @@ class RAGChain:
                     dense_weight=search_dense_weight,
                     bm25_weight=search_bm25_weight
                 )
-                logger.info(f"Retry found {len(context_docs)} documents")
+                logger.info(f"🔍 [RAG] Повторный поиск нашел документов: {len(context_docs)}")
             
             # Извлекаем уникальные источники
             seen_urls = set()
@@ -224,6 +235,10 @@ class RAGChain:
         # Шаг 2: Формируем промпт с контекстом
         if context_docs:
             context_text = self._format_context(context_docs)
+            logger.info(f"📝 [RAG] Формирование промпта с контекстом из {len(context_docs)} документов")
+            logger.info(f"📝 [RAG] Размер контекста: {len(context_text)} символов")
+            logger.info(f"📝 [RAG] Контекст (первые 500 символов): {context_text[:500]}...")
+            
             enhanced_prompt = f"""Контекст из базы знаний HR консультанта:
 
 {context_text}
@@ -235,23 +250,31 @@ class RAGChain:
         else:
             # Если нет контекста, но это общий вопрос - отвечаем на основе знаний
             if use_rag:
-                logger.info("No context documents found, answering based on general knowledge")
+                logger.warning("⚠️ [RAG] Контекстные документы не найдены, отвечаю на основе общих знаний")
             enhanced_prompt = f"""Вопрос пользователя: {user_query}
 
 Ответь на вопрос, используя свои знания о HR консалтинге, управлении персоналом и бизнес-процессах. 
 Будь полезным и информативным."""
         
         # Шаг 3: Генерируем ответ через LLM
-        logger.info("Generating response with LLM")
+        logger.info(f"🤖 [RAG] Генерация ответа через LLM")
+        logger.info(f"🤖 [RAG] Промпт для LLM (первые 500 символов): {enhanced_prompt[:500]}...")
         # Используем временные параметры, если они установлены
         temperature = self._temp_temperature if self._temp_temperature is not None else 0.7
         max_tokens = self._temp_max_tokens if self._temp_max_tokens is not None else 2048
+        logger.info(f"🤖 [RAG] Параметры LLM: temperature={temperature}, max_tokens={max_tokens}")
+        
         llm_response = await self.llm_client.generate(
             prompt=enhanced_prompt,
             system_prompt=self.system_prompt,
             temperature=temperature,
             max_tokens=max_tokens
         )
+        
+        logger.info(f"✅ [RAG] Ответ от LLM получен: provider={llm_response.provider}, model={llm_response.model}, confidence={llm_response.confidence:.2f}")
+        logger.info(f"✅ [RAG] Ответ (первые 500 символов): {llm_response.content[:500]}...")
+        if llm_response.error:
+            logger.error(f"❌ [RAG] Ошибка LLM: {llm_response.error}")
         
         # Шаг 4: Если нет источников, добавляем общие источники из whitelist
         if not sources and use_rag:
@@ -264,6 +287,8 @@ class RAGChain:
                 logger.info(f"Using whitelist URLs as general sources: {len(sources)} URLs")
         
         # Шаг 5: Форматируем результат
+        logger.info(f"📊 [RAG] Формирование финального результата")
+        logger.info(f"📊 [RAG] Источников: {len(sources)}, Контекстных документов: {len(context_docs)}")
         result = {
             "answer": llm_response.content,
             "sources": sources,

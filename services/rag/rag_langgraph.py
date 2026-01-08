@@ -34,7 +34,10 @@ class RAGState(TypedDict):
 
 def classify_query(state: RAGState) -> RAGState:
     """Классифицирует тип запроса пользователя"""
-    query = state["user_query"].lower()
+    query = state["user_query"]
+    logger.info(f"🔍 [LANGGRAPH] Классификация запроса: '{query}'")
+    
+    query_lower = query.lower()
     
     pricing_keywords = [
         "цена", "стоимость", "стоит", "рублей", "руб", "прайс", "price", "cost",
@@ -47,15 +50,15 @@ def classify_query(state: RAGState) -> RAGState:
         "разработка", "внедрение", "автоматизация", "оптимизация"
     ]
     
-    if any(kw in query for kw in pricing_keywords):
+    if any(kw in query_lower for kw in pricing_keywords):
         query_type = "pricing"
-        logger.info(f"🔍 Запрос классифицирован как: PRICING")
-    elif any(kw in query for kw in service_keywords):
+        logger.info(f"🔍 [LANGGRAPH] Запрос классифицирован как: PRICING")
+    elif any(kw in query_lower for kw in service_keywords):
         query_type = "service_info"
-        logger.info(f"🔍 Запрос классифицирован как: SERVICE_INFO")
+        logger.info(f"🔍 [LANGGRAPH] Запрос классифицирован как: SERVICE_INFO")
     else:
         query_type = "general"
-        logger.info(f"🔍 Запрос классифицирован как: GENERAL")
+        logger.info(f"🔍 [LANGGRAPH] Запрос классифицирован как: GENERAL")
     
     state["query_type"] = query_type
     return state
@@ -66,20 +69,35 @@ def search_rag(state: RAGState) -> RAGState:
     query = state["user_query"]
     query_type = state["query_type"]
     
+    logger.info(f"🔍 [LANGGRAPH] Поиск в RAG для типа запроса: {query_type}")
+    
     try:
         if query_type == "pricing":
             # Для запросов о ценах - более широкий поиск с большим лимитом
             results = search_service(query, limit=10)
-            logger.info(f"🔍 Найдено {len(results)} услуг для запроса о ценах")
+            logger.info(f"🔍 [LANGGRAPH] Найдено {len(results)} услуг для запроса о ценах")
+            # Логируем первые 3 результата
+            for idx, result in enumerate(results[:3], 1):
+                title = result.get("title", "unknown")
+                score = result.get("score", 0)
+                price = result.get("price_str", result.get("price", "unknown"))
+                logger.info(f"🔍 [LANGGRAPH] Результат {idx}: {title}, цена: {price}, score: {score:.3f}")
             state["search_results"] = results
         else:
             # Для общих запросов используем стандартный поиск
             # Можно интегрировать с qdrant_loader для документов базы знаний
             results = search_service(query, limit=5)
             state["search_results"] = results
-            logger.info(f"🔍 Найдено {len(results)} результатов для общего запроса")
+            logger.info(f"🔍 [LANGGRAPH] Найдено {len(results)} результатов для общего запроса")
+            # Логируем первые 3 результата
+            for idx, result in enumerate(results[:3], 1):
+                title = result.get("title", result.get("text", "unknown")[:50])
+                score = result.get("score", 0)
+                logger.info(f"🔍 [LANGGRAPH] Результат {idx}: {title}, score: {score:.3f}")
     except Exception as e:
-        logger.error(f"❌ Ошибка поиска в RAG: {e}")
+        logger.error(f"❌ [LANGGRAPH] Ошибка поиска в RAG: {e}")
+        import traceback
+        logger.error(f"❌ [LANGGRAPH] Traceback: {traceback.format_exc()}")
         state["search_results"] = []
     
     return state
@@ -182,6 +200,11 @@ def generate_response(state: RAGState) -> RAGState:
     context = state["formatted_context"]
     query_type = state["query_type"]
     
+    logger.info(f"🤖 [LANGGRAPH] Генерация ответа для типа запроса: {query_type}")
+    logger.info(f"🤖 [LANGGRAPH] Размер контекста: {len(context)} символов")
+    if context:
+        logger.info(f"🤖 [LANGGRAPH] Контекст (первые 500 символов): {context[:500]}...")
+    
     try:
         # Формируем промпт в зависимости от типа запроса
         if query_type == "pricing":
@@ -267,10 +290,15 @@ def generate_response(state: RAGState) -> RAGState:
             )
         
         state["llm_response"] = response.content if response else "Не удалось сгенерировать ответ"
-        logger.info(f"✅ Ответ сгенерирован (тип: {query_type})")
+        logger.info(f"✅ [LANGGRAPH] Ответ сгенерирован (тип: {query_type})")
+        logger.info(f"✅ [LANGGRAPH] Ответ (первые 500 символов): {state['llm_response'][:500]}...")
+        if response and response.error:
+            logger.error(f"❌ [LANGGRAPH] Ошибка в ответе LLM: {response.error}")
         
     except Exception as e:
-        logger.error(f"❌ Ошибка генерации ответа: {e}")
+        logger.error(f"❌ [LANGGRAPH] Ошибка генерации ответа: {e}")
+        import traceback
+        logger.error(f"❌ [LANGGRAPH] Traceback: {traceback.format_exc()}")
         state["llm_response"] = "Произошла ошибка при генерации ответа"
     
     return state
@@ -448,6 +476,10 @@ async def query_with_langgraph(
     Returns:
         Словарь с ответом и метаданными
     """
+    logger.info(f"🚀 [LANGGRAPH] Начало обработки запроса через LangGraph")
+    logger.info(f"🚀 [LANGGRAPH] Запрос: '{user_query}'")
+    logger.info(f"🚀 [LANGGRAPH] Thread ID: {thread_id}")
+    
     app = get_rag_graph()
     
     initial_state = {
@@ -470,7 +502,13 @@ async def query_with_langgraph(
     
     try:
         # Запускаем граф
+        logger.info(f"🔄 [LANGGRAPH] Запуск графа обработки...")
         result = await app.ainvoke(initial_state, config)
+        
+        logger.info(f"✅ [LANGGRAPH] Граф завершил обработку")
+        logger.info(f"✅ [LANGGRAPH] Финальный ответ (первые 500 символов): {result.get('final_answer', '')[:500]}...")
+        logger.info(f"✅ [LANGGRAPH] Источников: {len(result.get('sources', []))}")
+        logger.info(f"✅ [LANGGRAPH] Валидация пройдена: {result.get('validated', False)}")
         
         return {
             "answer": result["final_answer"],
