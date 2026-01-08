@@ -205,12 +205,61 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger()
 
 # ===================== MEMORY =========================
+# Fallback хранилище в памяти (используется если PostgreSQL недоступен)
 UserMemory: Dict[int, Deque] = defaultdict(lambda: deque(maxlen=MEMORY_TURNS * 2))
 UserRecords: Dict[int, List[Dict]] = defaultdict(list)  # Хранилище записей пользователей
 UserAuth: Dict[int, Dict] = defaultdict(dict)  # Данные авторизации пользователей
 UserPhone: Dict[int, str] = {}  # Номера телефонов пользователей
 UserBookingData: Dict[int, Dict] = {}  # Частично собранные данные для записи (service, master, datetime)
 UserWeeekWorkspace: Dict[int, str] = {}  # WEEEK Workspace ID для каждого пользователя
+
+# Попытка импорта PostgreSQL модуля
+try:
+    from database import (
+        init_database,
+        add_memory as db_add_memory,
+        get_history as db_get_history,
+        get_recent_history as db_get_recent_history,
+        clear_user_memory as db_clear_user_memory,
+        add_user_record as db_add_user_record,
+        get_user_records as db_get_user_records,
+        delete_user_record as db_delete_user_record,
+        get_user_phone as db_get_user_phone,
+        set_user_phone as db_set_user_phone,
+        get_user_booking_data as db_get_user_booking_data,
+        set_user_booking_data as db_set_user_booking_data,
+        get_user_weeek_workspace as db_get_user_weeek_workspace,
+        set_user_weeek_workspace as db_set_user_weeek_workspace,
+        get_email_subscribers as db_get_email_subscribers,
+        add_email_subscriber as db_add_email_subscriber,
+        remove_email_subscriber as db_remove_email_subscriber,
+        get_user_auth as db_get_user_auth,
+        set_user_auth as db_set_user_auth
+    )
+    DATABASE_AVAILABLE = True
+    log.info("✅ PostgreSQL модуль загружен")
+except ImportError as e:
+    DATABASE_AVAILABLE = False
+    log.warning(f"⚠️ PostgreSQL модуль не доступен, используем память: {e}")
+    # Создаем заглушки для функций
+    def db_add_memory(*args, **kwargs): return False
+    def db_get_history(*args, **kwargs): return ""
+    def db_get_recent_history(*args, **kwargs): return ""
+    def db_clear_user_memory(*args, **kwargs): return False
+    def db_add_user_record(*args, **kwargs): return False
+    def db_get_user_records(*args, **kwargs): return []
+    def db_delete_user_record(*args, **kwargs): return False
+    def db_get_user_phone(*args, **kwargs): return None
+    def db_set_user_phone(*args, **kwargs): return False
+    def db_get_user_booking_data(*args, **kwargs): return None
+    def db_set_user_booking_data(*args, **kwargs): return False
+    def db_get_user_weeek_workspace(*args, **kwargs): return None
+    def db_set_user_weeek_workspace(*args, **kwargs): return False
+    def db_get_email_subscribers(*args, **kwargs): return []
+    def db_add_email_subscriber(*args, **kwargs): return False
+    def db_remove_email_subscriber(*args, **kwargs): return False
+    def db_get_user_auth(*args, **kwargs): return None
+    def db_set_user_auth(*args, **kwargs): return False
 
 # ===================== EMAIL MONITORING =====================
 # ID администраторов для уведомлений о новых письмах (можно указать несколько через запятую)
@@ -230,7 +279,10 @@ email_reply_state: Dict[int, Dict] = {}  # {user_id: {'email_id': ..., 'to': ...
 EMAIL_SUBSCRIBERS_FILE = "email_subscribers.json"
 
 def load_email_subscribers() -> set:
-    """Загрузить список подписчиков из файла"""
+    """Загрузить список подписчиков (PostgreSQL или файл)"""
+    if DATABASE_AVAILABLE:
+        return set(db_get_email_subscribers())
+    # Fallback на файл
     try:
         if os.path.exists(EMAIL_SUBSCRIBERS_FILE):
             with open(EMAIL_SUBSCRIBERS_FILE, 'r', encoding='utf-8') as f:
@@ -241,7 +293,11 @@ def load_email_subscribers() -> set:
     return set()
 
 def save_email_subscribers(subscribers: set):
-    """Сохранить список подписчиков в файл"""
+    """Сохранить список подписчиков (PostgreSQL или файл)"""
+    if DATABASE_AVAILABLE:
+        # В PostgreSQL подписчики сохраняются автоматически через add_email_subscriber
+        return
+    # Fallback на файл
     try:
         data = {'subscribers': list(subscribers)}
         with open(EMAIL_SUBSCRIBERS_FILE, 'w', encoding='utf-8') as f:
@@ -250,30 +306,54 @@ def save_email_subscribers(subscribers: set):
         log.error(f"❌ Ошибка сохранения подписчиков: {e}")
 
 def add_email_subscriber(user_id: int):
-    """Добавить пользователя в список подписчиков"""
+    """Добавить пользователя в список подписчиков (PostgreSQL или файл)"""
+    if DATABASE_AVAILABLE:
+        if db_add_email_subscriber(user_id):
+            log.info(f"✅ Пользователь {user_id} подписан на уведомления о почте (PostgreSQL)")
+            return
+        # Fallback на файл если PostgreSQL недоступен
     subscribers = load_email_subscribers()
     subscribers.add(user_id)
     save_email_subscribers(subscribers)
     log.info(f"✅ Пользователь {user_id} подписан на уведомления о почте")
 
 def remove_email_subscriber(user_id: int):
-    """Удалить пользователя из списка подписчиков"""
+    """Удалить пользователя из списка подписчиков (PostgreSQL или файл)"""
+    if DATABASE_AVAILABLE:
+        if db_remove_email_subscriber(user_id):
+            log.info(f"❌ Пользователь {user_id} отписан от уведомлений о почте (PostgreSQL)")
+            return
+        # Fallback на файл если PostgreSQL недоступен
     subscribers = load_email_subscribers()
     subscribers.discard(user_id)
     save_email_subscribers(subscribers)
     log.info(f"❌ Пользователь {user_id} отписан от уведомлений о почте")
 
 def get_email_subscribers() -> set:
-    """Получить список всех подписчиков"""
-    subscribers = load_email_subscribers()
+    """Получить список всех подписчиков (PostgreSQL или файл)"""
+    if DATABASE_AVAILABLE:
+        subscribers = set(db_get_email_subscribers())
+    else:
+        subscribers = load_email_subscribers()
     # Всегда добавляем администраторов
     subscribers.update(ADMIN_USER_IDS)
     return subscribers
 
 def add_memory(user_id, role, text):
+    """Добавить сообщение в память (PostgreSQL или RAM)"""
+    if DATABASE_AVAILABLE:
+        if db_add_memory(user_id, role, text):
+            return
+        # Fallback на память если PostgreSQL недоступен
     UserMemory[user_id].append((role, text))
 
 def get_history(user_id):
+    """Получить историю чата (PostgreSQL или RAM)"""
+    if DATABASE_AVAILABLE:
+        history = db_get_history(user_id)
+        if history:
+            return history
+        # Fallback на память если PostgreSQL недоступен
     return "\n".join([f"{r}: {t}" for r, t in UserMemory[user_id]])
 
 # ===================== NLP ============================
@@ -947,7 +1027,14 @@ def parse_booking_message(message: str, history: str) -> Dict:
     return result
 
 def get_recent_history(user_id: int, limit: int = 50) -> str:
-    """Получает последние N сообщений из истории"""
+    """Получить недавнюю историю (PostgreSQL или RAM)"""
+    if DATABASE_AVAILABLE:
+        history = db_get_recent_history(user_id, limit)
+        if history:
+            return history
+        # Fallback на память если PostgreSQL недоступен
+    
+    # Старая реализация из памяти (fallback)
     if user_id not in UserMemory:
         return ""
     
@@ -1033,16 +1120,33 @@ def format_user_record(record: Dict) -> str:
         return "❌ Ошибка отображения записи"
 
 def get_user_records(user_id: int) -> List[Dict]:
-    """Получить записи пользователя"""
-    return UserRecords.get(user_id, [])
+    """Получить записи пользователя (PostgreSQL или RAM)"""
+    return get_user_records_list(user_id)
 
 def add_user_record(user_id: int, record: Dict):
-    """Добавить запись пользователя"""
+    """Добавить запись пользователя (PostgreSQL или RAM)"""
+    if DATABASE_AVAILABLE:
+        if db_add_user_record(user_id, record):
+            return
+        # Fallback на память если PostgreSQL недоступен
     UserRecords[user_id].append(record)
 
 def remove_user_record(user_id: int, record_id: int):
-    """Удалить запись пользователя"""
+    """Удалить запись пользователя (PostgreSQL или RAM)"""
+    if DATABASE_AVAILABLE:
+        if db_delete_user_record(record_id):
+            return
+        # Fallback на память если PostgreSQL недоступен
     UserRecords[user_id] = [r for r in UserRecords[user_id] if r.get("id") != record_id]
+
+def get_user_records_list(user_id: int) -> List[Dict]:
+    """Получить список записей пользователя (PostgreSQL или RAM)"""
+    if DATABASE_AVAILABLE:
+        records = db_get_user_records(user_id)
+        if records:
+            return records
+        # Fallback на память если PostgreSQL недоступен
+    return UserRecords.get(user_id, [])
 
 def create_real_booking(user_id: int, service_name: str, master_name: str, date_time: str, client_name: str = "", client_phone: str = "") -> Dict:
     """Создать запись через Google Sheets"""
@@ -1926,16 +2030,26 @@ async def reset_user_session(query: CallbackQuery):
     
     try:
         # Очищаем память разговора
-        if user_id in UserMemory:
-            UserMemory[user_id] = deque(maxlen=MEMORY_TURNS)
+        if DATABASE_AVAILABLE:
+            db_clear_user_memory(user_id)
+        else:
+            if user_id in UserMemory:
+                UserMemory[user_id] = deque(maxlen=MEMORY_TURNS)
         
         # Очищаем локальные записи (но не удаляем из Google Sheets)
-        if user_id in UserRecords:
-            UserRecords[user_id] = []
+        if DATABASE_AVAILABLE:
+            # Записи в PostgreSQL не очищаем (они хранятся в Google Sheets)
+            pass
+        else:
+            if user_id in UserRecords:
+                UserRecords[user_id] = []
         
         # Очищаем частично собранные данные для записи
-        if user_id in UserBookingData:
-            del UserBookingData[user_id]
+        if DATABASE_AVAILABLE:
+            db_set_user_booking_data(user_id, {})
+        else:
+            if user_id in UserBookingData:
+                del UserBookingData[user_id]
         
         # Очищаем имя и телефон (опционально, можно оставить)
         # if user_id in UserName:
@@ -2889,7 +3003,10 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Проверяем, является ли сообщение номером телефона
     if text.startswith("+") and len(text) >= 10:
-        UserPhone[user_id] = text
+        if DATABASE_AVAILABLE:
+            db_set_user_phone(user_id, text)
+        else:
+            UserPhone[user_id] = text
         await update.message.reply_text(
             f"✅ *Номер телефона {text} сохранен!*\n\n"
             f"Теперь вы можете создавать записи.\n"
@@ -3011,8 +3128,14 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # КРИТИЧЕСКОЕ: Проверяем, есть ли сохраненные данные для записи
             # Если пользователь отвечает на вопрос бота (например, просто "Роман"), 
             # нужно использовать сохраненные данные и попытаться создать запись
-            if user_id in UserBookingData and UserBookingData[user_id]:
-                log.info(f"📋 Найдены сохраненные данные для записи: {UserBookingData[user_id]}")
+            saved_booking_data = None
+            if DATABASE_AVAILABLE:
+                saved_booking_data = db_get_user_booking_data(user_id)
+            else:
+                saved_booking_data = UserBookingData.get(user_id)
+            
+            if saved_booking_data:
+                log.info(f"📋 Найдены сохраненные данные для записи: {saved_booking_data}")
                 
                 # Парсим текущее сообщение для извлечения новых данных
                 history = get_recent_history(user_id, 50)
@@ -3020,17 +3143,23 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # Обновляем сохраненные данные новыми (если они есть)
                 if parsed_data.get("service"):
-                    UserBookingData[user_id]["service"] = parsed_data.get("service")
+                    saved_booking_data["service"] = parsed_data.get("service")
                 if parsed_data.get("master"):
-                    UserBookingData[user_id]["master"] = parsed_data.get("master")
+                    saved_booking_data["master"] = parsed_data.get("master")
                 if parsed_data.get("datetime"):
-                    UserBookingData[user_id]["datetime"] = parsed_data.get("datetime")
+                    saved_booking_data["datetime"] = parsed_data.get("datetime")
+                
+                # Сохраняем обновленные данные
+                if DATABASE_AVAILABLE:
+                    db_set_user_booking_data(user_id, saved_booking_data)
+                else:
+                    UserBookingData[user_id] = saved_booking_data
                 
                 # Объединяем сохраненные данные с текущими
                 combined_data = {
-                    "service": UserBookingData[user_id].get("service") or parsed_data.get("service"),
-                    "master": UserBookingData[user_id].get("master") or parsed_data.get("master"),
-                    "datetime": UserBookingData[user_id].get("datetime") or parsed_data.get("datetime")
+                    "service": saved_booking_data.get("service") or parsed_data.get("service"),
+                    "master": saved_booking_data.get("master") or parsed_data.get("master"),
+                    "datetime": saved_booking_data.get("datetime") or parsed_data.get("datetime")
                 }
                 
                 log.info(f"📋 Объединенные данные после ответа на вопрос: service={combined_data.get('service')}, master={combined_data.get('master')}, datetime={combined_data.get('datetime')}")
@@ -5958,6 +6087,19 @@ async def upload_to_qdrant(text_content: str, file_name: str, user_id: int, user
 
 # ===================== RUN BOT ========================
 def main():
+    # Инициализация PostgreSQL базы данных
+    if DATABASE_AVAILABLE:
+        try:
+            if init_database():
+                log.info("✅ PostgreSQL база данных инициализирована")
+            else:
+                log.warning("⚠️ Не удалось инициализировать PostgreSQL, используем память")
+        except Exception as e:
+            log.error(f"❌ Ошибка инициализации PostgreSQL: {e}")
+            log.warning("⚠️ Используем память вместо PostgreSQL")
+    else:
+        log.info("ℹ️ PostgreSQL не настроен, используем память для хранения данных")
+    
     # Проверяем доступность Qdrant библиотек еще раз при старте
     try:
         import qdrant_client
