@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 
 async def test_pricing_query():
     """Тест запроса о ценах"""
-    from rag_langgraph import query_with_langgraph
+    from services.rag.rag_langgraph import query_with_langgraph
     
     # Список услуг для тестирования
     test_queries = [
@@ -66,7 +66,7 @@ async def test_pricing_query():
 
 async def test_general_query():
     """Тест общего запроса (не о ценах)"""
-    from rag_langgraph import query_with_langgraph
+    from services.rag.rag_langgraph import query_with_langgraph
     
     print("\n" + "="*70)
     print("ТЕСТ ОБЩЕГО ЗАПРОСА (НЕ О ЦЕНАХ)")
@@ -100,7 +100,7 @@ async def test_comparison():
     # Тест LangGraph RAG
     print("1. LANGGRAPH RAG:\n")
     try:
-        from rag_langgraph import query_with_langgraph
+        from services.rag.rag_langgraph import query_with_langgraph
         result_lg = await query_with_langgraph(query, thread_id="test_compare_lg")
         print(f"   Ответ: {result_lg['answer'][:200]}...")
         print(f"   Валидация: {'✅' if result_lg['validated'] else '❌'}")
@@ -111,7 +111,7 @@ async def test_comparison():
     # Тест стандартного RAG
     print("\n2. СТАНДАРТНЫЙ RAG:\n")
     try:
-        from qdrant_helper import search_service
+        from services.rag.qdrant_helper import search_service
         results = search_service(query, limit=5)
         if results:
             print(f"   Найдено: {len(results)} результатов")

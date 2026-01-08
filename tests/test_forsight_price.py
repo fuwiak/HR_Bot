@@ -29,7 +29,7 @@ async def test_forsight_price_exact():
     print("ТЕСТ 1: ПРОВЕРКА ТОЧНОЙ ЦЕНЫ ФОРСАЙТ-СЕССИИ ЧЕРЕЗ LANGGRAPH RAG")
     print("="*70 + "\n")
     
-    from rag_langgraph import query_with_langgraph
+    from services.rag.rag_langgraph import query_with_langgraph
     
     test_queries = [
         "Форсайт - сессия. - какая цена",

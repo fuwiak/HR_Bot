@@ -215,7 +215,7 @@ UserWeeekWorkspace: Dict[int, str] = {}  # WEEEK Workspace ID для каждо�
 
 # Попытка импорта PostgreSQL модуля
 try:
-    from database import (
+    from backend.database import (
         init_database,
         add_memory as db_add_memory,
         get_history as db_get_history,
@@ -263,7 +263,7 @@ except ImportError as e:
 
 # Попытка импорта Redis модуля
 try:
-    from redis_helper import (
+    from services.helpers.redis_helper import (
         add_memory_redis,
         get_history_redis,
         get_recent_history_redis,
@@ -2227,7 +2227,7 @@ async def start_booking_process(query: CallbackQuery):
 async def show_weeek_projects(query: CallbackQuery):
     """Показать список проектов из WEEEK"""
     try:
-        from weeek_helper import get_projects
+        from services.helpers.weeek_helper import get_projects
 
         await query.edit_message_text("⏳ Загружаю проекты из WEEEK...")
 
@@ -2273,7 +2273,7 @@ async def show_weeek_projects(query: CallbackQuery):
 async def show_weeek_create_task_menu(query: CallbackQuery):
     """Показать меню создания задачи"""
     try:
-        from weeek_helper import get_projects
+        from services.helpers.weeek_helper import get_projects
 
         await query.edit_message_text("⏳ Загружаю проекты...")
 
@@ -2320,7 +2320,7 @@ async def show_weeek_project_details(query: CallbackQuery, context: ContextTypes
     try:
         project_id = query.data.replace("weeek_view_project_", "")
         
-        from weeek_helper import get_project
+        from services.helpers.weeek_helper import get_project
         
         await query.edit_message_text("⏳ Загружаю информацию о проекте...")
         
@@ -2366,7 +2366,7 @@ async def show_weeek_tasks_for_update(query: CallbackQuery, context: ContextType
     try:
         project_id = query.data.replace("weeek_update_select_project_", "")
         
-        from weeek_helper import get_tasks, get_project
+        from services.helpers.weeek_helper import get_tasks, get_project
         
         await query.edit_message_text("⏳ Загружаю задачи...")
         
@@ -2431,7 +2431,7 @@ async def show_weeek_task_edit_menu(query: CallbackQuery, context: ContextTypes.
     try:
         task_id = query.data.replace("weeek_edit_task_", "")
         
-        from weeek_helper import get_task
+        from services.helpers.weeek_helper import get_task
         
         await query.edit_message_text("⏳ Загружаю задачу...")
         
@@ -2563,7 +2563,7 @@ async def handle_weeek_complete_task(query: CallbackQuery, context: ContextTypes
     try:
         task_id = query.data.replace("weeek_complete_", "").replace("weeek_uncomplete_", "")
         
-        from weeek_helper import complete_task, uncomplete_task
+        from services.helpers.weeek_helper import complete_task, uncomplete_task
         
         await query.edit_message_text("⏳ Обновляю статус...")
         
@@ -2605,7 +2605,7 @@ async def handle_weeek_delete_task(query: CallbackQuery, context: ContextTypes.D
             return
         
         # Удаляем задачу
-        from weeek_helper import delete_task
+        from services.helpers.weeek_helper import delete_task
         
         await query.edit_message_text("⏳ Удаляю задачу...")
         
@@ -2638,7 +2638,7 @@ async def handle_weeek_set_priority(query: CallbackQuery, context: ContextTypes.
         priority = int(parts[0])
         task_id = parts[1]
         
-        from weeek_helper import update_task
+        from services.helpers.weeek_helper import update_task
         
         await query.edit_message_text("⏳ Обновляю приоритет...")
         
@@ -2673,7 +2673,7 @@ async def handle_weeek_set_type(query: CallbackQuery, context: ContextTypes.DEFA
         task_type = parts[0]
         task_id = parts[1]
         
-        from weeek_helper import update_task
+        from services.helpers.weeek_helper import update_task
         
         await query.edit_message_text("⏳ Обновляю тип задачи...")
         
@@ -2859,7 +2859,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("⏳ Отправляю ответ на email...")
             
             # Отправляем email
-            from email_helper import send_email
+            from services.helpers.email_helper import send_email
             
             success = await send_email(
                 to_email=to_email,
@@ -2898,7 +2898,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обработка обновления задачи
     if context.user_data.get("waiting_for_task_update"):
         try:
-            from weeek_helper import update_task
+            from services.helpers.weeek_helper import update_task
             
             task_id = context.user_data.get("editing_task_id")
             field = context.user_data.get("waiting_for_task_update")
@@ -2945,7 +2945,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обработка даты задачи
     if context.user_data.get("waiting_for_task_date"):
         try:
-            from weeek_helper import create_task, get_project
+            from services.helpers.weeek_helper import create_task, get_project
             import re
             from datetime import datetime
             
@@ -3148,7 +3148,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         # Используем улучшенный классификатор намерений только если быстрая проверка не сработала
         try:
-            from intent_classifier import is_booking_intent
+            from services.agents.intent_classifier import is_booking_intent
             # Используем LLM для классификации если доступен OpenRouter API
             use_llm = bool(OPENROUTER_API_KEY)
             is_booking_result, intent_details = is_booking_intent(
@@ -3498,7 +3498,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Если это похоже на бизнес-запрос, обрабатываем через Сценарий 3
             if is_lead_query and len(text) > 20:  # Игнорируем короткие сообщения
                 try:
-                    from scenario_workflows import process_telegram_lead
+                    from services.agents.scenario_workflows import process_telegram_lead
                     lead_result = await process_telegram_lead(
                         user_message=text,
                         user_id=user_id,
@@ -3729,7 +3729,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 # 2. Контекст из WEEEK (проекты и задачи)
                 try:
-                    from weeek_helper import get_projects, get_tasks
+                    from services.helpers.weeek_helper import get_projects, get_tasks
                     
                     # Получаем список проектов
                     projects = await get_projects()
@@ -4357,7 +4357,7 @@ async def demo_proposal_command(update: Update, context: ContextTypes.DEFAULT_TY
 async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /status - статус проектов"""
     try:
-        from weeek_helper import get_project_deadlines
+        from services.helpers.weeek_helper import get_project_deadlines
         
         # Получаем проекты с ближайшими дедлайнами
         upcoming_tasks = await get_project_deadlines(days_ahead=7)
@@ -4397,7 +4397,7 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 1. Получаем данные из WEEEK
         weeek_data = ""
         try:
-            from weeek_helper import get_projects, get_tasks
+            from services.helpers.weeek_helper import get_projects, get_tasks
             
             projects = await get_projects()
             target_project = None
@@ -4592,7 +4592,7 @@ async def weeek_create_task_command(update: Update, context: ContextTypes.DEFAUL
         return
     
     try:
-        from weeek_helper import create_task, get_projects
+        from services.helpers.weeek_helper import create_task, get_projects
         
         # Парсим аргументы (формат: проект | задача)
         full_text = " ".join(context.args)
@@ -4647,7 +4647,7 @@ async def weeek_create_task_command(update: Update, context: ContextTypes.DEFAUL
 async def weeek_projects_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /weeek_projects - список проектов в Weeek"""
     try:
-        from weeek_helper import get_projects
+        from services.helpers.weeek_helper import get_projects
 
         await update.message.reply_text("⏳ Получаю список проектов из WEEEK...")
 
@@ -4678,7 +4678,7 @@ async def weeek_projects_command(update: Update, context: ContextTypes.DEFAULT_T
 async def weeek_update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /weeek_update - обновление задачи в Weeek (интерактивное меню)"""
     try:
-        from weeek_helper import get_projects
+        from services.helpers.weeek_helper import get_projects
         
         await update.message.reply_text("⏳ Загружаю проекты...")
         
@@ -4740,7 +4740,7 @@ async def weeek_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     try:
-        from weeek_helper import get_tasks, get_project
+        from services.helpers.weeek_helper import get_tasks, get_project
         
         project_id = int(context.args[0])
         
@@ -4855,7 +4855,7 @@ async def weeek_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def weeek_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /weeek_info - информация о workspace и проектах"""
     try:
-        from weeek_helper import get_workspace_info, get_projects
+        from services.helpers.weeek_helper import get_workspace_info, get_projects
         
         await update.message.reply_text("⏳ Получаю информацию о workspace...")
         
@@ -4928,7 +4928,7 @@ async def weeek_create_project_command(update: Update, context: ContextTypes.DEF
         return
     
     try:
-        from weeek_helper import create_project
+        from services.helpers.weeek_helper import create_project
         
         project_name = " ".join(context.args)
         username = update.message.from_user.username or update.message.from_user.first_name
@@ -5224,7 +5224,7 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /email_check - проверка новых писем с уведомлениями"""
     try:
-        from email_helper import check_new_emails
+        from services.helpers.email_helper import check_new_emails
 
         await update.message.reply_text("⏳ Проверяю самое новое письмо...")
 
@@ -5397,7 +5397,7 @@ async def email_monitor_task(bot):
     
     while True:
         try:
-            from email_helper import check_new_emails
+            from services.helpers.email_helper import check_new_emails
             
             # Проверяем только самое новое письмо (limit=1 для скорости)
             emails = await check_new_emails(since_days=1, limit=1)
@@ -5431,7 +5431,7 @@ async def handle_email_reply_last(query: CallbackQuery):
     try:
         await query.answer("⏳ Получаю последнее письмо...")
         
-        from email_helper import check_new_emails
+        from services.helpers.email_helper import check_new_emails
         
         # Получаем последнее письмо
         emails = await check_new_emails(since_days=7, limit=1)
@@ -5608,7 +5608,7 @@ async def handle_email_task(query: CallbackQuery, email_id: str):
         from_addr = email_data.get("from", "")
         
         # Показываем меню выбора проекта
-        from weeek_helper import get_projects
+        from services.helpers.weeek_helper import get_projects
         
         projects = await get_projects()
         if not projects:
@@ -5876,7 +5876,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"⏳ Генерирую отчёт по проекту '{project_name}'...")
         
         # Получаем информацию о проекте из WEEEK
-        from weeek_helper import get_projects
+        from services.helpers.weeek_helper import get_projects
         projects = await get_projects()
         project_data = None
         for project in projects:

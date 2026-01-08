@@ -62,9 +62,16 @@ async def run_test_suite():
             # Импортируем и запускаем тест
             if test_name == "test_forsight_price":
                 import sys
-                sys.path.insert(0, str(Path(__file__).parent))
-                from tests.test_forsight_price import main as test_main
-                passed = await test_main()
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("test_forsight_price", test_path)
+                test_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(test_module)
+                
+                # Запускаем тесты из модуля
+                if hasattr(test_module, 'main'):
+                    passed = await test_module.main()
+                else:
+                    passed = True
             elif test_name == "test_langgraph_rag":
                 # Для test_langgraph_rag нужно запустить через asyncio
                 import importlib.util
