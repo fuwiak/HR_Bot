@@ -97,6 +97,10 @@ Thumbs.db
 google_sheets_credentials.json
 email_subscribers.json
 
+# Legacy files (temporary, handlers still import from app_old.py)
+telegram_bot/app_old.py
+telegram_bot/app_new.py
+
 # Files with real credentials - DO NOT COMMIT
 ENV_VARIABLES.md
 RAILWAY_SETUP.md
