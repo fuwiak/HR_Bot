@@ -408,7 +408,7 @@ def add_memory(user_id, role, text):
     
     # 3. Fallback на память если Redis и PostgreSQL недоступны
     if not REDIS_AVAILABLE_IMPORT and not DATABASE_AVAILABLE:
-    UserMemory[user_id].append((role, text))
+        UserMemory[user_id].append((role, text))
 
 def get_history(user_id):
     """Получить историю чата (Redis -> PostgreSQL -> RAM)"""
