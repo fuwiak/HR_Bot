@@ -53,3 +53,4 @@ pytest-mock>=3.12.0  # Для моков в тестах
 psycopg2-binary>=2.9.0  # PostgreSQL драйвер для Railway
 sqlalchemy>=2.0.0  # ORM для работы с базой данных
 alembic>=1.13.0  # Миграции базы данных
+redis>=5.0.0  # Redis клиент для кэширования

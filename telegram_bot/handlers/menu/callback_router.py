@@ -298,7 +298,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     elif query.data == "rag_stats":
         try:
-            from qdrant_helper import get_collection_stats
+            from services.rag.qdrant_helper import get_collection_stats
             stats = await get_collection_stats()
             
             if "error" in stats:
@@ -329,7 +329,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     elif query.data == "rag_docs":
         try:
-            from qdrant_helper import list_documents
+            from services.rag.qdrant_helper import list_documents
             docs = await list_documents(limit=20)
             
             if docs:
