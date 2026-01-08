@@ -1,5 +1,5 @@
 """
-Универсальный LLM-клиент с поддержкой Groq (основной) и OpenRouter (fallback).
+Универсальный LLM-клиент с поддержкой OpenRouter (основной провайдер).
 Поддерживает быструю замену endpoint через ENV переменные.
 """
 
@@ -30,8 +30,8 @@ class LLMClient:
     
     def __init__(
         self,
-        primary_provider: str = "groq",
-        primary_model: str = "openai/gpt-oss-120b",
+        primary_provider: str = "openrouter",
+        primary_model: str = "deepseek/deepseek-chat",
         fallback_chain: Optional[List[Dict[str, str]]] = None,
         confidence_threshold: float = 0.7,
         timeout: int = 30
@@ -41,23 +41,17 @@ class LLMClient:
         self.confidence_threshold = confidence_threshold
         self.timeout = timeout
         
-        # Цепочка fallback моделей
+        # Цепочка fallback моделей (только OpenRouter)
         if fallback_chain is None:
-            # Дефолтная цепочка fallback
+            # Дефолтная цепочка fallback (только OpenRouter модели)
             self.fallback_chain = [
-                {"provider": "groq", "model": "openai/gpt-oss-20b"},
-                {"provider": "openrouter", "model": "llama-3.3-70b-versatile"}
+                {"provider": "openrouter", "model": "deepseek/deepseek-chat"},
+                {"provider": "openrouter", "model": "meta-llama/llama-3.3-70b-instruct"}
             ]
         else:
             self.fallback_chain = fallback_chain
         
-        # Загружаем конфигурацию из ENV и очищаем от пробелов/переносов строк
-        groq_key = os.getenv("GROQ_API_KEY")
-        self.groq_api_key = groq_key.strip() if groq_key else None
-        
-        groq_url = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1/chat/completions")
-        self.groq_api_url = groq_url.strip()
-        
+        # Загружаем конфигурацию из ENV (только OpenRouter)
         openrouter_key = os.getenv("OPENROUTER_API_KEY")
         self.openrouter_api_key = openrouter_key.strip() if openrouter_key else None
         
@@ -65,7 +59,7 @@ class LLMClient:
         self.openrouter_api_url = openrouter_url.strip()
         
         # Для локального qroq/ollama можно установить через ENV
-        # GROQ_API_URL=http://localhost:11434/v1/chat/completions
+        # OpenRouter используется как основной провайдер
         
         # HTTP клиент создается лениво для thread-safety
         self._client: Optional[httpx.AsyncClient] = None
@@ -124,17 +118,7 @@ class LLMClient:
     ) -> LLMResponse:
         """Выполняет запрос к LLM API"""
         
-        if provider == "groq":
-            api_key = self.groq_api_key
-            api_url = self.groq_api_url
-            # Очищаем API ключ от возможных пробелов/переносов
-            api_key = api_key.strip() if api_key else None
-            api_url = api_url.strip()
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-        elif provider == "openrouter":
+        if provider == "openrouter":
             api_key = self.openrouter_api_key
             api_url = self.openrouter_api_url
             # Очищаем API ключ от возможных пробелов/переносов
@@ -400,8 +384,7 @@ class LLMClient:
     def _get_default_model(self, provider: str) -> str:
         """Возвращает дефолтную модель для провайдера (deprecated, используется primary_model)"""
         defaults = {
-            "groq": "openai/gpt-oss-120b",
-            "openrouter": "openai/gpt-oss-120b"
+            "openrouter": "deepseek/deepseek-chat"
         }
         return defaults.get(provider, self.primary_model)
     

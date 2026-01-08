@@ -74,7 +74,7 @@ log = logging.getLogger()
 
 # Попытка импорта PostgreSQL модуля
 try:
-    from backend.database import init_database
+    from backend.database import init_db
     DATABASE_AVAILABLE = True
     log.info("✅ PostgreSQL модуль загружен")
 except ImportError as e:
@@ -124,7 +124,7 @@ def main():
     # Инициализация PostgreSQL базы данных
     if DATABASE_AVAILABLE:
         try:
-            if init_database():
+            if init_db():
                 log.info("✅ PostgreSQL база данных инициализирована")
             else:
                 log.warning("⚠️ Не удалось инициализировать PostgreSQL, используем память")

@@ -249,7 +249,10 @@ def generate_response(state: RAGState) -> RAGState:
         
         # Генерируем ответ (синхронная обертка для async функции)
         import asyncio
-        llm_client = LLMClient()
+        llm_client = LLMClient(
+            primary_provider="openrouter",
+            primary_model="deepseek/deepseek-chat"
+        )
         
         # Используем asyncio.run если нет event loop, иначе используем существующий
         try:
