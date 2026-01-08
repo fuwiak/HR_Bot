@@ -15,7 +15,7 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend/ .
-COPY frontend/lib ./lib 2>/dev/null || true
+COPY frontend/lib ./lib
 
 # Set environment variable for build
 ENV NEXT_TELEMETRY_DISABLED=1
