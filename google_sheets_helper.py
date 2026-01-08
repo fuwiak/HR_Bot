@@ -120,7 +120,7 @@ def get_masters() -> List[Dict]:
         for idx, name in enumerate(sorted(master_names), 1):
             # Определяем тип зала по услугам
             master_services = [s for s in services if s.get("master1") == name or s.get("master2") == name]
-            service_type = "Мужской зал" if any(s.get("type") == "men" for s in master_services) else "Женский зал"
+            service_type = "HR-специалист" if any(s.get("type") == "men" for s in master_services) else "HR-специалист"
             
             masters.append({
                 "id": idx,
@@ -190,12 +190,12 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             if len(all_values) > 0:
                 header_row = all_values[0]
                 header_col_a = header_row[0].strip() if len(header_row) > 0 else ""
-                if "Мужской" in header_col_a or "мужской" in header_col_a:
+                if "Мужской" in header_col_a or "мужской" in header_col_a or "men" in header_col_a.lower():
                     current_type = "men"
-                    log.info(f"📋 Найдена секция в заголовке: Мужской зал (строка 1)")
-                elif "Женский" in header_col_a or "женский" in header_col_a:
+                    log.info(f"📋 Найдена секция в заголовке: Отдел Романа (строка 1)")
+                elif "Женский" in header_col_a or "женский" in header_col_a or "women" in header_col_a.lower():
                     current_type = "women"
-                    log.info(f"📋 Найдена секция в заголовке: Женский зал (строка 1)")
+                    log.info(f"📋 Найдена секция в заголовке: Отдел Анжелы (строка 1)")
             
             # Парсим данные (пропускаем заголовок, если есть)
             # ВАЖНО: Строка 1 - это заголовок, строка 2+ - данные
@@ -203,7 +203,7 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 if not row or len(row) < 2:
                     continue
                 
-                # Колонка A: Мужской зал / Женский зал (может быть заголовок секции)
+                # Колонка A: Тип услуги / Отдел (может быть заголовок секции)
                 col_a = row[0].strip() if len(row) > 0 else ""
                 # Колонка B: Услуга название
                 service_name = row[1].strip() if len(row) > 1 else ""
@@ -211,12 +211,12 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 # КРИТИЧЕСКОЕ: Если колонка A содержит заголовок секции, обновляем current_type
                 # Если колонка A пустая, используем последний установленный current_type
                 if col_a:
-                    if "Мужской" in col_a or "мужской" in col_a:
+                    if "Мужской" in col_a or "мужской" in col_a or "men" in col_a.lower():
                         current_type = "men"
-                        log.debug(f"📋 Найдена секция: Мужской зал (строка {row_idx})")
-                    elif "Женский" in col_a or "женский" in col_a:
+                        log.debug(f"📋 Найдена секция: Отдел Романа (строка {row_idx})")
+                    elif "Женский" in col_a or "женский" in col_a or "women" in col_a.lower():
                         current_type = "women"
-                        log.debug(f"📋 Найдена секция: Женский зал (строка {row_idx})")
+                        log.debug(f"📋 Найдена секция: Отдел Анжелы (строка {row_idx})")
                     
                     # Если колонка A содержит заголовок секции, но услуга тоже есть в этой строке
                     # (в колонке B), обрабатываем услугу дальше
@@ -314,7 +314,7 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             # Логируем статистику по типам услуг
             men_services = [s for s in services if s.get('type') == 'men']
             women_services = [s for s in services if s.get('type') == 'women']
-            log.info(f"📊 Статистика: Мужской зал - {len(men_services)} услуг, Женский зал - {len(women_services)} услуг")
+            log.info(f"📊 Статистика: Отдел Романа - {len(men_services)} услуг, Отдел Анжелы - {len(women_services)} услуг")
             
             # КРИТИЧЕСКОЕ: Логируем ВСЕ услуги для диагностики
             log.info(f"📋 ВСЕ НАЙДЕННЫЕ УСЛУГИ ({len(services)} шт.):")
