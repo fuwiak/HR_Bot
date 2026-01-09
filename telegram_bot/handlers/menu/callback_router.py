@@ -461,7 +461,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             projects = await get_projects()
             
             if not projects:
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+                keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
                 await query.edit_message_text(
                     "❌ Проектов не найдено.\n\n"
                     "Сначала создайте проекты в WEEEK.",
