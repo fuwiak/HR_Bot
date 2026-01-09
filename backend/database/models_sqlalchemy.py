@@ -99,6 +99,17 @@ class ConversationContext(Base):
         return f"<ConversationContext(user_id={self.user_id}, context_size={self.context_size})>"
 
 
+class EmailSubscriber(Base):
+    """Модель подписчика на email уведомления"""
+    __tablename__ = "email_subscribers"
+    
+    user_id = Column(BigInteger, primary_key=True, index=True)
+    subscribed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    def __repr__(self):
+        return f"<EmailSubscriber(user_id={self.user_id}, subscribed_at={self.subscribed_at})>"
+
+
 # Функция для получения engine
 def get_engine():
     """Получить SQLAlchemy engine"""

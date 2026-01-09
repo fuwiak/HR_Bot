@@ -33,6 +33,8 @@ COPY scripts/ ./scripts/
 COPY config.yaml .
 COPY config/ ./config/
 COPY templates/ ./templates/
+COPY alembic.ini .
+COPY alembic/ ./alembic/
 
 # Expose port for Telegram webhook
 EXPOSE 8080
@@ -40,8 +42,10 @@ EXPOSE 8080
 # Опциональный запуск тестов перед стартом
 ENV RUN_TESTS=${RUN_TESTS:-false}
 
-# Создаем entrypoint скрипт для инициализации Qdrant и условного запуска тестов
+# Создаем entrypoint скрипт для запуска миграций, инициализации Qdrant и условного запуска тестов
 RUN echo '#!/bin/sh\n\
+echo "🔄 Запуск миграций Alembic..."\n\
+alembic upgrade head || echo "⚠️ Миграции завершились с ошибками, но продолжаем запуск"\n\
 echo "🔧 Инициализация Qdrant коллекции..."\n\
 python scripts/init_qdrant.py || echo "⚠️ Инициализация Qdrant завершилась с ошибками, но продолжаем запуск"\n\
 if [ "$RUN_TESTS" = "true" ]; then\n\

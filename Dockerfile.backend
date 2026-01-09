@@ -33,6 +33,8 @@ COPY config.yaml .
 COPY config/ ./config/
 COPY templates/ ./templates/
 COPY dashboard_static/ ./dashboard_static/
+COPY alembic.ini .
+COPY alembic/ ./alembic/
 
 # Expose port for backend API
 EXPOSE 8081
