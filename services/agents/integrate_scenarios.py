@@ -19,15 +19,20 @@ try:
     )
     from services.helpers.hrtime_helper import get_new_orders
     from services.helpers.email_helper import check_new_emails
+    from services.services.telegram_channel_parser import TelegramChannelParser
     SCENARIOS_AVAILABLE = True
+    CHANNEL_PARSER_AVAILABLE = True
 except ImportError as e:
     log.warning(f"⚠️ Модули сценариев недоступны: {e}")
     SCENARIOS_AVAILABLE = False
+    CHANNEL_PARSER_AVAILABLE = False
 
 
 # Глобальные переменные для хранения обработанных ID (чтобы не обрабатывать повторно)
 processed_hrtime_orders = set()
+processed_channel_messages = set()  # ID сообщений из Telegram канала
 processed_emails = set()  # Используем message_id или subject+from как ключ
+last_channel_message_id = None  # ID последнего обработанного сообщения из канала
 
 
 # ===================== Фоновые задачи =====================
@@ -35,6 +40,10 @@ processed_emails = set()  # Используем message_id или subject+from 
 async def monitor_hrtime_orders(telegram_bot, interval_minutes: int = 30):
     """
     Фоновая задача для мониторинга новых заказов с HR Time
+    
+    Приоритет источников:
+    1. Telegram канал @HRTime_bot (основной источник)
+    2. HR Time API (fallback/placeholder)
     
     Args:
         telegram_bot: Экземпляр Telegram бота для уведомлений
@@ -45,46 +54,108 @@ async def monitor_hrtime_orders(telegram_bot, interval_minutes: int = 30):
         return
     
     log.info(f"🔄 [Мониторинг] Запуск мониторинга HR Time (интервал: {interval_minutes} минут)")
+    log.info(f"📢 [Мониторинг] Приоритет: Telegram канал @HRTime_bot → HR Time API (fallback)")
+    
+    # Инициализируем парсер канала
+    channel_parser = None
+    if CHANNEL_PARSER_AVAILABLE:
+        try:
+            channel_parser = TelegramChannelParser()
+            log.info("✅ [Мониторинг] Парсер Telegram канала инициализирован")
+        except Exception as e:
+            log.warning(f"⚠️ [Мониторинг] Не удалось инициализировать парсер канала: {e}")
+    
+    global last_channel_message_id
     
     while True:
         try:
-            # Получаем новые заказы
-            orders = await get_new_orders(limit=10)
+            orders_found = 0
             
-            for order in orders:
-                order_id = str(order.get("id", ""))
-                
-                # Пропускаем уже обработанные
-                if order_id in processed_hrtime_orders:
-                    continue
-                
-                log.info(f"🔔 [Мониторинг] Найден новый заказ: {order_id}")
-                
-                # Обрабатываем заказ через Сценарий 1
-                result = await process_hrtime_order(order_id, order_data=order)
-                
-                if result.get("success"):
-                    processed_hrtime_orders.add(order_id)
+            # ШАГ 1: Проверяем Telegram канал @HRTime_bot (основной источник)
+            if channel_parser:
+                try:
+                    log.info("📢 [Мониторинг] Проверка Telegram канала @HRTime_bot...")
+                    channel_orders = await channel_parser.get_new_orders_from_channel(
+                        limit=10,
+                        last_message_id=last_channel_message_id
+                    )
                     
-                    # Отправляем уведомление консультанту, если подготовлено
-                    if result.get("notification_text") and telegram_bot:
-                        consultant_chat_id = os.getenv("TELEGRAM_CONSULTANT_CHAT_ID")
-                        if consultant_chat_id:
-                            try:
-                                await telegram_bot.send_message(
-                                    chat_id=int(consultant_chat_id),
-                                    text=result["notification_text"],
-                                    parse_mode="Markdown"
-                                )
-                                log.info(f"✅ [Мониторинг] Консультант уведомлен о заказе {order_id}")
-                            except Exception as e:
-                                log.error(f"❌ [Мониторинг] Ошибка отправки уведомления: {e}")
+                    for channel_order in channel_orders:
+                        message_id = channel_order.get("message_id")
+                        order_id = f"channel_{message_id}"
+                        
+                        # Пропускаем уже обработанные
+                        if order_id in processed_channel_messages:
+                            continue
+                        
+                        log.info(f"🔔 [Мониторинг] Найден новый заказ из канала: {order_id}")
+                        
+                        # Преобразуем данные из канала в формат для process_hrtime_order
+                        parsed_data = channel_order.get("parsed", {})
+                        raw_data = parsed_data.get("raw_data", {})
+                        
+                        order_data = {
+                            "id": order_id,
+                            "title": raw_data.get("title", "Заказ из канала"),
+                            "description": raw_data.get("description", ""),
+                            "budget": parsed_data.get("budget", {}).get("text", ""),
+                            "deadline": parsed_data.get("deadline", {}).get("text", ""),
+                            "client": parsed_data.get("contacts", {}),
+                            "source": "telegram_channel",
+                            "message_id": message_id
+                        }
+                        
+                        # Обрабатываем заказ через Сценарий 1
+                        result = await process_hrtime_order(order_id, order_data=order_data)
+                        
+                        if result.get("success"):
+                            processed_channel_messages.add(order_id)
+                            if message_id and (not last_channel_message_id or message_id > last_channel_message_id):
+                                last_channel_message_id = message_id
+                            orders_found += 1
+                            
+                            # Отправляем уведомление консультанту
+                            if result.get("notification_text") and telegram_bot:
+                                consultant_chat_id = os.getenv("TELEGRAM_CONSULTANT_CHAT_ID")
+                                if consultant_chat_id:
+                                    try:
+                                        await telegram_bot.send_message(
+                                            chat_id=int(consultant_chat_id),
+                                            text=result["notification_text"],
+                                            parse_mode="Markdown"
+                                        )
+                                        log.info(f"✅ [Мониторинг] Консультант уведомлен о заказе {order_id}")
+                                    except Exception as e:
+                                        log.error(f"❌ [Мониторинг] Ошибка отправки уведомления: {e}")
+                        
+                        await asyncio.sleep(2)
+                    
+                    if channel_orders:
+                        log.info(f"✅ [Мониторинг] Обработано {len(channel_orders)} заказов из Telegram канала")
                 
-                # Небольшая задержка между обработкой заказов
-                await asyncio.sleep(2)
+                except Exception as e:
+                    log.warning(f"⚠️ [Мониторинг] Ошибка получения заказов из канала: {e}")
+                    log.info("🔄 [Мониторинг] Переключаюсь на HR Time API (fallback)")
             
-            if orders:
-                log.info(f"✅ [Мониторинг] Обработано {len(orders)} заказов с HR Time")
+            # ШАГ 2: Fallback на HR Time API (placeholder, пока не реализовано)
+            if orders_found == 0:
+                try:
+                    log.info("🔄 [Мониторинг] Проверка HR Time API (fallback)...")
+                    api_orders = await get_new_orders(limit=10)
+                    
+                    if not api_orders:
+                        log.info("ℹ️ [Мониторинг] HR Time API не вернул заказов (placeholder)")
+                    else:
+                        log.warning("⚠️ [Мониторинг] HR Time API вернул заказы, но это placeholder - не обрабатываем")
+                        # TODO: Когда API будет готово, раскомментировать обработку
+                        # for order in api_orders:
+                        #     order_id = str(order.get("id", ""))
+                        #     if order_id in processed_hrtime_orders:
+                        #         continue
+                        #     # ... обработка заказа
+                
+                except Exception as e:
+                    log.warning(f"⚠️ [Мониторинг] Ошибка HR Time API (fallback): {e}")
             
         except Exception as e:
             log.error(f"❌ [Мониторинг] Ошибка мониторинга HR Time: {e}")

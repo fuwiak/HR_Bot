@@ -266,9 +266,13 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
                     log.info(f"✅ [Сценарий 1] Задача создана в WEEEK")
             
             # 4e. Уведомление консультанта в Telegram
+            # Определяем источник данных
+            source = order_data.get("source", "api")
+            source_text = "📢 Канал: @HRTime_bot" if source == "telegram_channel" else "🌐 Источник: HR Time API"
+            
             notification_parts = [
                 f"🔥 *Новый теплый лид с HR Time*\n",
-                f"📢 Канал: @HRTime_bot\n",
+                f"{source_text}\n",
                 f"*Заказ:* {title}",
                 f"*Клиент:* {client_name}",
                 f"*Email:* {client_email or 'Не указан'}",

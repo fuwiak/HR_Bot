@@ -233,6 +233,22 @@ def main():
     # Callback query handler for inline buttons
     app.add_handler(CallbackQueryHandler(button_callback))
     
+    # Channel post handler for @HRTime_bot
+    try:
+        from telegram_bot.handlers.channel.hrtime_channel_handler import handle_channel_post
+        from telegram import Update
+        
+        # Создаем кастомный фильтр для channel_post
+        def channel_post_filter(update: Update) -> bool:
+            return update.channel_post is not None
+        
+        app.add_handler(MessageHandler(filters=channel_post_filter, callback=handle_channel_post))
+        log.info("✅ Обработчик сообщений из канала @HRTime_bot добавлен")
+    except Exception as e:
+        log.warning(f"⚠️ Не удалось загрузить обработчик канала: {e}")
+        import traceback
+        log.warning(traceback.format_exc())
+    
     # Message handler for AI chat (должен быть последним!)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, reply))
     
@@ -256,7 +272,8 @@ def main():
             await app.bot.set_webhook(
                 url=full_webhook_url,
                 drop_pending_updates=True,
-                max_connections=100
+                max_connections=100,
+                allowed_updates=["message", "channel_post", "callback_query"]
             )
             
             log.info(f"✅ Webhook установлен: {full_webhook_url}")
@@ -338,7 +355,7 @@ def main():
                 log.error(f"❌ Ошибка проверки webhook: {e}")
             
             await app.updater.start_polling(
-                allowed_updates=None,
+                allowed_updates=["message", "channel_post", "callback_query"],
                 drop_pending_updates=True
             )
             log.info("✅ Бот запущен с polling (concurrent_updates=True)")
