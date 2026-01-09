@@ -18,6 +18,21 @@
 
 ## Использование
 
+### Автоматически при деплое (рекомендуется)
+
+Миграция автоматически выполняется при старте Backend контейнера, если установлена переменная:
+
+```bash
+RUN_SERVICES_MIGRATION=true
+```
+
+**Настройка на Railway:**
+1. Railway Dashboard → HR_Bot → Variables
+2. Добавьте: `RUN_SERVICES_MIGRATION=true`
+3. Перезапустите сервис
+
+Подробнее: см. `docs/SERVICES_MIGRATION_AUTO.md`
+
 ### Локально
 
 ```bash
@@ -25,11 +40,16 @@
 python3 scripts/migrate_services_to_rag.py
 ```
 
-### На Railway
+### На Railway (вручную)
 
 ```bash
-# Через Railway CLI
-railway run python3 scripts/migrate_services_to_rag.py
+# Через Railway Shell (рекомендуется)
+railway shell --service HR_Bot
+python3 scripts/migrate_services_to_rag.py
+
+# Или через Railway CLI
+QDRANT_HOST="https://qdrant-production-bf97.up.railway.app" \
+railway run --service HR_Bot python3 scripts/migrate_services_to_rag.py
 ```
 
 ## Требования
