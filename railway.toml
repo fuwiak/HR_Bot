@@ -1,12 +1,19 @@
 # Railway конфигурация по умолчанию
-# Для нескольких сервисов используйте отдельные конфигурации в .railway/
-# или настройте Dockerfile Path в Dashboard для каждого сервиса
+# 
+# ВАЖНО: Этот файл НЕ используется для автоматической настройки Dockerfile Path!
+# Railway использует файлы в .railway/ для каждого сервиса:
+#   - .railway/telegram-bot.toml → Dockerfile (главный)
+#   - .railway/backend.toml → Dockerfile.backend
+#   - .railway/frontend.toml → frontend/Dockerfile
+#   - .railway/yadisk-indexer.toml → Dockerfile.yadisk
+#
+# При создании нового сервиса Railway будет использовать конфигурацию из .railway/*.toml
+# Если нужно изменить Dockerfile Path, используйте Railway Dashboard или скрипт:
+#   ./scripts/setup_miniapp_dockerfile.sh
 
 [build]
 builder = "DOCKERFILE"
-# По умолчанию используется Dockerfile для Telegram Bot сервиса
-# Для других сервисов настройте в Dashboard: Settings → Build → Dockerfile Path
-dockerfilePath = "Dockerfile"
+# dockerfilePath НЕ указан - Railway будет использовать .railway/*.toml для каждого сервиса
 
 [deploy]
 numReplicas = 1
