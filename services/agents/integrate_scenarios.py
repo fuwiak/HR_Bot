@@ -10,15 +10,15 @@ from typing import Optional
 log = logging.getLogger()
 
 try:
-    from scenario_workflows import (
+    from services.agents.scenario_workflows import (
         process_hrtime_order,
         process_lead_email,
         process_telegram_lead,
         check_upcoming_deadlines,
         start_deadline_monitor
     )
-    from hrtime_helper import get_new_orders
-    from email_helper import check_new_emails
+    from services.helpers.hrtime_helper import get_new_orders
+    from services.helpers.email_helper import check_new_emails
     SCENARIOS_AVAILABLE = True
 except ImportError as e:
     log.warning(f"⚠️ Модули сценариев недоступны: {e}")

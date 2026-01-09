@@ -142,16 +142,19 @@ def main():
     def index_services_background():
         """Индексировать услуги в Qdrant в фоновом потоке"""
         try:
+            import time
+            # Даем время для инициализации Google Sheets
+            time.sleep(2)
             log.info("🔄 Фоновая индексация Qdrant: чтение услуг из Google Sheets...")
             services = get_services()
-            if services:
+            if services and len(services) > 0:
                 log.info(f"📋 Прочитано {len(services)} услуг из Google Sheets, начинаю индексацию в Qdrant...")
                 if index_services(services):
                     log.info(f"✅ Успешно проиндексировано {len(services)} услуг в Qdrant")
                 else:
                     log.warning("⚠️ Не удалось проиндексировать услуги в Qdrant")
             else:
-                log.warning("⚠️ Нет услуг для индексации в Qdrant")
+                log.debug("ℹ️ Нет услуг для индексации в Qdrant (возможно Google Sheets еще не загружены или пусты)")
         except Exception as e:
             log.error(f"❌ Ошибка индексации Qdrant в фоне: {e}")
             import traceback
