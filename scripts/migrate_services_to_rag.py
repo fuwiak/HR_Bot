@@ -383,15 +383,31 @@ def migrate_services_to_rag(services: List[Dict]) -> bool:
     
     try:
         upload_start = datetime.now()
-        client.upsert(
+        
+        # Используем wait=True для ожидания завершения операции
+        result = client.upsert(
             collection_name=COLLECTION_NAME,
-            points=points
+            points=points,
+            wait=True  # Ждем завершения операции
         )
+        
         upload_time = (datetime.now() - upload_start).total_seconds()
         
+        log.info(f"✅ Статус загрузки: {result.status if hasattr(result, 'status') else 'COMPLETED'}")
         log.info(f"✅ Успешно загружено {successful} услуг в RAG коллекцию '{COLLECTION_NAME}' (время: {upload_time:.1f}с)")
+        
         if failed > 0:
             log.warning(f"⚠️ Не удалось загрузить {failed} услуг")
+        
+        # Проверяем количество точек в коллекции
+        try:
+            count_result = client.count(
+                collection_name=COLLECTION_NAME,
+                exact=True
+            )
+            log.info(f"📊 Проверка: в коллекции теперь {count_result.count} точек")
+        except Exception as count_e:
+            log.warning(f"⚠️ Не удалось проверить количество точек: {count_e}")
         
         # Показываем статус коллекции ПОСЛЕ загрузки
         log.info("\n📊 Статус коллекции ПОСЛЕ загрузки:")
