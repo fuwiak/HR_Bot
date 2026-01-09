@@ -188,13 +188,103 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("weeek_select_project_"):
         project_id = query.data.replace("weeek_select_project_", "")
         context.user_data["selected_project_id"] = project_id
-        await query.edit_message_text(
-            "✅ Проект выбран!\n\n"
-            "Теперь отправьте название задачи (текстовым сообщением).\n\n"
-            "Например: `Согласовать КП с клиентом`",
-            parse_mode='Markdown'
-        )
         context.user_data["waiting_for_task_name"] = True
+        
+        # Показываем кнопки для быстрого выбора даты
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        tomorrow = today + timedelta(days=1)
+        next_week = today + timedelta(days=7)
+        
+        keyboard = [
+            [InlineKeyboardButton("📅 Сегодня", callback_data=f"weeek_date_{today.strftime('%d.%m.%Y')}")],
+            [InlineKeyboardButton("📅 Завтра", callback_data=f"weeek_date_{tomorrow.strftime('%d.%m.%Y')}")],
+            [InlineKeyboardButton("📅 Через неделю", callback_data=f"weeek_date_{next_week.strftime('%d.%m.%Y')}")],
+            [InlineKeyboardButton("📝 Без даты", callback_data="weeek_date_none")],
+            [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]
+        ]
+        
+        await query.edit_message_text(
+            "✅ *Проект выбран!*\n\n"
+            "📝 *Шаг 1: Название задачи*\n"
+            "Отправьте название задачи текстовым сообщением.\n\n"
+            "📅 *Шаг 2: Дата (опционально)*\n"
+            "Выберите дату кнопкой ниже или отправьте свою дату после названия.\n\n"
+            "💡 *Пример:*\n"
+            "`Согласовать КП с клиентом`",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    elif query.data.startswith("weeek_date_"):
+        # Обработка выбора даты
+        date_str = query.data.replace("weeek_date_", "")
+        
+        if date_str == "none":
+            context.user_data["task_date"] = None
+            context.user_data["task_time"] = None
+            await query.answer("✅ Задача будет создана без даты")
+        else:
+            context.user_data["task_date"] = date_str
+            # Показываем кнопки для выбора времени
+            keyboard = [
+                [InlineKeyboardButton("🕐 09:00", callback_data=f"weeek_time_{date_str}_09:00")],
+                [InlineKeyboardButton("🕐 12:00", callback_data=f"weeek_time_{date_str}_12:00")],
+                [InlineKeyboardButton("🕐 15:00", callback_data=f"weeek_time_{date_str}_15:00")],
+                [InlineKeyboardButton("🕐 18:00", callback_data=f"weeek_time_{date_str}_18:00")],
+                [InlineKeyboardButton("⏰ Без времени", callback_data=f"weeek_time_{date_str}_none")],
+                [InlineKeyboardButton("🔙 Назад", callback_data=f"weeek_select_project_{context.user_data.get('selected_project_id')}")]
+            ]
+            
+            await query.edit_message_text(
+                f"✅ Дата выбрана: *{date_str}*\n\n"
+                "⏰ *Выберите время (опционально):*",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        
+        # Если дата не выбрана, показываем сообщение о вводе названия
+        keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="menu_projects")]]
+        await query.edit_message_text(
+            "✅ Дата: не указана\n\n"
+            "📝 Теперь отправьте название задачи текстовым сообщением.\n\n"
+            "💡 *Пример:*\n"
+            "`Согласовать КП с клиентом`",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    elif query.data.startswith("weeek_time_"):
+        # Обработка выбора времени
+        # Формат: weeek_time_DD.MM.YYYY_HH:MM или weeek_time_DD.MM.YYYY_none
+        parts = query.data.replace("weeek_time_", "").split("_", 1)
+        if len(parts) == 2:
+            date_str = parts[0]
+            time_str = parts[1]
+            
+            context.user_data["task_date"] = date_str
+            if time_str == "none":
+                context.user_data["task_time"] = None
+                await query.answer("✅ Время не указано")
+            else:
+                context.user_data["task_time"] = time_str
+                await query.answer(f"✅ Время выбрано: {time_str}")
+            
+            # Показываем сообщение о вводе названия
+            keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="menu_projects")]]
+            time_display = f"{time_str}" if time_str != "none" else "не указано"
+            await query.edit_message_text(
+                f"✅ Дата: *{date_str}*\n"
+                f"✅ Время: *{time_display}*\n\n"
+                "📝 Теперь отправьте название задачи текстовым сообщением.\n\n"
+                "💡 *Пример:*\n"
+                "`Согласовать КП с клиентом`",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
         return
     
     elif query.data.startswith("weeek_view_project_"):
