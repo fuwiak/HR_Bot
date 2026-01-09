@@ -367,7 +367,20 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         response_text += f"⏰ *Время:* {task_time}\n"
                     response_text += f"🆔 *ID задачи:* `{task_id}`"
                     
-                    await update.message.reply_text(response_text, parse_mode=ParseMode.MARKDOWN)
+                    # Добавляем кнопки для редактирования задачи
+                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                    keyboard = [
+                        [InlineKeyboardButton("✏️ Редактировать задачу", callback_data=f"weeek_edit_task_{task_id}")],
+                        [InlineKeyboardButton("📅 Изменить дату", callback_data=f"weeek_edit_date_{task_id}")],
+                        [InlineKeyboardButton("➕ Создать еще задачу", callback_data="weeek_create_task_menu")],
+                        [InlineKeyboardButton("🔙 В меню проектов", callback_data="menu_projects")]
+                    ]
+                    
+                    await update.message.reply_text(
+                        response_text, 
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
                     log.info(f"✅ Задача создана: {task_name} в проекте {project_id}")
                 else:
                     await update.message.reply_text("❌ Не удалось создать задачу в WEEEK")
