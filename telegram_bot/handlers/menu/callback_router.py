@@ -324,6 +324,58 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_weeek_edit_field(query, context)
         return
     
+    elif query.data.startswith("weeek_edit_title_"):
+        from telegram_bot.handlers.commands.weeek import handle_weeek_edit_title
+        await handle_weeek_edit_title(query, context)
+        return
+    
+    elif query.data.startswith("weeek_edit_date_"):
+        from telegram_bot.handlers.commands.weeek import handle_weeek_edit_date
+        await handle_weeek_edit_date(query, context)
+        return
+    
+    elif query.data.startswith("weeek_edit_date_select_"):
+        # Обработка выбора даты при редактировании
+        # Формат: weeek_edit_date_select_taskId_date
+        parts = query.data.replace("weeek_edit_date_select_", "").split("_", 1)
+        if len(parts) == 2:
+            task_id = parts[0]
+            date_str = parts[1]
+            
+            try:
+                from services.helpers.weeek_helper import update_task, get_task
+                
+                if date_str == "none":
+                    # Удаляем дату - используем пустую строку или None
+                    result = await update_task(task_id, due_date="")
+                    if result:
+                        await query.answer("✅ Дата удалена")
+                    else:
+                        await query.answer("❌ Ошибка обновления даты")
+                else:
+                    # Конвертируем формат DD.MM.YYYY в YYYY-MM-DD для API
+                    from datetime import datetime
+                    try:
+                        date_obj = datetime.strptime(date_str, '%d.%m.%Y')
+                        api_date = date_obj.strftime('%Y-%m-%d')
+                        result = await update_task(task_id, due_date=api_date)
+                        if result:
+                            await query.answer(f"✅ Дата обновлена: {date_str}")
+                        else:
+                            await query.answer("❌ Ошибка обновления даты")
+                    except ValueError:
+                        await query.answer("❌ Неверный формат даты")
+                        return
+                
+                # Обновляем меню редактирования
+                query.data = f"weeek_edit_task_{task_id}"
+                from telegram_bot.handlers.commands.weeek import show_weeek_task_edit_menu
+                await show_weeek_task_edit_menu(query, context)
+            except Exception as e:
+                log.error(f"❌ Ошибка обновления даты: {e}")
+                await query.answer(f"❌ Ошибка: {str(e)}")
+        return
+    
     elif query.data.startswith("weeek_complete_"):
         await handle_weeek_complete_task(query, context)
         return
@@ -409,7 +461,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             projects = await get_projects()
             
             if not projects:
-                keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
                 await query.edit_message_text(
                     "❌ Проектов не найдено.\n\n"
                     "Сначала создайте проекты в WEEEK.",
@@ -430,8 +482,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")])
             
-            await query.edit_message_text(
-                "📝 *Суммаризация проекта*\n\n"
+        await query.edit_message_text(
+            "📝 *Суммаризация проекта*\n\n"
                 "Выберите проект для суммаризации:",
                 parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)

@@ -79,6 +79,128 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     
     try:
+        # Обработка редактирования задачи
+        if context.user_data.get("waiting_for_task_edit"):
+            task_id = context.user_data.get("editing_task_id")
+            field = context.user_data.get("editing_task_field")
+            
+            if not task_id or not field:
+                await update.message.reply_text("❌ Ошибка: данные редактирования не найдены")
+                context.user_data["waiting_for_task_edit"] = False
+                context.user_data["editing_task_id"] = None
+                context.user_data["editing_task_field"] = None
+                return
+            
+            try:
+                from services.helpers.weeek_helper import update_task, get_task
+                from datetime import datetime
+                
+                if field == "title":
+                    # Редактирование названия
+                    new_title = text.strip()
+                    if not new_title:
+                        await update.message.reply_text("❌ Название задачи не может быть пустым")
+                        return
+                    
+                    result = await update_task(task_id, title=new_title)
+                    if result:
+                        await update.message.reply_text(
+                            f"✅ *Название задачи обновлено!*\n\n"
+                            f"📝 Новое название: *{new_title}*",
+                            parse_mode=ParseMode.MARKDOWN
+                        )
+                    else:
+                        await update.message.reply_text("❌ Ошибка обновления названия задачи")
+                
+                elif field == "date":
+                    # Редактирование даты
+                    date_input = text.strip().lower()
+                    
+                    if date_input == "нет" or date_input == "no":
+                        # Удаляем дату
+                        result = await update_task(task_id, due_date="")
+                        if result:
+                            await update.message.reply_text("✅ Дата удалена из задачи")
+                        else:
+                            await update.message.reply_text("❌ Ошибка удаления даты")
+                    else:
+                        # Парсим дату
+                        import re
+                        from datetime import timedelta
+                        
+                        date_str = None
+                        text_lower = date_input
+                        
+                        if "завтра" in text_lower:
+                            date_str = (datetime.now() + timedelta(days=1)).strftime('%d.%m.%Y')
+                        elif "сегодня" in text_lower:
+                            date_str = datetime.now().strftime('%d.%m.%Y')
+                        else:
+                            # Ищем дату в формате DD.MM или DD.MM.YYYY
+                            date_patterns = [
+                                (r'(\d{1,2})\.(\d{1,2})\.(\d{4})', '%d.%m.%Y'),
+                                (r'(\d{1,2})\.(\d{1,2})', '%d.%m'),
+                            ]
+                            
+                            for pattern, date_format in date_patterns:
+                                match = re.search(pattern, date_input)
+                                if match:
+                                    try:
+                                        if date_format == '%d.%m':
+                                            date_str = match.group(0)
+                                            parsed_date = datetime.strptime(date_str, '%d.%m')
+                                            if parsed_date.replace(year=datetime.now().year) < datetime.now():
+                                                parsed_date = parsed_date.replace(year=datetime.now().year + 1)
+                                            else:
+                                                parsed_date = parsed_date.replace(year=datetime.now().year)
+                                            date_str = parsed_date.strftime('%d.%m.%Y')
+                                        else:
+                                            date_str = match.group(0)
+                                        break
+                                    except ValueError:
+                                        continue
+                        
+                        if date_str:
+                            # Конвертируем в формат API
+                            try:
+                                date_obj = datetime.strptime(date_str, '%d.%m.%Y')
+                                api_date = date_obj.strftime('%Y-%m-%d')
+                                result = await update_task(task_id, due_date=api_date)
+                                if result:
+                                    await update.message.reply_text(
+                                        f"✅ *Дата задачи обновлена!*\n\n"
+                                        f"📅 Новая дата: *{date_str}*",
+                                        parse_mode=ParseMode.MARKDOWN
+                                    )
+                                else:
+                                    await update.message.reply_text("❌ Ошибка обновления даты")
+                            except ValueError:
+                                await update.message.reply_text("❌ Неверный формат даты. Используйте ДД.ММ.ГГГГ или ДД.ММ")
+                        else:
+                            await update.message.reply_text(
+                                "❌ Неверный формат даты.\n\n"
+                                "Используйте:\n"
+                                "• `25.12.2024` или `25.12`\n"
+                                "• `сегодня` / `завтра`\n"
+                                "• `нет` - удалить дату"
+                            )
+                
+                # Очищаем состояние
+                context.user_data["waiting_for_task_edit"] = False
+                context.user_data["editing_task_id"] = None
+                context.user_data["editing_task_field"] = None
+                return
+                
+            except Exception as e:
+                log.error(f"❌ Ошибка редактирования задачи: {e}")
+                import traceback
+                log.error(traceback.format_exc())
+                await update.message.reply_text(f"❌ Ошибка редактирования: {str(e)}")
+                context.user_data["waiting_for_task_edit"] = False
+                context.user_data["editing_task_id"] = None
+                context.user_data["editing_task_field"] = None
+                return
+        
         # Обработка ввода произвольного времени для задачи
         if context.user_data.get("waiting_for_task_time"):
             time_input = text.strip().lower()

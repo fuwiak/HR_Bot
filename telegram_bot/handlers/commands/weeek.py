@@ -614,12 +614,16 @@ async def show_weeek_task_edit_menu(query: CallbackQuery, context: ContextTypes.
         priority = task.get("priority")
         priority_names = {0: "Низкий", 1: "Средний", 2: "Высокий", 3: "В ожидании", None: "Не указан"}
         priority_name = priority_names.get(priority, "Не указан")
+        task_date = task.get("day") or task.get("dueDate") or task.get("startDate") or "не указана"
         
         text = f"📝 *Задача: {task_title}*\n\n"
         text += f"Статус: {'✅ Завершена' if is_completed else '⭕ Активна'}\n"
         text += f"Приоритет: {priority_name}\n"
+        text += f"📅 Дата: {task_date}\n"
         
         keyboard = [
+            [InlineKeyboardButton("✏️ Редактировать название", callback_data=f"weeek_edit_title_{task_id}")],
+            [InlineKeyboardButton("📅 Редактировать дату", callback_data=f"weeek_edit_date_{task_id}")],
             [InlineKeyboardButton("✅ Завершить" if not is_completed else "⭕ Возобновить", 
                                 callback_data=f"weeek_complete_{task_id}")],
             [InlineKeyboardButton("🗑 Удалить", callback_data=f"weeek_delete_{task_id}")],
@@ -642,6 +646,68 @@ async def show_weeek_task_edit_menu(query: CallbackQuery, context: ContextTypes.
 async def handle_weeek_edit_field(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик редактирования поля задачи"""
     await query.answer("⚠️ Функция редактирования полей в разработке")
+
+async def handle_weeek_edit_title(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик редактирования названия задачи"""
+    try:
+        task_id = query.data.replace("weeek_edit_title_", "")
+        context.user_data["editing_task_id"] = task_id
+        context.user_data["editing_task_field"] = "title"
+        context.user_data["waiting_for_task_edit"] = True
+        
+        from services.helpers.weeek_helper import get_task
+        task = await get_task(task_id)
+        current_title = task.get("title", task.get("name", "")) if task else ""
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"weeek_edit_task_{task_id}")]]
+        await query.edit_message_text(
+            f"✏️ *Редактирование названия задачи*\n\n"
+            f"Текущее название: *{current_title}*\n\n"
+            "📝 Отправьте новое название задачи текстовым сообщением.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        await query.answer(f"❌ Ошибка: {str(e)}")
+
+async def handle_weeek_edit_date(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик редактирования даты задачи"""
+    try:
+        task_id = query.data.replace("weeek_edit_date_", "")
+        context.user_data["editing_task_id"] = task_id
+        context.user_data["editing_task_field"] = "date"
+        context.user_data["waiting_for_task_edit"] = True
+        
+        from services.helpers.weeek_helper import get_task
+        from datetime import datetime, timedelta
+        
+        task = await get_task(task_id)
+        current_date = task.get("day") or task.get("dueDate") or "не указана" if task else "не указана"
+        
+        # Кнопки для быстрого выбора даты
+        today = datetime.now()
+        tomorrow = today + timedelta(days=1)
+        next_week = today + timedelta(days=7)
+        
+        keyboard = [
+            [InlineKeyboardButton("📅 Сегодня", callback_data=f"weeek_edit_date_select_{task_id}_{today.strftime('%d.%m.%Y')}")],
+            [InlineKeyboardButton("📅 Завтра", callback_data=f"weeek_edit_date_select_{task_id}_{tomorrow.strftime('%d.%m.%Y')}")],
+            [InlineKeyboardButton("📅 Через неделю", callback_data=f"weeek_edit_date_select_{task_id}_{next_week.strftime('%d.%m.%Y')}")],
+            [InlineKeyboardButton("📝 Без даты", callback_data=f"weeek_edit_date_select_{task_id}_none")],
+            [InlineKeyboardButton("🔙 Назад", callback_data=f"weeek_edit_task_{task_id}")]
+        ]
+        
+        await query.edit_message_text(
+            f"📅 *Редактирование даты задачи*\n\n"
+            f"Текущая дата: *{current_date}*\n\n"
+            "Выберите новую дату кнопкой или отправьте свою дату текстом (формат: ДД.ММ.ГГГГ или ДД.ММ)",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    except Exception as e:
+        log.error(f"❌ Ошибка: {e}")
+        await query.answer(f"❌ Ошибка: {str(e)}")
 
 async def handle_weeek_complete_task(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик завершения/возобновления задачи"""
