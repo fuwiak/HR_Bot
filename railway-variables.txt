@@ -1,0 +1,6 @@
+error: unexpected argument '--project' found
+
+Usage: railway variables [OPTIONS]
+
+For more information, try '--help'.
+

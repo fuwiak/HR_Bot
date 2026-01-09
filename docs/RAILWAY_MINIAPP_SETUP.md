@@ -155,6 +155,10 @@ Mini App должен загружаться быстро. Используйт�
    - Headers настроены
    - BotFather настроен
 
+### Устранение проблем:
+Если вы видите ошибку **"Application failed to respond"**, см. подробную инструкцию:
+👉 [MINIAPP_TROUBLESHOOTING.md](./MINIAPP_TROUBLESHOOTING.md)
+
 ## 📚 Дополнительные ресурсы
 
 - [Telegram Mini Apps Documentation](https://core.telegram.org/bots/webapps)

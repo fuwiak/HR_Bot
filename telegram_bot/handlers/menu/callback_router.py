@@ -747,14 +747,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             log.error(f"❌ Ошибка получения статуса: {e}")
-            keyboard = [
-                [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
-                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
-            ]
-            await query.edit_message_text(
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
+            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
                 f"❌ Ошибка: {str(e)}",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     elif query.data == "chat":
         keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]]
         await query.edit_message_text(

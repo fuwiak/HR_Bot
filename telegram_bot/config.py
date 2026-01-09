@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 # Загружаем переменные окружения
 load_dotenv()
 
+# Настраиваем логирование
+log = logging.getLogger(__name__)
+
 # ===================== TELEGRAM CONFIG =====================
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
 
@@ -54,9 +57,17 @@ EMAIL_CHECK_INTERVAL = int(os.getenv("EMAIL_CHECK_INTERVAL", "10"))
 
 # ===================== VALIDATION =====================
 if not TELEGRAM_BOT_TOKEN:
-    raise ValueError("Ошибка: Отсутствует TELEGRAM_TOKEN в .env")
+    # В Railway не поднимаем ошибку при старте, только логируем
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+        log.warning("⚠️ TELEGRAM_TOKEN не установлен в Railway. Добавьте переменную: TELEGRAM_TOKEN=your_token")
+    else:
+        raise ValueError("Ошибка: Отсутствует TELEGRAM_TOKEN в .env")
 if not OPENROUTER_API_KEY:
-    raise ValueError("Ошибка: Отсутствует OPENROUTER_API_KEY в .env")
+    # В Railway не поднимаем ошибку при старте, только логируем
+    if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+        log.warning("⚠️ OPENROUTER_API_KEY не установлен в Railway. Добавьте переменную: OPENROUTER_API_KEY=your_key")
+    else:
+        raise ValueError("Ошибка: Отсутствует OPENROUTER_API_KEY в .env")
 
 if OPENROUTER_API_URL and not OPENROUTER_API_URL.startswith("https://"):
     logging.warning(f"⚠️ Подозрительный URL OpenRouter: {OPENROUTER_API_URL}")
