@@ -1,5 +1,6 @@
 # Dockerfile для Frontend (Next.js) сервиса
 # Используется когда Dockerfile находится внутри frontend/ директории
+# ВАЖНО: Railway строит из корня проекта, поэтому нужно указывать frontend/ в путях
 FROM node:18-alpine AS base
 
 # Install dependencies only when needed
@@ -7,15 +8,15 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* ./
+# Copy package files (Railway строит из корня, поэтому указываем frontend/)
+COPY frontend/package.json frontend/package-lock.json* ./
 RUN npm ci
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY frontend/ .
 
 # Set environment variable for build
 ENV NEXT_TELEMETRY_DISABLED=1
