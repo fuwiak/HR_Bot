@@ -461,11 +461,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             projects = await get_projects()
             
             if not projects:
+            if not projects:
                 keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
-                await query.edit_message_text(
-                    "❌ Проектов не найдено.\n\n"
-                    "Сначала создайте проекты в WEEEK.",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                "❌ Проектов не найдено.\n\n"
+                "Сначала создайте проекты в WEEEK.",
+                reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 return
             
@@ -483,11 +483,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")])
             
         await query.edit_message_text(
-            "📝 *Суммаризация проекта*\n\n"
+            await query.edit_message_text(
                 "Выберите проект для суммаризации:",
                 parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+                )
         except Exception as e:
             log.error(f"❌ Ошибка: {e}")
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
