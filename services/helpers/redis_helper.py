@@ -292,7 +292,7 @@ def sync_memory_to_postgres(user_id: int) -> bool:
         return False
     
     try:
-        from database import add_memory as db_add_memory
+        from backend.database import add_memory as db_add_memory
         
         key = f"user_memory:{user_id}"
         messages_json = client.get(key)
@@ -325,7 +325,7 @@ def sync_user_data_to_postgres(user_id: int) -> bool:
         return False
     
     try:
-        from database import (
+        from backend.database import (
             set_user_phone as db_set_user_phone,
             set_user_booking_data as db_set_user_booking_data
         )
@@ -354,7 +354,7 @@ def sync_email_subscribers_to_postgres() -> bool:
         return False
     
     try:
-        from database import add_email_subscriber as db_add_email_subscriber
+        from backend.database import add_email_subscriber as db_add_email_subscriber
         
         subscribers = get_email_subscribers_redis()
         
