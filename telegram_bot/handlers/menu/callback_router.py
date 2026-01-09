@@ -455,11 +455,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "summary_menu":
         try:
             from services.helpers.weeek_helper import get_projects
-            
             await query.edit_message_text("⏳ Загружаю проекты...")
-            
             projects = await get_projects()
-            
             if not projects:
                 keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
                 await query.edit_message_text(
@@ -468,7 +465,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 return
-            
             keyboard = []
             for project in projects[:10]:
                 project_title = project.get("title", "Без названия")
@@ -479,11 +475,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         callback_data=f"summary_project_{project_id}"
                     )
                 ])
-            
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")])
-            
-        await query.edit_message_text(
-            "📝 *Суммаризация проекта*\n\n"
+            await query.edit_message_text(
+                "📝 *Суммаризация проекта*\n\n"
                 "Выберите проект для суммаризации:",
                 parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
@@ -495,7 +489,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ Ошибка: {str(e)}",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
-        return
+        return  
     
     elif query.data.startswith("summary_project_"):
         try:
