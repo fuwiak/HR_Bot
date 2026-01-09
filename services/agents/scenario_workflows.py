@@ -12,21 +12,27 @@ log = logging.getLogger()
 
 # Импорты модулей
 try:
-    from hrtime_helper import get_new_orders, send_proposal, send_message, get_order_details
-    from lead_processor import classify_request, validate_lead, generate_proposal
-    from email_helper import check_new_emails, classify_email, send_email
-    from weeek_helper import create_project, create_task, get_project_deadlines
-    from rag_chain import RAGChain
+    from services.helpers.hrtime_helper import get_new_orders, send_proposal, send_message, get_order_details
+    from services.agents.lead_processor import classify_request, validate_lead, generate_proposal
+    from services.helpers.email_helper import check_new_emails, classify_email, send_email
+    from services.helpers.weeek_helper import create_project, create_task, get_project_deadlines
+    from services.rag.rag_chain import RAGChain
+    from services.services.hrtime_order_parser import HRTimeOrderParser
+    from services.services.hrtime_lead_validator import HRTimeLeadValidator
     HRTIME_AVAILABLE = True
     EMAIL_AVAILABLE = True
     WEEEK_AVAILABLE = True
     RAG_AVAILABLE = True
+    PARSER_AVAILABLE = True
+    VALIDATOR_AVAILABLE = True
 except ImportError as e:
     log.warning(f"⚠️ Некоторые модули недоступны: {e}")
     HRTIME_AVAILABLE = False
     EMAIL_AVAILABLE = False
     WEEEK_AVAILABLE = False
     RAG_AVAILABLE = False
+    PARSER_AVAILABLE = False
+    VALIDATOR_AVAILABLE = False
 
 # Telegram bot для отправки уведомлений консультанту
 TELEGRAM_CONSULTANT_CHAT_ID = os.getenv("TELEGRAM_CONSULTANT_CHAT_ID")  # ID чата консультанта для уведомлений
@@ -55,9 +61,9 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
     Полный workflow обработки нового заказа с HR Time
     
     Шаги:
-    1. Парсинг данных заказа
-    2. RAG + Классификация через GigaChat
-    3. Валидация лида
+    1. Парсинг данных заказа через LLM (текст ТЗ, бюджет, сроки, контакты)
+    2. RAG + Классификация через LLM
+    3. Валидация лида с уточняющими вопросами (если нужно)
     4. Действия для теплого лида:
        - Отправка отклика на HR Time
        - Отправка КП по email/Telegram
@@ -75,28 +81,56 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
         return {"success": False, "error": "HR Time модуль недоступен"}
     
     try:
-        # Шаг 1: Получаем данные заказа
+        # Шаг 1: Парсинг данных заказа через LLM
+        log.info(f"📥 [Сценарий 1] Парсинг заказа {order_id}...")
+        
+        parsed_order = None
+        if PARSER_AVAILABLE:
+            try:
+                parser = HRTimeOrderParser()
+                parsed_result = await parser.parse_order(order_id, order_data)
+                if parsed_result.get("success"):
+                    parsed_order = parsed_result
+                    log.info(f"✅ [Сценарий 1] Заказ распарсен через LLM")
+                else:
+                    log.warning(f"⚠️ [Сценарий 1] Ошибка парсинга: {parsed_result.get('error')}")
+            except Exception as e:
+                log.error(f"❌ [Сценарий 1] Ошибка парсера: {e}")
+        
+        # Получаем данные заказа, если не были распарсены
         if order_data is None:
             order_data = await get_order_details(order_id)
             if not order_data:
                 return {"success": False, "error": "Не удалось получить данные заказа"}
         
-        # Извлекаем данные
-        title = order_data.get("title", "")
-        description = order_data.get("description", "")
-        budget = order_data.get("budget")
-        deadline = order_data.get("deadline")
-        client = order_data.get("client", {})
-        client_name = client.get("name", "Клиент")
-        client_email = client.get("email", "")
-        client_phone = client.get("phone", "")
+        # Извлекаем данные (используем распарсенные, если доступны)
+        if parsed_order and parsed_order.get("parsed"):
+            parsed = parsed_order["parsed"]
+            title = order_data.get("title", "")
+            description = parsed.get("requirements", order_data.get("description", ""))
+            budget_text = parsed.get("budget", {}).get("text", str(order_data.get("budget", "")))
+            deadline_text = parsed.get("deadline", {}).get("text", str(order_data.get("deadline", "")))
+            contacts = parsed.get("contacts", {})
+            client_name = contacts.get("full_name", order_data.get("client", {}).get("name", "Клиент"))
+            client_email = contacts.get("email", order_data.get("client", {}).get("email", ""))
+            client_phone = contacts.get("phone", order_data.get("client", {}).get("phone", ""))
+        else:
+            # Fallback на старый способ
+            title = order_data.get("title", "")
+            description = order_data.get("description", "")
+            budget_text = str(order_data.get("budget", ""))
+            deadline_text = str(order_data.get("deadline", ""))
+            client = order_data.get("client", {})
+            client_name = client.get("name", "Клиент")
+            client_email = client.get("email", "")
+            client_phone = client.get("phone", "")
         
         # Формируем полный текст запроса для анализа
         request_text = f"{title}\n\n{description}"
-        if budget:
-            request_text += f"\nБюджет: {budget}"
-        if deadline:
-            request_text += f"\nСрок: {deadline}"
+        if budget_text:
+            request_text += f"\nБюджет: {budget_text}"
+        if deadline_text:
+            request_text += f"\nСрок: {deadline_text}"
         
         # Шаг 2: RAG + Классификация
         log.info(f"🔍 [Сценарий 1] Анализ заказа {order_id}: {title}")
@@ -115,8 +149,46 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
         category = classification.get("category", "другое")
         log.info(f"✅ [Сценарий 1] Заказ классифицирован как: {category}")
         
-        # Шаг 3: Валидация лида
-        validation = await validate_lead(request_text)
+        # Шаг 3: Валидация лида с уточняющими вопросами
+        validation_result = None
+        if VALIDATOR_AVAILABLE:
+            try:
+                validator = HRTimeLeadValidator()
+                validation_result = await validator.validate_lead_with_questions(
+                    lead_request=request_text,
+                    parsed_order=parsed_order
+                )
+                validation = validation_result.get("validation", {})
+                
+                # Если нужны уточняющие вопросы, пытаемся их задать
+                if validation_result.get("needs_clarification") and validation_result.get("questions"):
+                    questions = validation_result.get("questions", [])
+                    log.info(f"💬 [Сценарий 1] Нужны уточняющие вопросы: {len(questions)}")
+                    
+                    # Пытаемся задать вопросы (placeholder)
+                    questions_result = await validator.ask_clarification_questions(
+                        order_id=order_id,
+                        questions=questions,
+                        client_email=client_email
+                    )
+                    
+                    if questions_result.get("success"):
+                        log.info(f"✅ [Сценарий 1] Вопросы отправлены через {questions_result.get('method')}")
+                    else:
+                        log.warning(f"⚠️ [Сценарий 1] Не удалось отправить вопросы автоматически")
+                        # Сохраняем вопросы для ручной отправки
+                        validation_result["questions_for_manual"] = questions_result.get("questions_text", "")
+            except Exception as e:
+                log.error(f"❌ [Сценарий 1] Ошибка валидатора: {e}")
+                validation = await validate_lead(request_text)
+        else:
+            validation = await validate_lead(request_text)
+        
+        if not validation_result:
+            validation = await validate_lead(request_text)
+        else:
+            validation = validation_result.get("validation", {})
+        
         score = validation.get("score", 0)
         status = validation.get("status", "cold")
         
@@ -125,8 +197,10 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
         result = {
             "success": True,
             "order_id": order_id,
+            "parsed_order": parsed_order,
             "classification": classification,
             "validation": validation,
+            "validation_result": validation_result,
             "proposal_sent": False,
             "weeek_project_created": False,
             "notification_sent": False
@@ -192,18 +266,34 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
                     log.info(f"✅ [Сценарий 1] Задача создана в WEEEK")
             
             # 4e. Уведомление консультанта в Telegram
-            notification_text = (
-                f"🔥 *Новый теплый лид с HR Time*\n\n"
-                f"*Заказ:* {title}\n"
-                f"*Клиент:* {client_name}\n"
-                f"*Email:* {client_email or 'Не указан'}\n"
-                f"*Телефон:* {client_phone or 'Не указан'}\n"
-                f"*Оценка:* {score:.2f} ({status})\n"
-                f"*Категория:* {category}\n\n"
-                f"✅ Отклик и черновик КП отправлены\n"
-                f"{'✅ Проект создан в WEEEK' if result.get('weeek_project_created') else '❌ Ошибка создания проекта в WEEEK'}\n\n"
-                f"Требует вашего ознакомления с КП."
-            )
+            notification_parts = [
+                f"🔥 *Новый теплый лид с HR Time*\n",
+                f"📢 Канал: @HRTime_bot\n",
+                f"*Заказ:* {title}",
+                f"*Клиент:* {client_name}",
+                f"*Email:* {client_email or 'Не указан'}",
+                f"*Телефон:* {client_phone or 'Не указан'}",
+                f"*Оценка:* {score:.2f} ({status})",
+                f"*Категория:* {category}\n"
+            ]
+            
+            # Добавляем информацию о распарсенных данных
+            if parsed_order and parsed_order.get("parsed"):
+                parsed = parsed_order["parsed"]
+                if parsed.get("budget", {}).get("amount", 0) > 0:
+                    budget = parsed["budget"]
+                    notification_parts.append(f"*Бюджет:* {budget['amount']:.0f} {budget.get('currency', 'RUB')}")
+                if parsed.get("deadline", {}).get("date"):
+                    notification_parts.append(f"*Срок:* {parsed['deadline']['date']}")
+            
+            notification_parts.extend([
+                "",
+                "✅ Отклик и черновик КП отправлены",
+                f"{'✅ Проект создан в WEEEK' if result.get('weeek_project_created') else '❌ Ошибка создания проекта в WEEEK'}\n",
+                "Требует вашего ознакомления с КП."
+            ])
+            
+            notification_text = "\n".join(notification_parts)
             
             result["notification_text"] = notification_text
             result["notification_sent"] = True  # Отправка будет выполнена вызывающим кодом
