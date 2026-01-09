@@ -23,6 +23,7 @@ except ImportError:
 # Загружаем конфигурацию из config.yaml
 from pathlib import Path
 import sys
+import os
 project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
@@ -75,9 +76,20 @@ def get_sheets_client():
             creds_data = json.loads(GOOGLE_SHEETS_CREDENTIALS_JSON)
             creds = Credentials.from_service_account_info(creds_data, scopes=scope)
         elif GOOGLE_SHEETS_CREDENTIALS_PATH:
-            log.info(f"📋 Используем credentials из файла: {GOOGLE_SHEETS_CREDENTIALS_PATH}")
+            # Преобразуем относительный путь в абсолютный
+            credentials_path = GOOGLE_SHEETS_CREDENTIALS_PATH
+            if not os.path.isabs(credentials_path):
+                # Если путь относительный, ищем от корня проекта
+                project_root = Path(__file__).parent.parent.parent.parent
+                credentials_path = project_root / credentials_path.lstrip('./')
+            
+            if not os.path.exists(credentials_path):
+                log.warning(f"⚠️ Файл credentials не найден: {credentials_path}")
+                return None
+            
+            log.info(f"📋 Используем credentials из файла: {credentials_path}")
             creds = Credentials.from_service_account_file(
-                GOOGLE_SHEETS_CREDENTIALS_PATH, scopes=scope)
+                str(credentials_path), scopes=scope)
         else:
             log.warning("Google Sheets не настроены - нет credentials")
             return None

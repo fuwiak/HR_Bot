@@ -1,7 +1,7 @@
 """
 SQLAlchemy модели для базы данных
 """
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey, Index
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Text, DateTime, Boolean, JSON, ForeignKey, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -17,7 +17,7 @@ class TelegramUser(Base):
     """Модель пользователя Telegram"""
     __tablename__ = "telegram_users"
     
-    user_id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(BigInteger, primary_key=True, index=True)
     username = Column(String(255), nullable=True, index=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
@@ -39,7 +39,7 @@ class TelegramMessage(Base):
     __tablename__ = "telegram_messages"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("telegram_users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(BigInteger, ForeignKey("telegram_users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     message_id = Column(Integer, nullable=True, index=True)  # ID сообщения в Telegram
     chat_id = Column(Integer, nullable=False, index=True)
     
@@ -81,7 +81,7 @@ class ConversationContext(Base):
     __tablename__ = "conversation_contexts"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("telegram_users.user_id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(BigInteger, ForeignKey("telegram_users.user_id", ondelete="CASCADE"), nullable=False, index=True)
     chat_id = Column(Integer, nullable=False, index=True)
     
     # Контекст разговора (последние N сообщений)

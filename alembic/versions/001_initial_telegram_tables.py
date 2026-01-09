@@ -22,7 +22,7 @@ def upgrade() -> None:
     # Создаем таблицу telegram_users
     op.create_table(
         'telegram_users',
-        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.BigInteger(), nullable=False),
         sa.Column('username', sa.String(length=255), nullable=True),
         sa.Column('first_name', sa.String(length=255), nullable=True),
         sa.Column('last_name', sa.String(length=255), nullable=True),
@@ -40,7 +40,7 @@ def upgrade() -> None:
     op.create_table(
         'telegram_messages',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.BigInteger(), nullable=False),
         sa.Column('message_id', sa.Integer(), nullable=True),
         sa.Column('chat_id', sa.Integer(), nullable=False),
         sa.Column('role', sa.String(length=50), nullable=False),
@@ -70,7 +70,7 @@ def upgrade() -> None:
     op.create_table(
         'conversation_contexts',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.BigInteger(), nullable=False),
         sa.Column('chat_id', sa.Integer(), nullable=False),
         sa.Column('context_json', postgresql.JSON(astext_type=sa.Text()), nullable=False),
         sa.Column('context_size', sa.Integer(), nullable=True, server_default='0'),
