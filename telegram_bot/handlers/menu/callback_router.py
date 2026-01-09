@@ -461,10 +461,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             projects = await get_projects()
             
             if not projects:
-                keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
-                "❌ Проектов не найдено.\n\n"
-                "Сначала создайте проекты в WEEEK.",
-                reply_markup=InlineKeyboardMarkup(keyboard)
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+                await query.edit_message_text(
+                    "❌ Проектов не найдено.\n\n"
+                    "Сначала создайте проекты в WEEEK.",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
                 return
             
             keyboard = []
@@ -480,8 +482,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")])
             
-            await query.edit_message_text(
-                "📝 *Суммаризация проекта*\n\n"
+        await query.edit_message_text(
+            "📝 *Суммаризация проекта*\n\n"
                 "Выберите проект для суммаризации:",
                 parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
