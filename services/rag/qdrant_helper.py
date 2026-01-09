@@ -460,17 +460,13 @@ def index_services(services: List[Dict]) -> bool:
             log.warning("⚠️ Нет точек для индексации (все эмбеддинги не удалось сгенерировать)")
             return False
         
-        # Удаляем старые данные и вставляем новые
-        try:
-            client.delete_collection(COLLECTION_NAME)
-        except Exception as e:
-            log.debug(f"ℹ️ Коллекция не существовала или уже удалена: {e}")
-        
+        # НЕ удаляем коллекцию - используем upsert для обновления существующих данных
+        # Это сохраняет все существующие данные в коллекции
         if not ensure_collection():
             log.error("❌ Не удалось создать/проверить коллекцию")
             return False
         
-        # Вставляем новые точки
+        # Вставляем/обновляем точки (upsert не удаляет существующие данные)
         client.upsert(
             collection_name=COLLECTION_NAME,
             points=points
@@ -603,7 +599,8 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
             }
             results.append(service)
         
-        # Ограничиваем количество результатов
+        # Сортируем результаты по score (от большего к меньшему) и ограничиваем количество
+        results.sort(key=lambda x: x.get('score', 0), reverse=True)
         results = results[:limit]
         
         if results:

@@ -114,9 +114,21 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 results = search_service(text, limit=3)
                 if results:
                     log.info(f"✅ [RAG] Найдено {len(results)} результатов в коллекции 'hr2137_bot_knowledge_base'")
+                    # Сортируем по score (уже отсортировано в search_service, но на всякий случай)
+                    results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
                     rag_context = "\n\nРелевантная информация из базы знаний:\n"
-                    for i, result in enumerate(results[:3], 1):
-                        rag_context += f"{i}. {result.get('title', 'Без названия')}: {result.get('content', '')[:200]}...\n"
+                    for i, result in enumerate(results_sorted[:3], 1):
+                        title = result.get('title', 'Без названия')
+                        price_str = result.get('price_str', '')
+                        score = result.get('score', 0)
+                        # Используем price_str если есть, иначе пытаемся получить из content
+                        content = result.get('content', '')
+                        if price_str:
+                            rag_context += f"{i}. {title} - {price_str} (релевантность: {score:.2f})\n"
+                        elif content:
+                            rag_context += f"{i}. {title}: {content[:200]}... (релевантность: {score:.2f})\n"
+                        else:
+                            rag_context += f"{i}. {title} (релевантность: {score:.2f})\n"
                 else:
                     log.info(f"ℹ️ [RAG] Результаты не найдены в коллекции 'hr2137_bot_knowledge_base' для запроса: '{text[:100]}'")
             except Exception as e:

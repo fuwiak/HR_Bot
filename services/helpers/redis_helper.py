@@ -59,7 +59,7 @@ def get_redis_client():
             )
             logger.info(f"✅ Redis клиент создан: {REDIS_HOST}:{REDIS_PORT}")
         else:
-            logger.warning("⚠️ Redis переменные окружения не установлены")
+            logger.debug("ℹ️ Redis переменные окружения не установлены, используем только PostgreSQL")
             return None
         
         # Проверяем подключение
