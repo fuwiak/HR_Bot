@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict
 from datetime import datetime, timedelta
 
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ChatAction, ParseMode
 
@@ -79,6 +79,68 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     
     try:
+        # Обработка ввода произвольного времени для задачи
+        if context.user_data.get("waiting_for_task_time"):
+            time_input = text.strip().lower()
+            
+            # Проверяем формат времени (ЧЧ:ММ)
+            import re
+            time_pattern = r'^(\d{1,2}):(\d{2})$'
+            match = re.match(time_pattern, text.strip())
+            
+            if time_input == "нет" or time_input == "no":
+                context.user_data["task_time"] = None
+                context.user_data["waiting_for_task_time"] = False
+                
+                date_str = context.user_data.get("task_date", "не указана")
+                keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="menu_projects")]]
+                await update.message.reply_text(
+                    f"✅ Дата: *{date_str}*\n"
+                    f"✅ Время: *не указано*\n\n"
+                    "📝 Теперь отправьте название задачи текстовым сообщением.\n\n"
+                    "💡 *Пример:*\n"
+                    "`Согласовать КП с клиентом`",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                return
+            elif match:
+                hours = int(match.group(1))
+                minutes = int(match.group(2))
+                
+                # Проверяем валидность времени
+                if 0 <= hours <= 23 and 0 <= minutes <= 59:
+                    time_str = f"{hours:02d}:{minutes:02d}"
+                    context.user_data["task_time"] = time_str
+                    context.user_data["waiting_for_task_time"] = False
+                    
+                    date_str = context.user_data.get("task_date", "не указана")
+                    keyboard = [[InlineKeyboardButton("🔙 Отмена", callback_data="menu_projects")]]
+                    await update.message.reply_text(
+                        f"✅ Дата: *{date_str}*\n"
+                        f"✅ Время: *{time_str}*\n\n"
+                        "📝 Теперь отправьте название задачи текстовым сообщением.\n\n"
+                        "💡 *Пример:*\n"
+                        "`Согласовать КП с клиентом`",
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                    return
+                else:
+                    await update.message.reply_text(
+                        "❌ Неверный формат времени.\n\n"
+                        "Используйте формат ЧЧ:ММ (например: 14:30)\n"
+                        "Часы: 0-23, минуты: 0-59"
+                    )
+                    return
+            else:
+                await update.message.reply_text(
+                    "❌ Неверный формат времени.\n\n"
+                    "Используйте формат ЧЧ:ММ (например: 14:30)\n"
+                    "Или отправьте `нет` чтобы пропустить время."
+                )
+                return
+        
         # Обработка создания задачи в WEEEK
         if context.user_data.get("waiting_for_task_name"):
             project_id = context.user_data.get("selected_project_id")
@@ -95,6 +157,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Парсим дату из текста (форматы: "25.12", "25.12.2024", "завтра", "сегодня")
             task_date = context.user_data.get("task_date")
+            task_time = context.user_data.get("task_time")
             task_name = task_text
             
             # Если дата не была выбрана кнопкой, пытаемся найти её в тексте

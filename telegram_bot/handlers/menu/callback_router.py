@@ -233,6 +233,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("🕐 12:00", callback_data=f"weeek_time_{date_str}_12:00")],
                 [InlineKeyboardButton("🕐 15:00", callback_data=f"weeek_time_{date_str}_15:00")],
                 [InlineKeyboardButton("🕐 18:00", callback_data=f"weeek_time_{date_str}_18:00")],
+                [InlineKeyboardButton("✏️ Ввести своё время", callback_data=f"weeek_time_custom_{date_str}")],
                 [InlineKeyboardButton("⏰ Без времени", callback_data=f"weeek_time_{date_str}_none")],
                 [InlineKeyboardButton("🔙 Назад", callback_data=f"weeek_select_project_{context.user_data.get('selected_project_id')}")]
             ]
@@ -252,6 +253,26 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📝 Теперь отправьте название задачи текстовым сообщением.\n\n"
             "💡 *Пример:*\n"
             "`Согласовать КП с клиентом`",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    
+    elif query.data.startswith("weeek_time_custom_"):
+        # Обработка запроса на ввод произвольного времени
+        date_str = query.data.replace("weeek_time_custom_", "")
+        context.user_data["task_date"] = date_str
+        context.user_data["waiting_for_task_time"] = True
+        
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data=f"weeek_date_{date_str}")]]
+        await query.edit_message_text(
+            f"✅ Дата: *{date_str}*\n\n"
+            "⏰ *Введите время в формате ЧЧ:ММ*\n\n"
+            "💡 *Примеры:*\n"
+            "• `14:30`\n"
+            "• `09:15`\n"
+            "• `18:45`\n\n"
+            "Или отправьте `нет` чтобы пропустить время.",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -388,7 +409,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             projects = await get_projects()
             
             if not projects:
-                keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
                 await query.edit_message_text(
                     "❌ Проектов не найдено.\n\n"
                     "Сначала создайте проекты в WEEEK.",
@@ -409,8 +430,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")])
             
-            await query.edit_message_text(
-                "📝 *Суммаризация проекта*\n\n"
+        await query.edit_message_text(
+            "📝 *Суммаризация проекта*\n\n"
                 "Выберите проект для суммаризации:",
                 parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
@@ -482,16 +503,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await query.edit_message_text(
                 text,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         except Exception as e:
             log.error(f"❌ Ошибка суммаризации: {e}")
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="summary_menu")]]
             await query.edit_message_text(
                 f"❌ Ошибка: {str(e)}",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return
     elif query.data == "quick_summary_menu":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_tools")]]
@@ -641,14 +662,14 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             log.error(f"❌ Ошибка получения статуса: {e}")
-            keyboard = [
-                [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
-                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
-            ]
-            await query.edit_message_text(
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
+            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+        ]
+        await query.edit_message_text(
                 f"❌ Ошибка получения статуса: {str(e)}",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     elif query.data == "chat":
         keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]]
         await query.edit_message_text(
