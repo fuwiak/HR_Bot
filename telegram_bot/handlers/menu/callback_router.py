@@ -290,16 +290,118 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Суммаризация
     elif query.data == "summary_menu":
-        keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
-        await query.edit_message_text(
-            "📝 *Суммаризация проекта*\n\n"
-            "Используйте команду:\n"
-            "`/summary [название проекта]`\n\n"
-            "Например:\n"
-            "`/summary Подбор HR-менеджера`",
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            from services.helpers.weeek_helper import get_projects
+            
+            await query.edit_message_text("⏳ Загружаю проекты...")
+            
+            projects = await get_projects()
+            
+            if not projects:
+                keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+                await query.edit_message_text(
+                    "❌ Проектов не найдено.\n\n"
+                    "Сначала создайте проекты в WEEEK.",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                return
+            
+            keyboard = []
+            for project in projects[:10]:
+                project_title = project.get("title", "Без названия")
+                project_id = project.get("id", "")
+                keyboard.append([
+                    InlineKeyboardButton(
+                        f"📝 {project_title}",
+                        callback_data=f"summary_project_{project_id}"
+                    )
+                ])
+            
+            keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")])
+            
+            await query.edit_message_text(
+                "📝 *Суммаризация проекта*\n\n"
+                "Выберите проект для суммаризации:",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            log.error(f"❌ Ошибка: {e}")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
+            await query.edit_message_text(
+                f"❌ Ошибка: {str(e)}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        return
+    
+    elif query.data.startswith("summary_project_"):
+        try:
+            project_id = query.data.replace("summary_project_", "")
+            
+            from services.helpers.weeek_helper import get_project, get_tasks
+            from telegram_bot.handlers.commands.tools import summary_command
+            
+            await query.edit_message_text("⏳ Суммаризирую проект...")
+            
+            project = await get_project(project_id)
+            if not project:
+                keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="summary_menu")]]
+                await query.edit_message_text(
+                    "❌ Проект не найден",
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                return
+            
+            project_title = project.get("title", project.get("name", "Без названия"))
+            
+            # Получаем задачи проекта
+            tasks_result = await get_tasks(project_id=project_id, per_page=50)
+            tasks = tasks_result.get("tasks", []) if tasks_result.get("success") else []
+            
+            # Формируем сводку
+            text = f"📝 *Суммаризация проекта: {project_title}*\n\n"
+            
+            if tasks:
+                completed = sum(1 for t in tasks if t.get("isCompleted", False))
+                active = len(tasks) - completed
+                high_priority = sum(1 for t in tasks if t.get("priority") == 2)
+                
+                text += f"📊 *Статистика:*\n"
+                text += f"Всего задач: {len(tasks)}\n"
+                text += f"✅ Завершено: {completed}\n"
+                text += f"⭕ Активных: {active}\n"
+                if high_priority > 0:
+                    text += f"🔴 Высокий приоритет: {high_priority}\n"
+                text += "\n"
+                
+                # Последние задачи
+                recent_tasks = tasks[:5]
+                text += "*Последние задачи:*\n"
+                for task in recent_tasks:
+                    task_title = task.get("title", task.get("name", "Без названия"))
+                    is_completed = task.get("isCompleted", False)
+                    status = "✅" if is_completed else "⭕"
+                    text += f"{status} {task_title}\n"
+            else:
+                text += "❌ Задач в проекте не найдено.\n"
+            
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="summary_menu")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+            ]
+            
+            await query.edit_message_text(
+                text,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            log.error(f"❌ Ошибка суммаризации: {e}")
+            keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="summary_menu")]]
+            await query.edit_message_text(
+                f"❌ Ошибка: {str(e)}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
         return
     elif query.data == "quick_summary_menu":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_tools")]]
@@ -406,19 +508,57 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
     elif query.data == "status":
-        keyboard = [
-            [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
-            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
-        ]
-        await query.edit_message_text(
-            "📋 *Статус проектов*\n\n"
-            "Используйте команду:\n"
-            "`/status`\n\n"
-            "Для суммаризации проекта:\n"
-            "`/summary [название проекта]`",
-            parse_mode='Markdown',
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        try:
+            from services.helpers.weeek_helper import get_project_deadlines
+            
+            await query.edit_message_text("⏳ Загружаю задачи с дедлайнами...")
+            
+            # Получаем проекты с ближайшими дедлайнами
+            upcoming_tasks = await get_project_deadlines(days_ahead=7)
+            
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+            ]
+            
+            if upcoming_tasks:
+                text = "📊 *Статус проектов*\n\n"
+                text += f"Задачи с дедлайнами на ближайшие 7 дней:\n\n"
+                
+                for task in upcoming_tasks[:10]:  # Показываем первые 10
+                    task_name = task.get("name", task.get("title", "Задача"))
+                    due_date = task.get("due_date", "Не указан")
+                    status = task.get("status", "Активна")
+                    project_id = task.get("project_id", "")
+                    text += f"• *{task_name}*\n"
+                    text += f"  Дедлайн: {due_date}\n"
+                    text += f"  Статус: {status}\n"
+                    if project_id:
+                        text += f"  Проект ID: `{project_id}`\n"
+                    text += "\n"
+                
+                if len(upcoming_tasks) > 10:
+                    text += f"_...и еще {len(upcoming_tasks) - 10} задач_\n"
+            else:
+                text = "📊 *Статус проектов*\n\n"
+                text += "Нет задач с ближайшими дедлайнами.\n\n"
+                text += "Используйте WEEEK для управления проектами."
+            
+            await query.edit_message_text(
+                text,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        except Exception as e:
+            log.error(f"❌ Ошибка получения статуса: {e}")
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+            ]
+            await query.edit_message_text(
+                f"❌ Ошибка получения статуса: {str(e)}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     elif query.data == "chat":
         keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]]
         await query.edit_message_text(
