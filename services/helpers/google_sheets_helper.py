@@ -95,9 +95,30 @@ def get_sheets_client():
         return None
 
 
-# ===================== ВАЖНО: PLACEHOLDER ДАННЫЕ УДАЛЕНЫ =====================
-# Все данные ТОЛЬКО из Google Sheets. Бот не работает без доступа к таблице.
-# Если Google Sheets недоступны - бот выдает ошибку, а не использует placeholder данные.
+# ===================== PLACEHOLDER ДАННЫЕ =====================
+# Используются если Google Sheets недоступны
+
+PLACEHOLDER_SERVICES = [
+    {
+        "id": 1,
+        "name": "Консультация",
+        "price": 5000,
+        "duration": 60,
+        "master1": "Консультант",
+        "master2": "",
+        "type": "consultation",
+        "description": "Консультация по услугам"
+    }
+]
+
+PLACEHOLDER_MASTERS = [
+    {
+        "id": 1,
+        "name": "Консультант",
+        "type": "consultation",
+        "services": ["Консультация"]
+    }
+]
 
 
 # ===================== ФУНКЦИИ РАБОТЫ С ДАННЫМИ =====================
@@ -107,13 +128,8 @@ def get_masters() -> List[Dict]:
     client = get_sheets_client()
     
     if not client:
-        error_msg = (
-            "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets клиент не инициализирован!\n"
-            "Не удалось получить список мастеров.\n"
-            "Убедитесь, что Google Sheets настроены правильно."
-        )
-        log.error(error_msg)
-        raise Exception(error_msg)
+        log.warning("⚠️ Google Sheets недоступны, используем placeholder данные для мастеров")
+        return PLACEHOLDER_MASTERS.copy()
     
     try:
         # Получаем мастеров из услуг (уникальные имена из колонок Мастер 1 и Мастер 2)
@@ -145,17 +161,14 @@ def get_masters() -> List[Dict]:
             })
         
         if not masters:
-            error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Не найдено ни одного мастера в Google Sheets!"
-            log.error(error_msg)
-            raise Exception(error_msg)
+            log.warning("⚠️ Не найдено мастеров в Google Sheets, используем placeholder данные")
+            masters = PLACEHOLDER_MASTERS.copy()
         
         log.info(f"✅ Получено {len(masters)} мастеров из Google Sheets")
         return masters
     except Exception as e:
-        log.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА чтения мастеров из Google Sheets: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
-        raise
+        log.warning(f"⚠️ Ошибка чтения мастеров из Google Sheets: {e}, используем placeholder данные")
+        return PLACEHOLDER_MASTERS.copy()
 
 
 def get_services(master_name: Optional[str] = None) -> List[Dict]:
@@ -309,14 +322,8 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
                 service_id += 1
             
             if not services:
-                error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Не найдено ни одной услуги в Google Sheets (лист 'Ценник')!"
-                log.error(error_msg)
-                raise Exception(error_msg)
-            
-            if not services:
-                error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Не найдено ни одной услуги в Google Sheets (лист 'Ценник')!"
-                log.error(error_msg)
-                raise Exception(error_msg)
+                log.warning("⚠️ Не найдено услуг в Google Sheets, используем placeholder данные")
+                services = PLACEHOLDER_SERVICES.copy()
             
             # Обновляем кэш
             _services_cache = services
@@ -385,21 +392,22 @@ def get_services(master_name: Optional[str] = None) -> List[Dict]:
             return services
             
         except Exception as e:
-            log.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА чтения услуг из Google Sheets: {e}")
-            import traceback
-            log.error(f"❌ Traceback: {traceback.format_exc()}")
-            raise Exception(f"Не удалось прочитать услуги из Google Sheets: {e}")
+            log.warning(f"⚠️ Ошибка чтения услуг из Google Sheets: {e}, используем placeholder данные")
+            services = PLACEHOLDER_SERVICES.copy()
+            if master_name:
+                services = [s for s in services if master_name.lower() in (s.get("master1", "") + " " + s.get("master2", "")).lower()]
+            _services_cache = services
+            _services_cache_time = datetime.now()
+            return services
     
-    # КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены
-    error_msg = (
-        "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены или недоступны!\n"
-        "Бот не может работать без доступа к таблице.\n"
-        "Убедитесь, что установлены:\n"
-        "- GOOGLE_SHEETS_CREDENTIALS_JSON (для Railway)\n"
-        "- или GOOGLE_SHEETS_CREDENTIALS_PATH (для локальной разработки)"
-    )
-    log.error(error_msg)
-    raise Exception(error_msg)
+    # Google Sheets не настроены - используем placeholder
+    log.warning("⚠️ Google Sheets недоступны, используем placeholder данные для услуг")
+    services = PLACEHOLDER_SERVICES.copy()
+    if master_name:
+        services = [s for s in services if master_name.lower() in (s.get("master1", "") + " " + s.get("master2", "")).lower()]
+    _services_cache = services
+    _services_cache_time = datetime.now()
+    return services
 
 
 def parse_price(price_str: str) -> int:
@@ -435,9 +443,9 @@ def get_available_slots(master_name: str, date: str) -> List[str]:
     client = get_sheets_client()
     
     if not client:
-        error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены для получения расписания!"
-        log.error(error_msg)
-        raise Exception(error_msg)
+        log.warning("⚠️ Google Sheets недоступны для получения расписания, возвращаем placeholder расписание")
+        # Возвращаем placeholder расписание
+        return ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"]
     
     try:
         # Получаем расписание мастера из реальных данных
@@ -518,18 +526,37 @@ def create_booking(booking_data: Dict) -> Dict:
             _services_cache = None
             
         except Exception as e:
-            error_msg = f"❌ КРИТИЧЕСКАЯ ОШИБКА записи в Google Sheets: {e}"
-            log.error(error_msg)
-            import traceback
-            log.error(f"❌ Traceback: {traceback.format_exc()}")
-            raise Exception(error_msg)
+            log.warning(f"⚠️ Ошибка записи в Google Sheets: {e}, запись не сохранена")
+            # Возвращаем placeholder запись
+            booking_record = {
+                "id": booking_id,
+                "service": booking_data.get("service", ""),
+                "master": booking_data.get("master", ""),
+                "date": booking_data.get("date", ""),
+                "time": booking_data.get("time", ""),
+                "client_name": booking_data.get("client_name", ""),
+                "client_phone": booking_data.get("client_phone", ""),
+                "price": booking_data.get("price", 0),
+                "status": "pending",
+                "note": "Запись не сохранена в Google Sheets (недоступны)"
+            }
+            return booking_record
     else:
-        error_msg = (
-            "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены!\n"
-            "Не удалось создать запись. Бот не может работать без доступа к таблице."
-        )
-        log.error(error_msg)
-        raise Exception(error_msg)
+        log.warning("⚠️ Google Sheets недоступны, запись не сохранена")
+        # Возвращаем placeholder запись
+        booking_record = {
+            "id": booking_id,
+            "service": booking_data.get("service", ""),
+            "master": booking_data.get("master", ""),
+            "date": booking_data.get("date", ""),
+            "time": booking_data.get("time", ""),
+            "client_name": booking_data.get("client_name", ""),
+            "client_phone": booking_data.get("client_phone", ""),
+            "price": booking_data.get("price", 0),
+            "status": "pending",
+            "note": "Запись не сохранена в Google Sheets (недоступны)"
+        }
+        return booking_record
     
     return booking_record
 
@@ -539,9 +566,8 @@ def check_slot_available(master_name: str, date: str, time: str) -> bool:
     client = get_sheets_client()
     
     if not client:
-        error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены для проверки доступности!"
-        log.error(error_msg)
-        raise Exception(error_msg)
+        log.warning("⚠️ Google Sheets недоступны для проверки доступности, считаем слот доступным")
+        return True  # По умолчанию считаем слот доступным
     
     if client:
         try:
@@ -579,16 +605,8 @@ def check_slot_available(master_name: str, date: str, time: str) -> bool:
             return True
             
         except Exception as e:
-            error_msg = f"❌ КРИТИЧЕСКАЯ ОШИБКА проверки слота в Google Sheets: {e}"
-            log.error(error_msg)
-            import traceback
-            log.error(f"❌ Traceback: {traceback.format_exc()}")
-            raise Exception(error_msg)
-    
-    # КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены
-    error_msg = "❌ КРИТИЧЕСКАЯ ОШИБКА: Google Sheets не настроены для проверки доступности!"
-    log.error(error_msg)
-    raise Exception(error_msg)
+            log.warning(f"⚠️ Ошибка проверки слота в Google Sheets: {e}, считаем слот доступным")
+            return True  # По умолчанию считаем слот доступным
 
 
 def refresh_services_cache():

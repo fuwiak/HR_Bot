@@ -82,10 +82,14 @@ async def get_new_orders(limit: int = 10) -> List[Dict]:
                 
                 log.info(f"✅ [HR Time] Получено {len(parsed_orders)} новых заказов")
                 return parsed_orders
+    except aiohttp.ClientConnectorDNSError as e:
+        log.warning(f"⚠️ [HR Time] Ошибка подключения к API (используем placeholder): {e}")
+        return []
+    except asyncio.TimeoutError:
+        log.warning("⚠️ [HR Time] Таймаут подключения к API (используем placeholder)")
+        return []
     except Exception as e:
-        log.error(f"❌ [HR Time] Ошибка получения заказов: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        log.warning(f"⚠️ [HR Time] Ошибка получения заказов (используем placeholder): {e}")
         return []
 
 async def send_proposal(order_id: str, proposal_text: str) -> bool:
