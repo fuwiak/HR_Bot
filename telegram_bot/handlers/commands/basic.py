@@ -1,7 +1,7 @@
 """
 Basic команды
 """
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram_bot.storage.email_subscribers import add_email_subscriber
@@ -21,6 +21,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     add_email_subscriber(user_id)
     
     # Группируем кнопки по 2 в ряд для компактности
+    from telegram_bot.config import MINI_APP_URL
+    
     keyboard = [
         [
             InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base"),
@@ -35,6 +37,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
         ]
     ]
+    
+    # Добавляем кнопку Web App если URL настроен
+    if MINI_APP_URL:
+        keyboard.append([
+            InlineKeyboardButton(
+                "🌐 Открыть Mini App",
+                web_app=WebAppInfo(url=MINI_APP_URL)
+            )
+        ])
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Улучшенное форматирование с разделителями
@@ -65,6 +76,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Компактная группировка кнопок
+    from telegram_bot.config import MINI_APP_URL
+    
     keyboard = [
         [
             InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base"),
@@ -79,6 +92,16 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
         ]
     ]
+    
+    # Добавляем кнопку Web App если URL настроен
+    if MINI_APP_URL:
+        keyboard.append([
+            InlineKeyboardButton(
+                "🌐 Открыть Mini App",
+                web_app=WebAppInfo(url=MINI_APP_URL)
+            )
+        ])
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     menu_text = (
@@ -101,6 +124,7 @@ async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_main_menu(query):
     """Показать главное меню с улучшенным дизайном"""
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    from telegram_bot.config import MINI_APP_URL
     
     # Компактная группировка кнопок
     keyboard = [
@@ -117,6 +141,16 @@ async def show_main_menu(query):
             InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
         ]
     ]
+    
+    # Добавляем кнопку Web App если URL настроен
+    if MINI_APP_URL:
+        keyboard.append([
+            InlineKeyboardButton(
+                "🌐 Открыть Mini App",
+                web_app=WebAppInfo(url=MINI_APP_URL)
+            )
+        ])
+    
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     menu_text = (

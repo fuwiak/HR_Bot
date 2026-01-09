@@ -2,6 +2,26 @@
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone', // Для Docker деплоя на Railway
+  
+  // Настройки для Telegram Mini App
+  async headers() {
+    return [
+      {
+        source: '/miniapp/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://web.telegram.org https://webk.telegram.org https://webz.telegram.org",
+          },
+        ],
+      },
+    ];
+  },
+  
   async rewrites() {
     // Используем переменную окружения для backend URL
     // В Railway это будет URL backend сервиса

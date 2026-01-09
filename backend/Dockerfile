@@ -46,6 +46,12 @@ ENV RUN_SERVICES_MIGRATION=${RUN_SERVICES_MIGRATION:-false}
 # Создаем entrypoint скрипт для запуска миграций, инициализации Qdrant и тестов
 RUN echo '#!/bin/sh\n\
 set -e\n\
+echo "🔍 Проверка DATABASE_URL..."\n\
+if [ -z "$DATABASE_URL" ]; then\n\
+    echo "❌ ОШИБКА: DATABASE_URL не установлен!"\n\
+    echo "В Railway добавьте переменную: DATABASE_URL=${{Postgres.DATABASE_URL}}"\n\
+    exit 1\n\
+fi\n\
 echo "🔄 Запуск миграций Alembic..."\n\
 if alembic upgrade head; then\n\
     echo "✅ Миграции успешно применены"\n\

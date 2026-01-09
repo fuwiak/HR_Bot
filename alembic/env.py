@@ -43,7 +43,15 @@ if not database_url:
     if pg_host and pg_password:
         database_url = f"postgresql://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_database}"
     else:
+        # В production (Railway) не используем localhost - это ошибка конфигурации
+        if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+            raise ValueError(
+                "❌ DATABASE_URL не настроен! "
+                "В Railway добавьте переменную: DATABASE_URL=${{Postgres.DATABASE_URL}}"
+            )
+        # Только для локальной разработки используем localhost
         database_url = "postgresql://postgres:postgres@localhost:5432/railway"
+        print("⚠️ ВНИМАНИЕ: Используется localhost. Для Railway установите DATABASE_URL=${{Postgres.DATABASE_URL}}")
 
 # Устанавливаем URL в конфиг Alembic
 config.set_main_option("sqlalchemy.url", database_url)

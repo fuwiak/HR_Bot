@@ -26,6 +26,17 @@ if not WEBHOOK_URL and RAILWAY_PUBLIC_DOMAIN:
     WEBHOOK_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}"
 USE_WEBHOOK = os.getenv("USE_WEBHOOK", "true").lower() == "true"
 
+# ===================== MINI APP CONFIG =====================
+MINI_APP_URL = os.getenv("MINI_APP_URL", "")
+if not MINI_APP_URL:
+    # Пытаемся получить из FRONTEND_URL или построить из домена
+    FRONTEND_URL = os.getenv("FRONTEND_URL", "")
+    if FRONTEND_URL:
+        MINI_APP_URL = FRONTEND_URL.rstrip("/") + "/miniapp"
+    elif RAILWAY_PUBLIC_DOMAIN:
+        # Предполагаем, что frontend на том же домене или отдельном сервисе
+        MINI_APP_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}/miniapp"
+
 # ===================== GOOGLE SHEETS CONFIG =====================
 GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")
 GOOGLE_SHEETS_SPREADSHEET_ID = os.getenv("GOOGLE_SHEETS_SPREADSHEET_ID", "1NF25EWqRxjdNTKk4VFVAYZGIOlVFfaktpEvvj1bRXKU")
