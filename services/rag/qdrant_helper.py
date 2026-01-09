@@ -19,6 +19,13 @@ project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
+# Загружаем переменные окружения из .env файла
+try:
+    from dotenv import load_dotenv
+    load_dotenv(project_root / ".env")
+except ImportError:
+    pass  # python-dotenv не установлен, используем только системные переменные окружения
+
 # Импортируем config loader
 from config import load_config
 

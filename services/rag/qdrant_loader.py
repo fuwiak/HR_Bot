@@ -27,6 +27,14 @@ from collections import defaultdict
 
 from whitelist import WhitelistManager
 
+# Загружаем переменные окружения из .env файла
+try:
+    from dotenv import load_dotenv
+    project_root = Path(__file__).parent.parent.parent
+    load_dotenv(project_root / ".env")
+except ImportError:
+    pass  # python-dotenv не установлен, используем только системные переменные окружения
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -87,18 +95,53 @@ class QdrantLoader:
         if hasattr(self, '_initialized') and self._initialized:
             return
         self.collection_name = collection_name
-        self.qdrant_url = qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
+        
+        # Определяем URL Qdrant (та же логика, что в qdrant_helper.py)
+        # Приоритет: 1) QDRANT_HOST, 2) переданный qdrant_url, 3) QDRANT_URL, 4) localhost
+        qdrant_host = os.getenv("QDRANT_HOST")
+        if qdrant_host:
+            # Определяем, является ли домен публичным (Railway public domain)
+            is_public_domain = (
+                ".up.railway.app" in qdrant_host or
+                ".railway.app" in qdrant_host or
+                qdrant_host.startswith("https://")
+            )
+            
+            if is_public_domain:
+                # Публичный домен Railway - используем HTTPS без порта
+                if qdrant_host.startswith("https://"):
+                    self.qdrant_url = qdrant_host
+                elif qdrant_host.startswith("http://"):
+                    self.qdrant_url = qdrant_host.replace("http://", "https://")
+                else:
+                    self.qdrant_url = f"https://{qdrant_host}"
+                logger.info(f"🔧 Используется публичный Railway Qdrant: {self.qdrant_url}")
+            else:
+                # Приватный домен Railway - используем HTTP с портом
+                qdrant_port = os.getenv("QDRANT_PORT", "6333")
+                self.qdrant_url = f"http://{qdrant_host}:{qdrant_port}"
+                logger.info(f"🔧 Используется приватный Railway Qdrant: {self.qdrant_url}")
+        else:
+            # Fallback на старый QDRANT_URL или localhost
+            self.qdrant_url = qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
+            if self.qdrant_url == "http://localhost:6333":
+                logger.info(f"🔧 Используется локальный Qdrant: {self.qdrant_url}")
+            else:
+                logger.info(f"🔧 Используется Qdrant URL: {self.qdrant_url}")
+        
+        # API ключ больше не используется для Railway Qdrant
         self.qdrant_api_key = qdrant_api_key or os.getenv("QDRANT_API_KEY", "")
         
-        # Используем Qdrant Cloud (как в текущем проекте)
-        # Всегда используем Cloud если есть API ключ, иначе локальный
-        client_kwargs = {"url": self.qdrant_url}
-        if self.qdrant_api_key:
+        # Создаем клиент Qdrant
+        is_public = self.qdrant_url.startswith("https://")
+        timeout_seconds = 30.0 if is_public else 10.0
+        
+        client_kwargs = {"url": self.qdrant_url, "timeout": timeout_seconds}
+        # API ключ используется только для старых Qdrant Cloud подключений
+        if self.qdrant_api_key and not qdrant_host:
             client_kwargs["api_key"] = self.qdrant_api_key
-            logger.info(f"Используется Qdrant Cloud: {self.qdrant_url}")
-        else:
-            logger.warning("⚠️ QDRANT_API_KEY не установлен, используется локальный сервер (для разработки)")
-            logger.warning("⚠️ Для продакшена используйте Qdrant Cloud с API ключом")
+            logger.info(f"Используется Qdrant Cloud с API ключом: {self.qdrant_url}")
+        
         self.client = QdrantClient(**client_kwargs)
         
         # Инициализация embeddings через API (как в qdrant_helper)

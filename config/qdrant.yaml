@@ -1,6 +1,9 @@
 # Конфигурация Qdrant векторной базы данных
 qdrant:
   # Подключение
+  # Установите QDRANT_HOST в .env файле или переменных окружения:
+  # - Для удаленного Railway: QDRANT_HOST=https://qdrant-production-bf97.up.railway.app
+  # - Для локальной разработки: не устанавливайте QDRANT_HOST (будет использован localhost:6333)
   # Для приватных доменов Railway: используйте только host (например: "qdrant-service.railway.internal")
   # Для публичных доменов Railway: используйте полный URL с https:// (например: "https://qdrant-production-bf97.up.railway.app")
   host: "${QDRANT_HOST}"  # Private domain или полный URL (https://) Qdrant сервиса в Railway
@@ -17,5 +20,5 @@ qdrant:
   default_limit: 5  # Дефолтное количество результатов поиска
   pricing_limit: 10  # Количество результатов для запросов о ценах
   
-  # Локальная разработка (fallback)
+  # Локальная разработка (fallback, используется если QDRANT_HOST не установлен)
   local_url: "http://localhost:6333"

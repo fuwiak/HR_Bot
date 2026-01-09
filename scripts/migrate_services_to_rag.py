@@ -14,7 +14,16 @@ from typing import List, Dict, Optional
 from datetime import datetime
 
 # Добавляем корневую директорию в путь
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
+
+# Загружаем переменные окружения из .env файла
+try:
+    from dotenv import load_dotenv
+    from pathlib import Path
+    load_dotenv(Path(project_root) / ".env")
+except ImportError:
+    pass  # python-dotenv не установлен, используем только системные переменные окружения
 
 # Настройка логирования
 logging.basicConfig(
