@@ -133,8 +133,8 @@ def get_qdrant_client():
         # Определяем, является ли URL публичным доменом
         is_public = QDRANT_URL.startswith("https://")
         
-        # Для публичных доменов используем больший таймаут
-        timeout_seconds = 30.0 if is_public else 10.0
+        # Для публичных доменов используем больший таймаут (SSL handshake может занимать время)
+        timeout_seconds = 90.0 if is_public else 10.0
         
         # Проверяем, нужен ли API ключ для публичных доменов
         qdrant_api_key = os.getenv("QDRANT_API_KEY")
@@ -145,28 +145,42 @@ def get_qdrant_client():
             _qdrant_client = QdrantClient(
                 url=QDRANT_URL,
                 api_key=qdrant_api_key,
-                timeout=timeout_seconds
+                timeout=timeout_seconds,
+                prefer_grpc=False  # Используем HTTP для публичных доменов
             )
             log.info(f"🔗 Подключение к публичному Railway Qdrant с API ключом: {QDRANT_URL}")
         else:
             # Приватный домен или без API ключа
             _qdrant_client = QdrantClient(
                 url=QDRANT_URL,
-                timeout=timeout_seconds
+                timeout=timeout_seconds,
+                prefer_grpc=False  # Используем HTTP для публичных доменов
             )
             if is_public:
-                log.info(f"🔗 Подключение к публичному Railway Qdrant: {QDRANT_URL}")
+                log.info(f"🔗 Подключение к публичному Railway Qdrant: {QDRANT_URL} (таймаут: {timeout_seconds}с)")
             else:
                 log.info(f"🔗 Подключение к Railway Qdrant: {QDRANT_URL}")
         
-        # Проверяем подключение с таймаутом
-        try:
-            _qdrant_client.get_collections()
-            log.info(f"✅ Qdrant клиент успешно подключен: {QDRANT_URL}")
-            log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
-        except Exception as conn_e:
-            log.warning(f"⚠️ Предупреждение при проверке подключения: {conn_e}")
-            # Не возвращаем None, так как клиент может работать, просто проверка не прошла
+        # Проверяем подключение с retry логикой
+        max_retries = 3
+        retry_delay = 2.0
+        for attempt in range(max_retries):
+            try:
+                _qdrant_client.get_collections()
+                log.info(f"✅ Qdrant клиент успешно подключен: {QDRANT_URL}")
+                log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
+                break
+            except Exception as conn_e:
+                if attempt < max_retries - 1:
+                    log.warning(f"⚠️ Попытка подключения {attempt + 1}/{max_retries} не удалась: {conn_e}")
+                    log.info(f"⏳ Повторная попытка через {retry_delay} секунд...")
+                    import time
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Экспоненциальная задержка
+                else:
+                    log.warning(f"⚠️ Не удалось проверить подключение после {max_retries} попыток: {conn_e}")
+                    log.warning("⚠️ Клиент создан, но проверка подключения не прошла. Возможно, проблемы с сетью.")
+                    # Не возвращаем None, так как клиент может работать, просто проверка не прошла
         
         return _qdrant_client
     except Exception as e:
@@ -299,34 +313,50 @@ def ensure_collection():
     if not client:
         return False
     
-    try:
-        # Проверяем, существует ли коллекция
-        collections = client.get_collections()
-        collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
-        
-        if not collection_exists:
-            # Создаем коллекцию с фиксированной размерностью
-            client.create_collection(
-                collection_name=COLLECTION_NAME,
-                vectors_config=VectorParams(size=_embedding_dimension, distance=Distance.COSINE),
-            )
-            log.info(f"✅ Создана коллекция '{COLLECTION_NAME}' в Qdrant (размерность: {_embedding_dimension})")
-        else:
-            log.debug(f"ℹ️ Коллекция '{COLLECTION_NAME}' уже существует")
-        
-        _collection_initialized = True
-        return True
-    except Exception as e:
-        # Проверяем, если это ошибка о том, что коллекция уже существует - это нормально
-        error_str = str(e)
-        if "already exists" in error_str or "409" in error_str or "Conflict" in error_str:
-            log.debug(f"ℹ️ Коллекция '{COLLECTION_NAME}' уже существует (это нормально)")
+    # Retry логика для надежности подключения
+    max_retries = 3
+    retry_delay = 2.0
+    import time
+    
+    for attempt in range(max_retries):
+        try:
+            # Проверяем, существует ли коллекция
+            collections = client.get_collections()
+            collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
+            
+            if not collection_exists:
+                # Создаем коллекцию с фиксированной размерностью
+                client.create_collection(
+                    collection_name=COLLECTION_NAME,
+                    vectors_config=VectorParams(size=_embedding_dimension, distance=Distance.COSINE),
+                )
+                log.info(f"✅ Создана коллекция '{COLLECTION_NAME}' в Qdrant (размерность: {_embedding_dimension})")
+            else:
+                log.debug(f"ℹ️ Коллекция '{COLLECTION_NAME}' уже существует")
+            
             _collection_initialized = True
             return True
-        log.error(f"❌ Ошибка создания коллекции в Qdrant: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
-        return False
+        except Exception as e:
+            # Проверяем, если это ошибка о том, что коллекция уже существует - это нормально
+            error_str = str(e)
+            if "already exists" in error_str or "409" in error_str or "Conflict" in error_str:
+                log.info(f"ℹ️ Коллекция '{COLLECTION_NAME}' уже существует (это нормально)")
+                _collection_initialized = True
+                return True
+            
+            if attempt < max_retries - 1:
+                log.warning(f"⚠️ Попытка {attempt + 1}/{max_retries} не удалась: {e}")
+                log.info(f"⏳ Повторная попытка через {retry_delay} секунд...")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Экспоненциальная задержка
+            else:
+                # Последняя попытка не удалась
+                log.error(f"❌ Ошибка создания коллекции в Qdrant: {e}")
+                import traceback
+                log.error(f"❌ Traceback: {traceback.format_exc()}")
+                return False
+    
+    return False
 
 def generate_service_id(service: Dict) -> str:
     """Генерирует уникальный ID для услуги на основе её данных"""
