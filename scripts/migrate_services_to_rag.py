@@ -10,46 +10,54 @@ import os
 import sys
 import logging
 import hashlib
-from typing import List, Dict, Optional
+import time
+from typing import List, Dict
 from datetime import datetime
+from pathlib import Path
 
-# Добавляем корневую директорию в путь
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, project_root)
+# Добавляем корневую директорию проекта в sys.path
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 # Загружаем переменные окружения из .env файла
 try:
     from dotenv import load_dotenv
-    from pathlib import Path
-    load_dotenv(Path(project_root) / ".env")
+    load_dotenv(project_root / ".env")
 except ImportError:
     pass  # python-dotenv не установлен, используем только системные переменные окружения
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-log = logging.getLogger(__name__)
+import requests  # pip install requests
+from qdrant_client import QdrantClient
+from qdrant_client.http.models import PointStruct
 
-# Импорты из проекта
-try:
-    from services.rag.qdrant_helper import (
-        get_qdrant_client,
-        generate_embedding,
-        ensure_collection,
-        get_collection_info,
-        COLLECTION_NAME
-    )
-    from qdrant_client.models import PointStruct
-except ImportError as e:
-    log.error(f"❌ Ошибка импорта: {e}")
+# =============================================================================
+# КОНФИГ
+# =============================================================================
+
+QDRANT_URL = "https://qdrant-production-bf97.up.railway.app"
+COLLECTION_NAME = "hr2137_bot_knowledge_base"
+
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")  # Опциональный API ключ для Qdrant
+EMBEDDING_MODEL = "qwen/qwen3-embedding-8b"  # 1536-мерные эмбеддинги для совместимости с Qdrant коллекцией
+
+# Таймауты для Qdrant
+QDRANT_TIMEOUT = 30.0  # Увеличенный таймаут для SSL handshake
+QDRANT_MAX_RETRIES = 3
+QDRANT_RETRY_DELAY = 2.0
+
+if not OPENROUTER_API_KEY:
+    print("❌ Установите переменную окружения OPENROUTER_API_KEY=sk-or-...")
     sys.exit(1)
 
-# Текст с услугами (каждая услуга - 2 строки: название + цена)
+# Настройка OpenRouter для эмбеддингов
+OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings"
+
+# =============================================================================
+# SERVICES_TEXT (ПОЛНЫЙ)
+# =============================================================================
+
 SERVICES_TEXT = """Услуги исполнителя
 Автоматизация и настройка HR бизнес - процессов / постановка работы HR-функции с "0"
 от 80 000 рублей
@@ -182,37 +190,44 @@ HR-аудит компании / подразделения
 Разработка оргструктуры и функциональной матрицы для малого бизнеса и стартапов
 от 25 000 рублей"""
 
+# =============================================================================
+# ЛОГИРОВАНИЕ
+# =============================================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+log = logging.getLogger(__name__)
+
+# =============================================================================
+# ПАРСИНГ УСЛУГ
+# =============================================================================
 
 def parse_services(text: str) -> List[Dict]:
     """
     Парсит текст с услугами.
     Каждая услуга - 2 строки: название + цена (начинается с "от X рублей")
-    
-    Args:
-        text: Текст с услугами
-        
-    Returns:
-        Список словарей с услугами
     """
-    lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
+    lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
     services = []
-    
+
     # Пропускаем первую строку "Услуги исполнителя"
     i = 1
     while i < len(lines):
-        # Название услуги
         title = lines[i]
         i += 1
-        
-        # Цена (должна начинаться с "от")
-        if i < len(lines) and lines[i].startswith('от'):
+
+        if i < len(lines) and lines[i].startswith("от"):
             price_str = lines[i]
-            # Извлекаем число из строки "от X рублей" или "от X 000 рублей"
-            price_str_clean = price_str.replace('от', '').replace('рублей', '').strip()
-            # Убираем пробелы и преобразуем в число
-            price_str_clean = price_str_clean.replace(' ', '')
+            price_str_clean = (
+                price_str.replace("от", "")
+                .replace("рублей", "")
+                .replace(" ", "")
+                .strip()
+            )
             try:
-                # Парсим число (может быть "80000" или "80 000")
                 price = int(price_str_clean)
             except ValueError:
                 log.warning(f"⚠️ Не удалось распарсить цену: {price_str}")
@@ -222,224 +237,643 @@ def parse_services(text: str) -> List[Dict]:
             log.warning(f"⚠️ Не найдена цена для услуги: {title}")
             price_str = "цена не указана"
             price = 0
-        
-        # Создаем структурированный документ для услуги
+
         service = {
             "title": title,
             "price": price,
             "price_str": price_str,
             "indexed_at": datetime.now().isoformat(),
             "source_type": "service",
-            "category": "услуги_исполнителя"
+            "category": "услуги_исполнителя",
         }
         services.append(service)
-    
-    return services
 
+    return services
 
 def generate_service_id(service: Dict) -> str:
     """Генерирует уникальный ID для услуги"""
     service_str = f"{service.get('title', '')}_{service.get('price', 0)}"
     return hashlib.md5(service_str.encode()).hexdigest()
 
+# =============================================================================
+# EMBEDDING ЧЕРЕЗ OPENROUTER QWEN
+# =============================================================================
 
-def print_collection_info():
-    """Выводит информацию о коллекции"""
+def generate_embedding(text: str, target_dimension: int = 1536) -> List[float]:
+    """
+    Генерирует эмбеддинг через OpenRouter (Qwen3-Embedding-8B) используя прямой HTTP запрос.
+    Автоматически обрезает или дополняет эмбеддинг до target_dimension.
+    """
+    if not OPENROUTER_API_KEY:
+        raise ValueError("OPENROUTER_API_KEY не установлен")
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": os.getenv("APP_URL", "https://github.com/HR2137_bot").strip(),
+        "X-Title": "HR2137_bot",
+    }
+    
+    data = {
+        "model": EMBEDDING_MODEL,
+        "input": text[:8000]  # Ограничение для API
+    }
+    
+    try:
+        response = requests.post(
+            OPENROUTER_EMBEDDINGS_URL,
+            json=data,
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        result = response.json()
+        embedding = result["data"][0]["embedding"]
+        embedding_size = len(embedding)
+        
+        # Адаптируем размерность к целевой
+        if embedding_size != target_dimension:
+            if embedding_size > target_dimension:
+                # Обрезаем до нужной размерности
+                embedding = embedding[:target_dimension]
+                log.debug(f"✂️ Эмбеддинг обрезан: {embedding_size} → {target_dimension}")
+            else:
+                # Дополняем нулями если меньше
+                padding_size = target_dimension - embedding_size
+                embedding = embedding + [0.0] * padding_size
+                log.debug(f"📌 Эмбеддинг дополнен: {embedding_size} → {target_dimension} (+{padding_size} нулей)")
+        
+        return embedding
+    except requests.exceptions.RequestException as e:
+        log.error(f"❌ Ошибка при запросе к OpenRouter: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            log.error(f"❌ Ответ сервера: {e.response.text}")
+        raise
+
+# =============================================================================
+# ИНФОРМАЦИЯ О КОЛЛЕКЦИИ
+# =============================================================================
+
+def print_collection_info(client: QdrantClient):
+    """Выводит информацию о коллекции с retry логикой"""
     log.info("\n" + "=" * 80)
     log.info("📊 Информация о коллекции:")
     log.info("=" * 80)
-    
-    info = get_collection_info()
-    
-    if "error" in info:
-        log.error(f"❌ Ошибка получения информации: {info['error']}")
-        return
-    
-    log.info(f"📁 Коллекция: {info.get('collection_name', 'N/A')}")
-    log.info(f"✅ Существует: {'Да' if info.get('exists') else 'Нет'}")
-    
-    if info.get('exists'):
-        log.info(f"📊 Статус: {info.get('status', 'unknown')}")
-        log.info(f"🔢 Всего точек: {info.get('points_count', 0)}")
-        log.info(f"🔢 Индексированных векторов: {info.get('indexed_vectors_count', 0)}")
-        log.info(f"🔢 Всего векторов: {info.get('vectors_count', 0)}")
-        
-        config = info.get('config', {})
-        if config:
-            log.info(f"📐 Размерность векторов: {config.get('vector_size', 'N/A')}")
-            log.info(f"📏 Метрика расстояния: {config.get('distance', 'N/A')}")
-    
+
+    for attempt in range(QDRANT_MAX_RETRIES):
+        try:
+            info = client.get_collection(COLLECTION_NAME)
+            count_result = client.count(collection_name=COLLECTION_NAME, exact=True)
+            cfg = info.config.params.vectors
+
+            log.info(f"📁 Коллекция: {COLLECTION_NAME}")
+            log.info("✅ Существует: Да")
+            log.info(f"🔢 Всего точек: {count_result.count}")
+            log.info(f"📐 Размерность векторов: {cfg.size}")
+            log.info(f"📏 Метрика расстояния: {cfg.distance}")
+            break  # Успешно получена информация
+        except Exception as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "404" in error_str or "does not exist" in error_str:
+                log.info(f"❌ Коллекция {COLLECTION_NAME} не существует")
+                break
+            elif "timeout" in error_str or "timed out" in error_str or "handshake" in error_str:
+                if attempt < QDRANT_MAX_RETRIES - 1:
+                    delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                    log.warning(
+                        f"⚠️ Таймаут при получении информации (попытка {attempt + 1}/{QDRANT_MAX_RETRIES}), повтор через {delay}с..."
+                    )
+                    time.sleep(delay)
+                else:
+                    log.warning(f"⚠️ Ошибка таймаута при получении информации о коллекции: {e}")
+                    break
+            else:
+                log.warning(f"⚠️ Ошибка при получении информации о коллекции: {e}")
+                break
+
     log.info("=" * 80 + "\n")
 
+# =============================================================================
+# МИГРАЦИЯ ЧЕРЕЗ HTTP API
+# =============================================================================
 
-def migrate_services_to_rag(services: List[Dict]) -> bool:
+def migrate_services_to_rag_http(services: List[Dict]) -> bool:
     """
-    Загружает услуги в RAG коллекцию Qdrant
-    
-    Args:
-        services: Список услуг
-        
-    Returns:
-        True если успешно, False если ошибка
+    Загружает услуги в RAG коллекцию Qdrant используя прямой HTTP API
+    (альтернатива Python клиенту)
     """
-    log.info(f"🚀 Начинаем миграцию {len(services)} услуг в RAG коллекцию...")
+    log.info(f"🚀 Начинаем миграцию {len(services)} услуг через HTTP API...")
     
-    # Показываем статус коллекции ДО загрузки
-    log.info("\n📊 Статус коллекции ДО загрузки:")
-    print_collection_info()
+    # Подготовка заголовков
+    headers = {
+        "Content-Type": "application/json",
+    }
+    if QDRANT_API_KEY:
+        headers["api-key"] = QDRANT_API_KEY
     
-    # Проверяем подключение к Qdrant
-    client = get_qdrant_client()
-    if not client:
-        log.error("❌ Qdrant клиент не доступен")
+    base_url = QDRANT_URL.rstrip("/")
+    
+    # 1. Проверяем существование коллекции
+    log.info("\n📊 Проверка коллекции...")
+    collection_url = f"{base_url}/collections/{COLLECTION_NAME}"
+    
+    for attempt in range(QDRANT_MAX_RETRIES):
+        try:
+            response = requests.get(
+                collection_url,
+                headers=headers,
+                timeout=QDRANT_TIMEOUT
+            )
+            if response.status_code == 200:
+                collection_info = response.json()
+                vector_size = collection_info["result"]["config"]["params"]["vectors"]["size"]
+                log.info(f"✅ Коллекция найдена, vector_size={vector_size}")
+                break
+            elif response.status_code == 404:
+                log.error(f"❌ Коллекция {COLLECTION_NAME} не найдена")
+                return False
+            else:
+                response.raise_for_status()
+        except requests.exceptions.Timeout:
+            if attempt < QDRANT_MAX_RETRIES - 1:
+                delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                log.warning(f"⚠️ Таймаут при проверке коллекции (попытка {attempt + 1}/{QDRANT_MAX_RETRIES})")
+                time.sleep(delay)
+            else:
+                log.error("❌ Таймаут при проверке коллекции после всех попыток")
+                return False
+        except Exception as e:
+            log.error(f"❌ Ошибка при проверке коллекции: {e}")
+            return False
+    else:
+        log.error("❌ Не удалось проверить коллекцию")
         return False
     
-    # Создаем/проверяем коллекцию
-    log.info("🔧 Проверка/создание коллекции...")
-    if not ensure_collection():
-        log.error("❌ Не удалось создать/проверить коллекцию")
-        return False
-    log.info("✅ Коллекция готова к работе")
-    
-    # Генерируем точки для каждой услуги
+    # 2. Генерируем эмбеддинги и подготавливаем точки
     log.info("\n" + "=" * 80)
     log.info("🔄 Генерация эмбеддингов и подготовка данных...")
     log.info("=" * 80)
     
-    points = []
+    points_data = []
     successful = 0
     failed = 0
     start_time = datetime.now()
     
     for idx, service in enumerate(services, 1):
         try:
-            # Создаем текстовое представление услуги для поиска
-            # Включаем название, цену и ключевые слова для лучшего поиска
             service_text = f"{service['title']} {service['price_str']} услуга консультация"
-            
-            # Показываем прогресс
             progress = (idx / len(services)) * 100
-            log.info(f"[{idx}/{len(services)}] ({progress:.1f}%) 🔄 Генерация эмбеддинга: {service['title'][:50]}...")
+            log.info(
+                f"[{idx}/{len(services)}] ({progress:.1f}%) 🔄 Генерация эмбеддинга: {service['title'][:50]}..."
+            )
             
-            # Генерируем эмбеддинг
             embedding_start = datetime.now()
-            embedding = generate_embedding(service_text)
+            embedding = generate_embedding(service_text, target_dimension=vector_size)
             embedding_time = (datetime.now() - embedding_start).total_seconds()
             
             if embedding is None:
-                log.warning(f"⚠️ [{idx}/{len(services)}] Не удалось сгенерировать эмбеддинг для: {service['title']}")
+                log.warning(
+                    f"⚠️ [{idx}/{len(services)}] Не удалось сгенерировать эмбеддинг для: {service['title']}"
+                )
                 failed += 1
                 continue
             
-            log.info(f"    ✅ Эмбеддинг создан ({embedding_time:.2f}с, размерность: {len(embedding)})")
+            if len(embedding) != vector_size:
+                log.error(
+                    f"❌ Размер эмбеддинга {len(embedding)} != vector_size коллекции {vector_size}"
+                )
+                failed += 1
+                continue
             
-            # Создаем payload с полной информацией
-            # Формат должен совпадать с тем, что ожидает search_service
-            payload = {
-                "title": service["title"],
-                "price": service["price"],
-                "price_str": service["price_str"],
-                "text": service_text,  # Полный текст для поиска
-                "indexed_at": service["indexed_at"],
-                "source_type": "service",  # Важно для фильтрации в search_service
-                "category": service.get("category", "услуги_исполнителя"),
-                "service_id": generate_service_id(service),
-                # Дополнительные поля для совместимости
-                "id": generate_service_id(service),  # Для совместимости со старой структурой
-                "master": "",  # Пустое поле для совместимости
-                "duration": 0  # Пустое поле для совместимости
+            log.info(
+                f"    ✅ Эмбеддинг создан ({embedding_time:.2f}с, размерность: {len(embedding)})"
+            )
+            
+            service_id = generate_service_id(service)
+            point_id = int(service_id[:8], 16)
+            
+            point = {
+                "id": point_id,
+                "vector": embedding,
+                "payload": {
+                    "title": service["title"],
+                    "price": service["price"],
+                    "price_str": service["price_str"],
+                    "text": service_text,
+                    "indexed_at": service["indexed_at"],
+                    "source_type": "service",
+                    "category": service.get("category", "услуги_исполнителя"),
+                    "service_id": service_id,
+                    "id": service_id,
+                    "master": "",
+                    "duration": 0,
+                }
             }
             
-            # Генерируем ID
-            service_id = generate_service_id(service)
-            point_id = int(service_id[:8], 16)  # Первые 8 символов hex в int
-            
-            points.append(PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload=payload
-            ))
-            
+            points_data.append(point)
             successful += 1
             
         except Exception as e:
-            log.error(f"❌ [{idx}/{len(services)}] Ошибка обработки услуги '{service.get('title', 'unknown')}': {e}")
+            log.error(
+                f"❌ [{idx}/{len(services)}] Ошибка обработки услуги "
+                f"'{service.get('title', 'unknown')}': {e}"
+            )
             failed += 1
             continue
     
     generation_time = (datetime.now() - start_time).total_seconds()
     log.info("\n" + "=" * 80)
-    log.info(f"✅ Генерация завершена: {successful} успешно, {failed} ошибок (время: {generation_time:.1f}с)")
+    log.info(
+        f"✅ Генерация завершена: {successful} успешно, {failed} ошибок "
+        f"(время: {generation_time:.1f}с)"
+    )
     log.info("=" * 80)
     
-    if not points:
+    if not points_data:
         log.error("❌ Нет точек для загрузки")
         return False
     
-    # Загружаем в Qdrant
+    # 3. Загружаем точки через HTTP API (батчами)
+    log.info("\n" + "=" * 80)
+    log.info(f"📤 Загрузка {len(points_data)} услуг в Qdrant через HTTP API...")
+    log.info("=" * 80)
+    
+    upsert_url = f"{base_url}/collections/{COLLECTION_NAME}/points"
+    batch_size = 100
+    upload_start = datetime.now()
+    
+    for batch_idx in range(0, len(points_data), batch_size):
+        batch = points_data[batch_idx:batch_idx + batch_size]
+        batch_num = (batch_idx // batch_size) + 1
+        total_batches = (len(points_data) + batch_size - 1) // batch_size
+        
+        log.info(f"📦 Загрузка батча {batch_num}/{total_batches} ({len(batch)} точек)...")
+        
+        payload = {
+            "points": batch,
+            "wait": True
+        }
+        
+        for attempt in range(QDRANT_MAX_RETRIES):
+            try:
+                response = requests.put(
+                    upsert_url,
+                    json=payload,
+                    headers=headers,
+                    timeout=QDRANT_TIMEOUT
+                )
+                response.raise_for_status()
+                result = response.json()
+                log.info(f"    ✅ Батч {batch_num} загружен успешно")
+                break
+            except requests.exceptions.Timeout:
+                if attempt < QDRANT_MAX_RETRIES - 1:
+                    delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                    log.warning(
+                        f"    ⚠️ Таймаут при загрузке батча {batch_num} "
+                        f"(попытка {attempt + 1}/{QDRANT_MAX_RETRIES})"
+                    )
+                    time.sleep(delay)
+                else:
+                    log.error(f"    ❌ Таймаут при загрузке батча {batch_num} после всех попыток")
+                    return False
+            except Exception as e:
+                if attempt < QDRANT_MAX_RETRIES - 1:
+                    delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                    log.warning(
+                        f"    ⚠️ Ошибка при загрузке батча {batch_num} "
+                        f"(попытка {attempt + 1}/{QDRANT_MAX_RETRIES}): {e}"
+                    )
+                    time.sleep(delay)
+                else:
+                    log.error(f"    ❌ Ошибка при загрузке батча {batch_num}: {e}")
+                    return False
+    
+    upload_time = (datetime.now() - upload_start).total_seconds()
+    log.info(f"✅ Успешно загружено {successful} услуг (время: {upload_time:.1f}с)")
+    
+    if failed > 0:
+        log.warning(f"⚠️ Не удалось загрузить {failed} услуг")
+    
+    # 4. Проверяем количество точек
+    count_url = f"{base_url}/collections/{COLLECTION_NAME}/points/count"
+    for attempt in range(QDRANT_MAX_RETRIES):
+        try:
+            response = requests.post(
+                count_url,
+                json={"exact": True},
+                headers=headers,
+                timeout=QDRANT_TIMEOUT
+            )
+            response.raise_for_status()
+            count_result = response.json()
+            total_points = count_result["result"]["count"]
+            log.info(f"📊 Проверка: в коллекции теперь {total_points} точек")
+            break
+        except Exception as e:
+            if attempt < QDRANT_MAX_RETRIES - 1:
+                delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                log.warning(f"⚠️ Таймаут при проверке количества точек, повтор через {delay}с...")
+                time.sleep(delay)
+            else:
+                log.warning(f"⚠️ Не удалось проверить количество точек: {e}")
+    
+    return True
+
+# =============================================================================
+# МИГРАЦИЯ
+# =============================================================================
+
+def create_qdrant_client():
+    """Создает QdrantClient с таймаутами и retry логикой"""
+    
+    client_kwargs = {
+        "url": QDRANT_URL,
+        "timeout": QDRANT_TIMEOUT,
+        "prefer_grpc": False,  # Используем HTTP для публичных доменов
+    }
+    
+    if QDRANT_API_KEY:
+        client_kwargs["api_key"] = QDRANT_API_KEY
+        log.info(f"🔗 Подключение к Qdrant с API ключом (таймаут: {QDRANT_TIMEOUT}с)")
+    else:
+        log.info(f"🔗 Подключение к Qdrant (таймаут: {QDRANT_TIMEOUT}с)")
+    
+    # Retry логика для создания клиента
+    for attempt in range(QDRANT_MAX_RETRIES):
+        try:
+            client = QdrantClient(**client_kwargs)
+            # Проверяем подключение простым запросом
+            client.get_collections()
+            log.info(f"✅ Успешное подключение к Qdrant")
+            return client
+        except Exception as e:
+            error_str = str(e).lower()
+            if attempt < QDRANT_MAX_RETRIES - 1:
+                delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                log.warning(
+                    f"⚠️ Попытка {attempt + 1}/{QDRANT_MAX_RETRIES} подключения не удалась: {str(e)[:100]}"
+                )
+                log.info(f"⏳ Повторная попытка через {delay} секунд...")
+                time.sleep(delay)
+            else:
+                log.error(f"❌ Не удалось подключиться к Qdrant после {QDRANT_MAX_RETRIES} попыток: {e}")
+                raise
+    
+    return None
+
+def migrate_services_to_rag(services: List[Dict]) -> bool:
+    """
+    Загружает услуги в RAG коллекцию Qdrant
+    """
+    log.info(f"🚀 Начинаем миграцию {len(services)} услуг в RAG коллекцию...")
+    log.info("\n📊 Статус коллекции ДО загрузки:")
+
+    try:
+        client = create_qdrant_client()
+    except Exception as e:
+        log.error(f"❌ Не удалось создать клиент Qdrant: {e}")
+        return False
+    
+    print_collection_info(client)
+
+    # Проверяем, что коллекция существует и узнаём vector_size с retry
+    vector_size = None
+    
+    for attempt in range(QDRANT_MAX_RETRIES):
+        try:
+            info = client.get_collection(COLLECTION_NAME)
+            vector_size = info.config.params.vectors.size
+            log.info(f"✅ Коллекция готова, vector_size={vector_size}")
+            break
+        except Exception as e:
+            error_str = str(e).lower()
+            if "not found" in error_str or "404" in error_str or "does not exist" in error_str:
+                log.error(
+                    f"❌ Коллекция {COLLECTION_NAME} не найдена. "
+                    f"Создайте её в Qdrant dashboard с размерностью, совпадающей с эмбеддингами модели."
+                )
+                return False
+            elif "timeout" in error_str or "timed out" in error_str or "handshake" in error_str:
+                if attempt < QDRANT_MAX_RETRIES - 1:
+                    delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                    log.warning(
+                        f"⚠️ Таймаут при получении коллекции (попытка {attempt + 1}/{QDRANT_MAX_RETRIES}): {str(e)[:100]}"
+                    )
+                    log.info(f"⏳ Повторная попытка через {delay} секунд...")
+                    time.sleep(delay)
+                else:
+                    log.error(f"❌ Ошибка таймаута при получении коллекции после {QDRANT_MAX_RETRIES} попыток: {e}")
+                    return False
+            else:
+                log.error(f"❌ Ошибка при получении коллекции: {e}")
+                return False
+    
+    if vector_size is None:
+        log.error("❌ Не удалось получить размерность коллекции")
+        return False
+
+    log.info("\n" + "=" * 80)
+    log.info("🔄 Генерация эмбеддингов и подготовка данных...")
+    log.info("=" * 80)
+
+    points = []
+    successful = 0
+    failed = 0
+    start_time = datetime.now()
+
+    for idx, service in enumerate(services, 1):
+        try:
+            service_text = f"{service['title']} {service['price_str']} услуга консультация"
+            progress = (idx / len(services)) * 100
+            log.info(
+                f"[{idx}/{len(services)}] ({progress:.1f}%) 🔄 Генерация эмбеддинга: {service['title'][:50]}..."
+            )
+
+            embedding_start = datetime.now()
+            embedding = generate_embedding(service_text, target_dimension=vector_size)
+            embedding_time = (datetime.now() - embedding_start).total_seconds()
+
+            if embedding is None:
+                log.warning(
+                    f"⚠️ [{idx}/{len(services)}] Не удалось сгенерировать эмбеддинг для: {service['title']}"
+                )
+                failed += 1
+                continue
+
+            if len(embedding) != vector_size:
+                log.error(
+                    f"❌ Размер эмбеддинга {len(embedding)} != vector_size коллекции {vector_size}"
+                )
+                failed += 1
+                continue
+
+            log.info(
+                f"    ✅ Эмбеддинг создан ({embedding_time:.2f}с, размерность: {len(embedding)})"
+            )
+
+            payload = {
+                "title": service["title"],
+                "price": service["price"],
+                "price_str": service["price_str"],
+                "text": service_text,
+                "indexed_at": service["indexed_at"],
+                "source_type": "service",
+                "category": service.get("category", "услуги_исполнителя"),
+                "service_id": generate_service_id(service),
+                # Дополнительные поля для совместимости
+                "id": generate_service_id(service),
+                "master": "",
+                "duration": 0,
+            }
+
+            service_id = generate_service_id(service)
+            point_id = int(service_id[:8], 16)
+
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector=embedding,
+                    payload=payload,
+                )
+            )
+
+            successful += 1
+
+        except Exception as e:
+            log.error(
+                f"❌ [{idx}/{len(services)}] Ошибка обработки услуги "
+                f"'{service.get('title', 'unknown')}': {e}"
+            )
+            failed += 1
+            continue
+
+    generation_time = (datetime.now() - start_time).total_seconds()
+    log.info("\n" + "=" * 80)
+    log.info(
+        f"✅ Генерация завершена: {successful} успешно, {failed} ошибок "
+        f"(время: {generation_time:.1f}с)"
+    )
+    log.info("=" * 80)
+
+    if not points:
+        log.error("❌ Нет точек для загрузки")
+        return False
+
     log.info("\n" + "=" * 80)
     log.info(f"📤 Загрузка {len(points)} услуг в Qdrant...")
     log.info("=" * 80)
+
+    # Retry логика для загрузки данных
+    upload_start = datetime.now()
+    result = None
     
-    try:
-        upload_start = datetime.now()
-        
-        # Используем wait=True для ожидания завершения операции
-        result = client.upsert(
-            collection_name=COLLECTION_NAME,
-            points=points,
-            wait=True  # Ждем завершения операции
-        )
-        
-        upload_time = (datetime.now() - upload_start).total_seconds()
-        
-        log.info(f"✅ Статус загрузки: {result.status if hasattr(result, 'status') else 'COMPLETED'}")
-        log.info(f"✅ Успешно загружено {successful} услуг в RAG коллекцию '{COLLECTION_NAME}' (время: {upload_time:.1f}с)")
-        
-        if failed > 0:
-            log.warning(f"⚠️ Не удалось загрузить {failed} услуг")
-        
-        # Проверяем количество точек в коллекции
+    for attempt in range(QDRANT_MAX_RETRIES):
+        try:
+            result = client.upsert(
+                collection_name=COLLECTION_NAME,
+                points=points,
+                wait=True,
+            )
+            break  # Успешно загружено
+        except Exception as e:
+            error_str = str(e).lower()
+            if "timeout" in error_str or "timed out" in error_str or "handshake" in error_str:
+                if attempt < QDRANT_MAX_RETRIES - 1:
+                    delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                    log.warning(
+                        f"⚠️ Таймаут при загрузке данных (попытка {attempt + 1}/{QDRANT_MAX_RETRIES}): {str(e)[:100]}"
+                    )
+                    log.info(f"⏳ Повторная попытка через {delay} секунд...")
+                    time.sleep(delay)
+                else:
+                    log.error(f"❌ Ошибка таймаута при загрузке после {QDRANT_MAX_RETRIES} попыток: {e}")
+                    import traceback
+                    log.error(f"❌ Traceback: {traceback.format_exc()}")
+                    return False
+            else:
+                log.error(f"❌ Ошибка загрузки в Qdrant: {e}")
+                import traceback
+                log.error(f"❌ Traceback: {traceback.format_exc()}")
+                return False
+    
+    if result is None:
+        log.error("❌ Не удалось загрузить данные после всех попыток")
+        return False
+
+    upload_time = (datetime.now() - upload_start).total_seconds()
+    status = getattr(result, "status", "COMPLETED")
+
+    log.info(f"✅ Статус загрузки: {status}")
+    log.info(
+        f"✅ Успешно загружено {successful} услуг в RAG коллекцию "
+        f"'{COLLECTION_NAME}' (время: {upload_time:.1f}с)"
+    )
+
+    if failed > 0:
+        log.warning(f"⚠️ Не удалось загрузить {failed} услуг")
+
+    # Проверка количества точек с retry
+    for attempt in range(QDRANT_MAX_RETRIES):
         try:
             count_result = client.count(
                 collection_name=COLLECTION_NAME,
-                exact=True
+                exact=True,
             )
             log.info(f"📊 Проверка: в коллекции теперь {count_result.count} точек")
+            break
         except Exception as count_e:
-            log.warning(f"⚠️ Не удалось проверить количество точек: {count_e}")
-        
-        # Показываем статус коллекции ПОСЛЕ загрузки
-        log.info("\n📊 Статус коллекции ПОСЛЕ загрузки:")
-        print_collection_info()
-        
-        return True
-        
-    except Exception as e:
-        log.error(f"❌ Ошибка загрузки в Qdrant: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
-        return False
+            error_str = str(count_e).lower()
+            if attempt < QDRANT_MAX_RETRIES - 1 and ("timeout" in error_str or "timed out" in error_str):
+                delay = QDRANT_RETRY_DELAY * (attempt + 1)
+                log.warning(f"⚠️ Таймаут при проверке количества точек, повтор через {delay}с...")
+                time.sleep(delay)
+            else:
+                log.warning(f"⚠️ Не удалось проверить количество точек: {count_e}")
 
+    log.info("\n📊 Статус коллекции ПОСЛЕ загрузки:")
+    print_collection_info(client)
+
+    return True
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 def main():
-    """Основная функция"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Миграция услуг в RAG коллекцию")
+    parser.add_argument(
+        "--http",
+        action="store_true",
+        help="Использовать прямой HTTP API вместо Python клиента"
+    )
+    args = parser.parse_args()
+    
     log.info("=" * 80)
     log.info("🚀 Миграция услуг в RAG коллекцию hr2137_bot_knowledge_base")
+    if args.http:
+        log.info("📡 Режим: HTTP API (прямые запросы)")
+    else:
+        log.info("🐍 Режим: Python клиент Qdrant")
     log.info("=" * 80)
-    
-    # Парсим услуги
+
     log.info("📝 Парсинг услуг из текста...")
     services = parse_services(SERVICES_TEXT)
     log.info(f"✅ Найдено {len(services)} услуг")
-    
-    # Выводим первые несколько для проверки
+
     log.info("\n📋 Примеры услуг:")
     for i, service in enumerate(services[:5], 1):
         log.info(f"  {i}. {service['title']} - {service['price_str']}")
+
+    # Выбираем метод миграции
+    if args.http:
+        success = migrate_services_to_rag_http(services)
+    else:
+        success = migrate_services_to_rag(services)
     
-    # Загружаем в RAG
-    if migrate_services_to_rag(services):
+    if success:
         log.info("\n" + "=" * 80)
         log.info("✅ Миграция завершена успешно!")
         log.info("=" * 80)
@@ -449,7 +883,6 @@ def main():
         log.error("❌ Миграция завершилась с ошибками")
         log.error("=" * 80)
         return 1
-
 
 if __name__ == "__main__":
     sys.exit(main())
