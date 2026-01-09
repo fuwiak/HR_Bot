@@ -38,7 +38,8 @@ media/*.docx
 media/*.xlsx
 
 # Frontend (для backend/telegram сервисов)
-frontend/
+# frontend/ - НЕ игнорируем, так как используется для Mini App
+# node_modules/ - игнорируем, они будут установлены в контейнере
 node_modules/
 
 # Local development
@@ -61,6 +62,7 @@ Thumbs.db
 /tmp/test_results.json
 
 # Docker
-Dockerfile*
+# Dockerfile* - НЕ игнорируем, так как используются для разных сервисов
+# docker-compose*.yml - можно игнорировать, не используется в Railway
 docker-compose*.yml
 .dockerignore
