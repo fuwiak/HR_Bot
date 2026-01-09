@@ -44,31 +44,57 @@ def get_redis_client():
         return _redis_client
     
     try:
-        # Если есть REDIS_URL, используем его
-        if REDIS_URL:
-            _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-            logger.info("✅ Redis клиент создан через REDIS_URL")
-        # Иначе используем отдельные параметры
-        elif REDIS_HOST and REDIS_PASSWORD:
-            _redis_client = redis.Redis(
-                host=REDIS_HOST,
-                port=REDIS_PORT,
-                password=REDIS_PASSWORD,
-                username=REDIS_USER,
-                decode_responses=True
-            )
-            logger.info(f"✅ Redis клиент создан: {REDIS_HOST}:{REDIS_PORT}")
-        else:
-            logger.debug("ℹ️ Redis переменные окружения не установлены, используем только PostgreSQL")
-            return None
+        # Логируем доступные переменные окружения (без паролей)
+        logger.debug(f"🔍 Проверка Redis переменных: REDIS_URL={'установлен' if REDIS_URL else 'не установлен'}, "
+                    f"REDIS_HOST={REDIS_HOST if REDIS_HOST != 'localhost' else 'не установлен'}, "
+                    f"REDIS_PORT={REDIS_PORT}, REDIS_PASSWORD={'установлен' if REDIS_PASSWORD else 'не установлен'}")
         
-        # Проверяем подключение
-        _redis_client.ping()
-        logger.info("✅ Redis подключение успешно")
-        return _redis_client
+        # Если есть REDIS_URL, используем его (приоритет)
+        if REDIS_URL:
+            try:
+                _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+                logger.info(f"✅ Redis клиент создан через REDIS_URL")
+                # Проверяем подключение
+                _redis_client.ping()
+                logger.info("✅ Redis подключение успешно через REDIS_URL")
+                return _redis_client
+            except Exception as e:
+                logger.error(f"❌ Ошибка подключения через REDIS_URL: {e}")
+                _redis_client = None
+        
+        # Иначе используем отдельные параметры
+        if REDIS_HOST and REDIS_HOST != "localhost":
+            try:
+                # Создаем подключение с паролем или без (в зависимости от наличия)
+                connection_params = {
+                    "host": REDIS_HOST,
+                    "port": REDIS_PORT,
+                    "username": REDIS_USER,
+                    "decode_responses": True
+                }
+                if REDIS_PASSWORD:
+                    connection_params["password"] = REDIS_PASSWORD
+                
+                _redis_client = redis.Redis(**connection_params)
+                logger.info(f"✅ Redis клиент создан: {REDIS_HOST}:{REDIS_PORT} (user: {REDIS_USER})")
+                # Проверяем подключение
+                _redis_client.ping()
+                logger.info("✅ Redis подключение успешно через отдельные параметры")
+                return _redis_client
+            except Exception as e:
+                logger.error(f"❌ Ошибка подключения через отдельные параметры: {e}")
+                _redis_client = None
+        
+        # Если ничего не сработало
+        logger.warning("⚠️ Redis переменные окружения не установлены или подключение не удалось. "
+                      "Используем только PostgreSQL (медленнее). "
+                      "Для добавления Redis на Railway: Dashboard → '+ New' → 'Database' → 'Add Redis'")
+        return None
         
     except Exception as e:
-        logger.error(f"❌ Ошибка создания Redis клиента: {e}")
+        logger.error(f"❌ Критическая ошибка создания Redis клиента: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
         return None
 
 
