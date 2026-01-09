@@ -108,13 +108,16 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 query_embedding = await generate_embedding_async(search_query)
                 
                 if query_embedding:
+                    collection_name = "hr2137_bot_knowledge_base"
+                    log.info(f"🔍 [RAG] Поиск в коллекции '{collection_name}' для команды /summary: '{search_query[:100]}'")
                     search_results = client.query_points(
-                        collection_name="hr2137_bot_knowledge_base",
+                        collection_name=collection_name,
                         query=query_embedding,
                         limit=5
                     )
                     
                     if search_results.points:
+                        log.info(f"✅ [RAG] Найдено {len(search_results.points)} результатов в коллекции '{collection_name}'")
                         rag_docs = []
                         for point in search_results.points:
                             payload = point.payload if hasattr(point, 'payload') else {}
@@ -126,7 +129,9 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         
                         if rag_docs:
                             rag_context = "Релевантные документы из базы знаний:\n\n" + "\n\n".join(rag_docs) + "\n\n"
-                            log.info(f"✅ Найдено {len(rag_docs)} документов в RAG")
+                            log.info(f"✅ [RAG] Использовано {len(rag_docs)} документов из коллекции '{collection_name}' для контекста")
+                    else:
+                        log.info(f"ℹ️ [RAG] Результаты не найдены в коллекции '{collection_name}' для запроса: '{search_query[:100]}'")
         except Exception as e:
             log.warning(f"⚠️ Ошибка RAG поиска: {e}")
         

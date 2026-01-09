@@ -110,13 +110,17 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rag_context = ""
         if len(text) > 10:  # Только для достаточно длинных запросов
             try:
+                log.info(f"🔍 [RAG] Поиск в коллекции 'hr2137_bot_knowledge_base' для запроса: '{text[:100]}'")
                 results = search_service(text, limit=3)
                 if results:
+                    log.info(f"✅ [RAG] Найдено {len(results)} результатов в коллекции 'hr2137_bot_knowledge_base'")
                     rag_context = "\n\nРелевантная информация из базы знаний:\n"
                     for i, result in enumerate(results[:3], 1):
                         rag_context += f"{i}. {result.get('title', 'Без названия')}: {result.get('content', '')[:200]}...\n"
+                else:
+                    log.info(f"ℹ️ [RAG] Результаты не найдены в коллекции 'hr2137_bot_knowledge_base' для запроса: '{text[:100]}'")
             except Exception as e:
-                log.warning(f"⚠️ Ошибка RAG поиска: {e}")
+                log.warning(f"⚠️ Ошибка RAG поиска в коллекции 'hr2137_bot_knowledge_base': {e}")
         
         # Формируем промпт
         system_prompt = CHAT_PROMPT

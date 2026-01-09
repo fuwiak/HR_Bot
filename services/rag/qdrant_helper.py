@@ -525,6 +525,8 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
         # Фильтруем только услуги (source_type="service" или есть поле id)
         from qdrant_client.models import Filter, FieldCondition, MatchValue
         
+        log.info(f"🔍 [RAG] Поиск в коллекции '{COLLECTION_NAME}' для запроса: '{query[:100]}' (limit={limit})")
+        
         # Фильтр: только услуги (source_type="service")
         try:
             service_filter = Filter(
@@ -544,6 +546,7 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
                     limit=limit * 2,  # Берем больше, чтобы после фильтрации осталось достаточно
                     query_filter=service_filter
                 )
+                log.debug(f"🔍 [RAG] Поиск выполнен в коллекции '{COLLECTION_NAME}' с фильтром source_type=service")
             except (TimeoutError, ConnectionError, Exception) as e:
                 error_str = str(e).lower()
                 if "timeout" in error_str or "timed out" in error_str or "connect" in error_str:
@@ -552,13 +555,14 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
                 raise  # Пробрасываем другие ошибки
         except Exception as e:
             # Если фильтр не работает (старые данные без source_type), ищем без фильтра
-            log.debug(f"⚠️ Фильтр не применился, используем поиск без фильтра: {e}")
+            log.debug(f"⚠️ Фильтр не применился, используем поиск без фильтра в коллекции '{COLLECTION_NAME}': {e}")
             try:
                 search_results = client.query_points(
                     collection_name=COLLECTION_NAME,
                     query=query_embedding,
                     limit=limit * 2
                 )
+                log.debug(f"🔍 [RAG] Поиск выполнен в коллекции '{COLLECTION_NAME}' без фильтра")
             except (TimeoutError, ConnectionError, Exception) as e:
                 error_str = str(e).lower()
                 if "timeout" in error_str or "timed out" in error_str or "connect" in error_str:
@@ -603,9 +607,11 @@ def search_service(query: str, limit: Optional[int] = None) -> List[Dict]:
         results = results[:limit]
         
         if results:
-            log.info(f"🔍 Найдено {len(results)} услуг в Qdrant для запроса '{query}'")
+            log.info(f"✅ [RAG] Найдено {len(results)} услуг в коллекции '{COLLECTION_NAME}' для запроса '{query}'")
             for r in results:
                 log.info(f"  📋 {r.get('title')} - {r.get('price_str') or r.get('price')}₽ (score: {r.get('score', 0):.3f})")
+        else:
+            log.info(f"ℹ️ [RAG] Результаты не найдены в коллекции '{COLLECTION_NAME}' для запроса '{query}'")
         
         return results
         

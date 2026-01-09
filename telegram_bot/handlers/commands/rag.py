@@ -30,11 +30,14 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
         
         # Ищем в Qdrant
+        collection_name = "hr2137_bot_knowledge_base"
+        log.info(f"🔍 [RAG] Поиск в коллекции '{collection_name}' для команды /rag_search: '{query}'")
         search_results = client.query_points(
-            collection_name="hr2137_bot_knowledge_base",
+            collection_name=collection_name,
             query=query_embedding,
             limit=5
         )
+        log.info(f"✅ [RAG] Найдено {len(search_results.points) if search_results.points else 0} результатов в коллекции '{collection_name}'")
         
         if not search_results.points:
             await update.message.reply_text(f"❌ По запросу '{query}' ничего не найдено в базе знаний.")
