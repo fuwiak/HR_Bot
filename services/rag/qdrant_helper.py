@@ -133,8 +133,8 @@ def get_qdrant_client():
         # Определяем, является ли URL публичным доменом
         is_public = QDRANT_URL.startswith("https://")
         
-        # Для публичных доменов используем больший таймаут (SSL handshake может занимать время)
-        timeout_seconds = 90.0 if is_public else 10.0
+        # Быстрый таймаут для всех подключений (15 секунд максимум)
+        timeout_seconds = 15.0
         
         # Проверяем, нужен ли API ключ для публичных доменов
         qdrant_api_key = os.getenv("QDRANT_API_KEY")
@@ -148,7 +148,7 @@ def get_qdrant_client():
                 timeout=timeout_seconds,
                 prefer_grpc=False  # Используем HTTP для публичных доменов
             )
-            log.info(f"🔗 Подключение к публичному Railway Qdrant с API ключом: {QDRANT_URL}")
+            log.info(f"🔗 Подключение к публичному Railway Qdrant с API ключом: {QDRANT_URL} (таймаут: {timeout_seconds}с)")
         else:
             # Приватный домен или без API ключа
             _qdrant_client = QdrantClient(
@@ -159,28 +159,55 @@ def get_qdrant_client():
             if is_public:
                 log.info(f"🔗 Подключение к публичному Railway Qdrant: {QDRANT_URL} (таймаут: {timeout_seconds}с)")
             else:
-                log.info(f"🔗 Подключение к Railway Qdrant: {QDRANT_URL}")
+                log.info(f"🔗 Подключение к Railway Qdrant: {QDRANT_URL} (таймаут: {timeout_seconds}с)")
         
-        # Проверяем подключение с retry логикой
-        max_retries = 3
-        retry_delay = 2.0
+        # Быстрая проверка подключения с fallback механизмами
+        max_retries = 2  # Уменьшено для быстрой работы
+        retry_delay = 1.0  # Уменьшена задержка
+        import time
+        
         for attempt in range(max_retries):
             try:
+                # Быстрая проверка через health endpoint (быстрее чем get_collections)
+                try:
+                    # Пробуем использовать httpx если доступен, иначе urllib
+                    try:
+                        import httpx
+                        health_url = QDRANT_URL.rstrip('/') + '/health'
+                        response = httpx.get(health_url, timeout=5.0, follow_redirects=True)
+                        if response.status_code == 200:
+                            log.info(f"✅ Qdrant доступен (health check: {response.status_code})")
+                            log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
+                            break
+                    except ImportError:
+                        # Fallback на urllib если httpx не установлен
+                        import urllib.request
+                        health_url = QDRANT_URL.rstrip('/') + '/health'
+                        req = urllib.request.Request(health_url)
+                        with urllib.request.urlopen(req, timeout=5.0) as response:
+                            if response.getcode() == 200:
+                                log.info(f"✅ Qdrant доступен (health check: {response.getcode()})")
+                                log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
+                                break
+                except Exception as health_e:
+                    log.debug(f"ℹ️ Health check не прошел, пробуем get_collections: {str(health_e)[:100]}")
+                
+                # Fallback: проверка через get_collections (но с коротким таймаутом)
                 _qdrant_client.get_collections()
                 log.info(f"✅ Qdrant клиент успешно подключен: {QDRANT_URL}")
                 log.info("✅ Используется Railway Qdrant (основная векторная база для RAG)")
                 break
             except Exception as conn_e:
                 if attempt < max_retries - 1:
-                    log.warning(f"⚠️ Попытка подключения {attempt + 1}/{max_retries} не удалась: {conn_e}")
+                    log.warning(f"⚠️ Попытка подключения {attempt + 1}/{max_retries} не удалась: {str(conn_e)[:100]}")
                     log.info(f"⏳ Повторная попытка через {retry_delay} секунд...")
-                    import time
                     time.sleep(retry_delay)
-                    retry_delay *= 2  # Экспоненциальная задержка
+                    retry_delay *= 1.5  # Меньшая экспоненциальная задержка
                 else:
-                    log.warning(f"⚠️ Не удалось проверить подключение после {max_retries} попыток: {conn_e}")
-                    log.warning("⚠️ Клиент создан, но проверка подключения не прошла. Возможно, проблемы с сетью.")
+                    log.warning(f"⚠️ Не удалось проверить подключение после {max_retries} попыток")
+                    log.warning("⚠️ Клиент создан, но проверка подключения не прошла. Продолжаем работу...")
                     # Не возвращаем None, так как клиент может работать, просто проверка не прошла
+                    break
         
         return _qdrant_client
     except Exception as e:
@@ -313,14 +340,14 @@ def ensure_collection():
     if not client:
         return False
     
-    # Retry логика для надежности подключения
-    max_retries = 3
-    retry_delay = 2.0
+    # Быстрая retry логика для надежности подключения
+    max_retries = 2  # Уменьшено для быстрой работы
+    retry_delay = 1.0  # Уменьшена задержка
     import time
     
     for attempt in range(max_retries):
         try:
-            # Проверяем, существует ли коллекция
+            # Проверяем, существует ли коллекция (с коротким таймаутом)
             collections = client.get_collections()
             collection_exists = any(col.name == COLLECTION_NAME for col in collections.collections)
             
@@ -345,13 +372,13 @@ def ensure_collection():
                 return True
             
             if attempt < max_retries - 1:
-                log.warning(f"⚠️ Попытка {attempt + 1}/{max_retries} не удалась: {e}")
+                log.warning(f"⚠️ Попытка {attempt + 1}/{max_retries} не удалась: {str(e)[:100]}")
                 log.info(f"⏳ Повторная попытка через {retry_delay} секунд...")
                 time.sleep(retry_delay)
-                retry_delay *= 2  # Экспоненциальная задержка
+                retry_delay *= 1.5  # Меньшая экспоненциальная задержка
             else:
                 # Последняя попытка не удалась
-                log.error(f"❌ Ошибка создания коллекции в Qdrant: {e}")
+                log.error(f"❌ Ошибка создания коллекции в Qdrant: {str(e)[:200]}")
                 import traceback
                 log.error(f"❌ Traceback: {traceback.format_exc()}")
                 return False
