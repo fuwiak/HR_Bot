@@ -617,6 +617,48 @@ async def search_with_preview(query: str, limit: int = 5) -> Dict:
         "timestamp": datetime.now().isoformat()
     }
 
+def get_collection_info() -> Dict:
+    """
+    Получить детальную информацию о коллекции в Qdrant
+    
+    Returns:
+        Словарь с информацией о коллекции
+    """
+    client = get_qdrant_client()
+    if not client:
+        return {
+            "error": "Qdrant клиент недоступен",
+            "collection_name": COLLECTION_NAME
+        }
+    
+    try:
+        collection_info = client.get_collection(COLLECTION_NAME)
+        return {
+            "collection_name": COLLECTION_NAME,
+            "exists": True,
+            "status": str(collection_info.status) if hasattr(collection_info, 'status') else "unknown",
+            "points_count": collection_info.points_count if hasattr(collection_info, 'points_count') else 0,
+            "indexed_vectors_count": collection_info.indexed_vectors_count if hasattr(collection_info, 'indexed_vectors_count') else 0,
+            "vectors_count": collection_info.vectors_count if hasattr(collection_info, 'vectors_count') else 0,
+            "config": {
+                "vector_size": collection_info.config.params.vectors.size if hasattr(collection_info.config.params.vectors, 'size') else 0,
+                "distance": str(collection_info.config.params.vectors.distance) if hasattr(collection_info.config.params.vectors, 'distance') else "unknown"
+            } if hasattr(collection_info, 'config') else {}
+        }
+    except Exception as e:
+        # Коллекция не существует
+        if "not found" in str(e).lower() or "404" in str(e):
+            return {
+                "collection_name": COLLECTION_NAME,
+                "exists": False,
+                "error": "Коллекция не найдена"
+            }
+        return {
+            "collection_name": COLLECTION_NAME,
+            "exists": False,
+            "error": str(e)
+        }
+
 async def get_collection_stats() -> Dict:
     """
     Получить статистику коллекции в Qdrant (для демонстрации)

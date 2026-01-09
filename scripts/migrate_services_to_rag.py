@@ -41,6 +41,7 @@ try:
         get_qdrant_client,
         generate_embedding,
         ensure_collection,
+        get_collection_info,
         COLLECTION_NAME
     )
     from qdrant_client.models import PointStruct
@@ -242,6 +243,35 @@ def generate_service_id(service: Dict) -> str:
     return hashlib.md5(service_str.encode()).hexdigest()
 
 
+def print_collection_info():
+    """Выводит информацию о коллекции"""
+    log.info("\n" + "=" * 80)
+    log.info("📊 Информация о коллекции:")
+    log.info("=" * 80)
+    
+    info = get_collection_info()
+    
+    if "error" in info:
+        log.error(f"❌ Ошибка получения информации: {info['error']}")
+        return
+    
+    log.info(f"📁 Коллекция: {info.get('collection_name', 'N/A')}")
+    log.info(f"✅ Существует: {'Да' if info.get('exists') else 'Нет'}")
+    
+    if info.get('exists'):
+        log.info(f"📊 Статус: {info.get('status', 'unknown')}")
+        log.info(f"🔢 Всего точек: {info.get('points_count', 0)}")
+        log.info(f"🔢 Индексированных векторов: {info.get('indexed_vectors_count', 0)}")
+        log.info(f"🔢 Всего векторов: {info.get('vectors_count', 0)}")
+        
+        config = info.get('config', {})
+        if config:
+            log.info(f"📐 Размерность векторов: {config.get('vector_size', 'N/A')}")
+            log.info(f"📏 Метрика расстояния: {config.get('distance', 'N/A')}")
+    
+    log.info("=" * 80 + "\n")
+
+
 def migrate_services_to_rag(services: List[Dict]) -> bool:
     """
     Загружает услуги в RAG коллекцию Qdrant
@@ -254,6 +284,10 @@ def migrate_services_to_rag(services: List[Dict]) -> bool:
     """
     log.info(f"🚀 Начинаем миграцию {len(services)} услуг в RAG коллекцию...")
     
+    # Показываем статус коллекции ДО загрузки
+    log.info("\n📊 Статус коллекции ДО загрузки:")
+    print_collection_info()
+    
     # Проверяем подключение к Qdrant
     client = get_qdrant_client()
     if not client:
@@ -261,14 +295,21 @@ def migrate_services_to_rag(services: List[Dict]) -> bool:
         return False
     
     # Создаем/проверяем коллекцию
+    log.info("🔧 Проверка/создание коллекции...")
     if not ensure_collection():
         log.error("❌ Не удалось создать/проверить коллекцию")
         return False
+    log.info("✅ Коллекция готова к работе")
     
     # Генерируем точки для каждой услуги
+    log.info("\n" + "=" * 80)
+    log.info("🔄 Генерация эмбеддингов и подготовка данных...")
+    log.info("=" * 80)
+    
     points = []
     successful = 0
     failed = 0
+    start_time = datetime.now()
     
     for idx, service in enumerate(services, 1):
         try:
@@ -276,14 +317,21 @@ def migrate_services_to_rag(services: List[Dict]) -> bool:
             # Включаем название, цену и ключевые слова для лучшего поиска
             service_text = f"{service['title']} {service['price_str']} услуга консультация"
             
-            log.info(f"[{idx}/{len(services)}] Обработка: {service['title']}")
+            # Показываем прогресс
+            progress = (idx / len(services)) * 100
+            log.info(f"[{idx}/{len(services)}] ({progress:.1f}%) 🔄 Генерация эмбеддинга: {service['title'][:50]}...")
             
             # Генерируем эмбеддинг
+            embedding_start = datetime.now()
             embedding = generate_embedding(service_text)
+            embedding_time = (datetime.now() - embedding_start).total_seconds()
+            
             if embedding is None:
-                log.warning(f"⚠️ Не удалось сгенерировать эмбеддинг для: {service['title']}")
+                log.warning(f"⚠️ [{idx}/{len(services)}] Не удалось сгенерировать эмбеддинг для: {service['title']}")
                 failed += 1
                 continue
+            
+            log.info(f"    ✅ Эмбеддинг создан ({embedding_time:.2f}с, размерность: {len(embedding)})")
             
             # Создаем payload с полной информацией
             # Формат должен совпадать с тем, что ожидает search_service
@@ -315,24 +363,40 @@ def migrate_services_to_rag(services: List[Dict]) -> bool:
             successful += 1
             
         except Exception as e:
-            log.error(f"❌ Ошибка обработки услуги '{service.get('title', 'unknown')}': {e}")
+            log.error(f"❌ [{idx}/{len(services)}] Ошибка обработки услуги '{service.get('title', 'unknown')}': {e}")
             failed += 1
             continue
+    
+    generation_time = (datetime.now() - start_time).total_seconds()
+    log.info("\n" + "=" * 80)
+    log.info(f"✅ Генерация завершена: {successful} успешно, {failed} ошибок (время: {generation_time:.1f}с)")
+    log.info("=" * 80)
     
     if not points:
         log.error("❌ Нет точек для загрузки")
         return False
     
     # Загружаем в Qdrant
+    log.info("\n" + "=" * 80)
+    log.info(f"📤 Загрузка {len(points)} услуг в Qdrant...")
+    log.info("=" * 80)
+    
     try:
-        log.info(f"📤 Загружаем {len(points)} услуг в Qdrant...")
+        upload_start = datetime.now()
         client.upsert(
             collection_name=COLLECTION_NAME,
             points=points
         )
-        log.info(f"✅ Успешно загружено {successful} услуг в RAG коллекцию '{COLLECTION_NAME}'")
+        upload_time = (datetime.now() - upload_start).total_seconds()
+        
+        log.info(f"✅ Успешно загружено {successful} услуг в RAG коллекцию '{COLLECTION_NAME}' (время: {upload_time:.1f}с)")
         if failed > 0:
             log.warning(f"⚠️ Не удалось загрузить {failed} услуг")
+        
+        # Показываем статус коллекции ПОСЛЕ загрузки
+        log.info("\n📊 Статус коллекции ПОСЛЕ загрузки:")
+        print_collection_info()
+        
         return True
         
     except Exception as e:
