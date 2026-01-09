@@ -40,8 +40,8 @@ class TelegramMessage(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("telegram_users.user_id", ondelete="CASCADE"), nullable=False, index=True)
-    message_id = Column(Integer, nullable=True, index=True)  # ID сообщения в Telegram
-    chat_id = Column(Integer, nullable=False, index=True)
+    message_id = Column(BigInteger, nullable=True, index=True)  # ID сообщения в Telegram (может быть очень большим)
+    chat_id = Column(BigInteger, nullable=False, index=True)  # ID чата (может быть очень большим)
     
     # Тип сообщения
     role = Column(String(50), nullable=False, index=True)  # "user" или "assistant"
@@ -82,14 +82,14 @@ class ConversationContext(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, ForeignKey("telegram_users.user_id", ondelete="CASCADE"), nullable=False, index=True)
-    chat_id = Column(Integer, nullable=False, index=True)
+    chat_id = Column(BigInteger, nullable=False, index=True)  # ID чата (может быть очень большим)
     
     # Контекст разговора (последние N сообщений)
     context_json = Column(JSON, nullable=False)  # Массив сообщений для LLM
     
     # Метаданные контекста
     context_size = Column(Integer, default=0)  # Количество сообщений в контексте
-    last_message_id = Column(Integer, nullable=True)  # ID последнего сообщения
+    last_message_id = Column(BigInteger, nullable=True)  # ID последнего сообщения (может быть очень большим)
     
     # Временные метки
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
