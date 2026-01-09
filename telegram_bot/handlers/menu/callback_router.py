@@ -106,16 +106,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Подменю "База знаний"
     elif query.data == "menu_knowledge_base":
         keyboard = [
-            [InlineKeyboardButton("🔍 Поиск в базе знаний", callback_data="rag_search_menu")],
-            [InlineKeyboardButton("📚 Список документов", callback_data="rag_docs")],
-            [InlineKeyboardButton("📊 Статистика RAG", callback_data="rag_stats")],
+            [
+                InlineKeyboardButton("🔍 Поиск", callback_data="rag_search_menu"),
+                InlineKeyboardButton("📚 Документы", callback_data="rag_docs")
+            ],
+            [InlineKeyboardButton("📊 Статистика", callback_data="rag_stats")],
             [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
         ]
         message_text = (
             "📚 *База знаний*\n\n"
-            "🔍 *Поиск* - семантический поиск по методикам, кейсам, шаблонам\n"
-            "📚 *Документы* - список всех документов в базе\n"
-            "📊 *Статистика* - информация о базе знаний"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔍 *Поиск* — семантический поиск\n"
+            "   по методикам, кейсам, шаблонам\n\n"
+            "📚 *Документы* — список всех\n"
+            "   документов в базе\n\n"
+            "📊 *Статистика* — информация\n"
+            "   о базе знаний"
         )
         await query.edit_message_text(
             message_text,
@@ -127,18 +133,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Подменю "Проекты"
     elif query.data == "menu_projects":
         keyboard = [
-            [InlineKeyboardButton("📋 Мои проекты", callback_data="weeek_list_projects")],
-            [InlineKeyboardButton("➕ Создать задачу", callback_data="weeek_create_task_menu")],
-            [InlineKeyboardButton("📊 Статус проектов", callback_data="status")],
-            [InlineKeyboardButton("📝 Суммаризация", callback_data="summary_menu")],
+            [
+                InlineKeyboardButton("📋 Мои проекты", callback_data="weeek_list_projects"),
+                InlineKeyboardButton("➕ Создать задачу", callback_data="weeek_create_task_menu")
+            ],
+            [
+                InlineKeyboardButton("📊 Статус", callback_data="status"),
+                InlineKeyboardButton("📝 Суммаризация", callback_data="summary_menu")
+            ],
             [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
         ]
         await query.edit_message_text(
-            "📋 *Управление проектами (WEEEK)*\n\n"
-            "📋 *Мои проекты* - список всех проектов\n"
-            "➕ *Создать задачу* - добавить задачу в проект\n"
-            "📊 *Статус* - задачи с ближайшими дедлайнами\n"
-            "📝 *Суммаризация* - краткая сводка по проекту",
+            "📋 *Управление проектами*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📋 *Мои проекты* — список проектов\n"
+            "➕ *Создать задачу* — новая задача\n"
+            "📊 *Статус* — ближайшие дедлайны\n"
+            "📝 *Суммаризация* — сводка по проекту",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -147,14 +158,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Подменю "Инструменты"
     elif query.data == "menu_tools":
         keyboard = [
-            [InlineKeyboardButton("📝 Сгенерировать КП", callback_data="generate_proposal")],
-            [InlineKeyboardButton("📄 Быстрая суммаризация", callback_data="quick_summary_menu")],
+            [
+                InlineKeyboardButton("📝 Генерация КП", callback_data="generate_proposal"),
+                InlineKeyboardButton("📄 Суммаризация", callback_data="quick_summary_menu")
+            ],
             [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
         ]
         await query.edit_message_text(
             "🛠 *Инструменты*\n\n"
-            "📝 *Генерация КП* - создать коммерческое предложение\n"
-            "📄 *Суммаризация* - краткая сводка текста",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📝 *Генерация КП* — создать\n"
+            "   коммерческое предложение\n\n"
+            "📄 *Суммаризация* — краткая\n"
+            "   сводка текста",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -163,14 +179,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Подменю "Помощь"
     elif query.data == "menu_help":
         keyboard = [
-            [InlineKeyboardButton("📖 Команды бота", callback_data="help_commands")],
-            [InlineKeyboardButton("💡 Примеры использования", callback_data="help_examples")],
+            [
+                InlineKeyboardButton("📖 Команды", callback_data="help_commands"),
+                InlineKeyboardButton("💡 Примеры", callback_data="help_examples")
+            ],
             [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
         ]
         await query.edit_message_text(
             "❓ *Помощь*\n\n"
-            "📖 *Команды* - список всех команд\n"
-            "💡 *Примеры* - примеры использования",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📖 *Команды* — список всех команд\n"
+            "💡 *Примеры* — примеры использования",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -396,40 +415,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "help_commands":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
         await query.edit_message_text(
-            "📖 *Команды бота:*\n\n"
-            "**Основные:**\n"
-            "`/start` - главное меню\n"
-            "`/menu` - главное меню\n\n"
-            "**База знаний (RAG):**\n"
-            "`/rag_search [запрос]` - поиск в базе знаний\n"
-            "`/rag_stats` - статистика базы\n"
-            "`/rag_docs` - список документов\n\n"
-            "**WEEEK проекты:**\n"
-            "`/weeek_info` - workspace info + список проектов с ID\n"
-            "`/weeek_projects` - список проектов\n"
-            "`/weeek_create_project [название]` - создать проект\n"
-            "`/weeek_tasks [id] [фильтры]` - задачи проекта\n"
-            "   Фильтры: all, completed, active, high, low\n"
-            "`/weeek_task [проект] | [задача]` - создать задачу\n"
-            "`/weeek_update` - обновить задачу (интерактивно)\n"
-            "`/status` - статус проектов\n\n"
-            "**Яндекс.Диск:**\n"
-            "`/yadisk_list [путь]` - список файлов\n"
-            "`/yadisk_search [запрос]` - поиск файлов\n"
-            "`/yadisk_recent` - последние файлы\n\n"
-            "**Email:**\n"
-            "`/email_check` - проверить новые письма\n"
-            "`/email_draft [текст]` - черновик ответа\n\n"
-            "**Генерация:**\n"
-            "`/demo_proposal [запрос]` - КП\n"
-            "`/hypothesis [описание]` - гипотезы\n"
-            "`/report [проект]` - отчет по проекту\n"
-            "`/summary [проект]` - суммаризация проекта\n"
-            "`/report [проект]` - отчёт\n"
-            "`/summary [проект]` - суммаризация\n\n"
-            "**Загрузка документов:**\n"
-            "`/upload` - инструкция по загрузке\n"
-            "Отправьте PDF/Word/Excel файл для индексации",
+            "📖 *Команды бота*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🏠 *Основные:*\n"
+            "`/start` — главное меню\n"
+            "`/menu` — главное меню\n\n"
+            "📚 *База знаний:*\n"
+            "`/rag_search [запрос]` — поиск\n"
+            "`/rag_stats` — статистика\n"
+            "`/rag_docs` — список документов\n\n"
+            "📋 *WEEEK проекты:*\n"
+            "`/weeek_info` — workspace info\n"
+            "`/weeek_projects` — список проектов\n"
+            "`/weeek_create_project [название]`\n"
+            "`/weeek_tasks [id] [фильтры]`\n"
+            "`/weeek_task [проект] | [задача]`\n"
+            "`/weeek_update` — обновить задачу\n"
+            "`/status` — статус проектов\n\n"
+            "📧 *Email:*\n"
+            "`/email_check` — проверить письма\n"
+            "`/email_draft [текст]` — черновик\n\n"
+            "🛠 *Генерация:*\n"
+            "`/demo_proposal [запрос]` — КП\n"
+            "`/summary [проект]` — суммаризация\n\n"
+            "📤 *Загрузка:*\n"
+            "`/upload` — инструкция\n"
+            "Отправьте PDF/Word/Excel файл",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -437,15 +448,16 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "help_examples":
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_help")]]
         await query.edit_message_text(
-            "💡 *Примеры использования:*\n\n"
+            "💡 *Примеры использования*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *Поиск:*\n"
             "`/rag_search подбор персонала`\n"
             "`/rag_search автоматизация HR`\n\n"
             "📝 *Генерация КП:*\n"
             "`/demo_proposal нужна помощь с подбором HR-менеджера`\n\n"
             "📋 *Проекты:*\n"
-            "`/status` - список проектов\n"
-            "`/summary Проект X` - сводка по проекту",
+            "`/status` — список проектов\n"
+            "`/summary Проект X` — сводка",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -460,25 +472,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not projects:
                 keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
                 await query.edit_message_text(
-                    "❌ Проектов не найдено.\n\n"
+                    "❌ *Проекты не найдены*\n\n"
                     "Сначала создайте проекты в WEEEK.",
+                    parse_mode='Markdown',
                     reply_markup=InlineKeyboardMarkup(keyboard)
                 )
                 return
             keyboard = []
-            for project in projects[:10]:
-                project_title = project.get("title", "Без названия")
-                project_id = project.get("id", "")
-                keyboard.append([
-                    InlineKeyboardButton(
-                        f"📝 {project_title}",
-                        callback_data=f"summary_project_{project_id}"
-                    )
-                ])
+            # Группируем кнопки по 2 в ряд
+            for i in range(0, len(projects[:10]), 2):
+                row = []
+                row.append(InlineKeyboardButton(
+                    f"📝 {projects[i].get('title', 'Без названия')[:20]}",
+                    callback_data=f"summary_project_{projects[i].get('id')}"
+                ))
+                if i + 1 < len(projects[:10]):
+                    row.append(InlineKeyboardButton(
+                        f"📝 {projects[i+1].get('title', 'Без названия')[:20]}",
+                        callback_data=f"summary_project_{projects[i+1].get('id')}"
+                    ))
+                keyboard.append(row)
             keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")])
             await query.edit_message_text(
                 "📝 *Суммаризация проекта*\n\n"
-                "Выберите проект для суммаризации:",
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Выберите проект:",
                 parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
@@ -516,29 +534,33 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tasks = tasks_result.get("tasks", []) if tasks_result.get("success") else []
             
             # Формируем сводку
-            text = f"📝 *Суммаризация проекта: {project_title}*\n\n"
+            text = (
+                f"📝 *Суммаризация проекта*\n"
+                f"*{project_title}*\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            )
             
             if tasks:
                 completed = sum(1 for t in tasks if t.get("isCompleted", False))
                 active = len(tasks) - completed
                 high_priority = sum(1 for t in tasks if t.get("priority") == 2)
                 
-                text += f"📊 *Статистика:*\n"
-                text += f"Всего задач: {len(tasks)}\n"
+                text += "📊 *Статистика:*\n"
+                text += f"📋 Всего: {len(tasks)}\n"
                 text += f"✅ Завершено: {completed}\n"
-                text += f"⭕ Активных: {active}\n"
+                text += f"⏳ Активных: {active}\n"
                 if high_priority > 0:
                     text += f"🔴 Высокий приоритет: {high_priority}\n"
-                text += "\n"
+                text += "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                text += "📋 *Последние задачи:*\n\n"
                 
                 # Последние задачи
                 recent_tasks = tasks[:5]
-                text += "*Последние задачи:*\n"
                 for task in recent_tasks:
                     task_title = task.get("title", task.get("name", "Без названия"))
                     is_completed = task.get("isCompleted", False)
-                    status = "✅" if is_completed else "⭕"
-                    text += f"{status} {task_title}\n"
+                    status = "✅" if is_completed else "⏳"
+                    text += f"{status} *{task_title}*\n"
             else:
                 text += "❌ Задач в проекте не найдено.\n"
             
@@ -564,7 +586,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_tools")]]
         await query.edit_message_text(
             "📄 *Быстрая суммаризация*\n\n"
-            "Отправьте текст для суммаризации, и я создам краткую сводку.",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Отправьте текст для суммаризации,\n"
+            "и я создам краткую сводку.",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -578,11 +602,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(
             "🔍 *Поиск в базе знаний*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "Используйте команду:\n"
             "`/rag_search [ваш запрос]`\n\n"
-            "Например:\n"
-            "`/rag_search подбор персонала`\n"
-            "`/rag_search автоматизация HR процессов`",
+            "💡 *Примеры:*\n"
+            "• `/rag_search подбор персонала`\n"
+            "• `/rag_search автоматизация HR`",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -592,10 +617,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
         ]
         await query.edit_message_text(
-            "📝 *Генерация коммерческого предложения*\n\n"
+            "📝 *Генерация КП*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "Используйте команду:\n"
             "`/demo_proposal [запрос клиента]`\n\n"
-            "Например:\n"
+            "💡 *Пример:*\n"
             "`/demo_proposal нужна помощь с подбором HR-менеджера`",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -608,12 +634,15 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if "error" in stats:
                 text = f"❌ Ошибка: {stats['error']}"
             else:
-                text = f"📊 *Статистика RAG базы знаний*\n\n"
-                text += f"Коллекция: `{stats.get('collection_name', 'N/A')}`\n"
-                text += f"Существует: {'✅' if stats.get('exists') else '❌'}\n"
+                text = (
+                    "📊 *Статистика базы знаний*\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📚 Коллекция: `{stats.get('collection_name', 'N/A')}`\n"
+                    f"✅ Статус: {'Активна' if stats.get('exists') else 'Не найдена'}\n"
+                )
                 if stats.get('exists'):
-                    text += f"Документов: {stats.get('points_count', 0)}\n"
-                    text += f"Размерность векторов: {stats.get('vector_size', 'N/A')}\n"
+                    text += f"📄 Документов: {stats.get('points_count', 0)}\n"
+                    text += f"🔢 Размерность: {stats.get('vector_size', 'N/A')}\n"
             
             keyboard = [
                 [InlineKeyboardButton("🔙 Назад", callback_data="menu_knowledge_base")],
@@ -637,14 +666,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             docs = await list_documents(limit=20)
             
             if docs:
-                text = f"📚 *Документы в базе знаний* (показано: {len(docs)})\n\n"
+                text = (
+                    f"📚 *Документы в базе*\n"
+                    f"Показано: {len(docs)}\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                )
                 for i, doc in enumerate(docs[:10], 1):
                     title = doc.get("title", "Без названия")
                     category = doc.get("category", "Неизвестно")
-                    text += f"*{i}. {title}*\n"
-                    text += f"   Категория: {category}\n\n"
+                    text += f"{i}. 📄 *{title}*\n"
+                    text += f"   🏷 {category}\n\n"
                 if len(docs) > 10:
-                    text += f"... и еще {len(docs) - 10} документов"
+                    text += f"_...и еще {len(docs) - 10} документов_"
             else:
                 text = "❌ В базе знаний нет документов."
             
@@ -668,7 +701,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             from services.helpers.weeek_helper import get_project_deadlines
             
-            await query.edit_message_text("⏳ Загружаю задачи с дедлайнами...")
+            await query.edit_message_text("⏳ Загружаю задачи...")
             
             # Получаем проекты с ближайшими дедлайнами
             upcoming_tasks = await get_project_deadlines(days_ahead=7)
@@ -679,27 +712,33 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             
             if upcoming_tasks:
-                text = "📊 *Статус проектов*\n\n"
-                text += f"Задачи с дедлайнами на ближайшие 7 дней:\n\n"
+                text = (
+                    "📊 *Статус проектов*\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📅 *Дедлайны на 7 дней*\n\n"
+                )
                 
                 for task in upcoming_tasks[:10]:  # Показываем первые 10
                     task_name = task.get("name", task.get("title", "Задача"))
                     due_date = task.get("due_date", "Не указан")
                     status = task.get("status", "Активна")
-                    project_id = task.get("project_id", "")
-                    text += f"• *{task_name}*\n"
-                    text += f"  Дедлайн: {due_date}\n"
-                    text += f"  Статус: {status}\n"
-                    if project_id:
-                        text += f"  Проект ID: `{project_id}`\n"
-                    text += "\n"
+                    
+                    # Иконка статуса
+                    status_icon = "✅" if status == "Завершена" else "⏳"
+                    
+                    text += f"{status_icon} *{task_name}*\n"
+                    text += f"   📅 {due_date}\n"
+                    text += f"   📊 {status}\n\n"
                 
                 if len(upcoming_tasks) > 10:
-                    text += f"_...и еще {len(upcoming_tasks) - 10} задач_\n"
+                    text += f"_...и еще {len(upcoming_tasks) - 10} задач_"
             else:
-                text = "📊 *Статус проектов*\n\n"
-                text += "Нет задач с ближайшими дедлайнами.\n\n"
-                text += "Используйте WEEEK для управления проектами."
+                text = (
+                    "📊 *Статус проектов*\n\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "✅ Нет задач с ближайшими дедлайнами\n\n"
+                    "Используйте WEEEK для управления проектами."
+                )
             
             await query.edit_message_text(
                 text,
@@ -708,20 +747,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except Exception as e:
             log.error(f"❌ Ошибка получения статуса: {e}")
-        keyboard = [
-            [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
-            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
-        ]
-        await query.edit_message_text(
-                f"❌ Ошибка получения статуса: {str(e)}",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+            keyboard = [
+                [InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")],
+                [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+            ]
+            await query.edit_message_text(
+                f"❌ Ошибка: {str(e)}",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     elif query.data == "chat":
         keyboard = [[InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]]
         await query.edit_message_text(
             "💬 *Чат с AI*\n\n"
-            "Теперь вы можете писать сообщения для общения с AI-помощником.\n\n"
-            "Ассистент использует базу знаний для формирования ответов.",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "Теперь вы можете писать сообщения\n"
+            "для общения с AI-помощником.\n\n"
+            "🤖 Ассистент использует базу знаний\n"
+            "для формирования ответов.",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )

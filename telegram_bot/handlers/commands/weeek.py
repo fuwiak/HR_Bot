@@ -30,37 +30,46 @@ async def weeek_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         projects = await get_projects()
         
         # Формируем сообщение
-        text = f"📊 *WORKSPACE INFO*\n\n"
-        text += f"🆔 ID: `{workspace_id}`\n"
-        text += f"📝 Название: {title}\n"
-        text += f"👤 Персональный: {'Да' if is_personal else 'Нет'}\n\n"
+        text = (
+            "📊 *WORKSPACE INFO*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🆔 ID: `{workspace_id}`\n"
+            f"📝 Название: {title}\n"
+            f"👤 Персональный: {'Да' if is_personal else 'Нет'}\n\n"
+        )
         
         if projects:
-            text += f"📋 *ПРОЕКТЫ* (всего: {len(projects)})\n\n"
+            text += f"📋 *ПРОЕКТЫ* ({len(projects)})\n\n"
             for i, project in enumerate(projects[:10], 1):
                 project_title = project.get("title", "Без названия")
                 project_id = project.get("id", "")
                 color = project.get("color", "")
                 is_private = project.get("isPrivate", False)
                 
-                text += f"{i}. *{project_title}*\n"
-                text += f"   🆔 ID: `{project_id}`\n"
+                text += f"{i}. 📁 *{project_title}*\n"
+                text += f"   🆔 `{project_id}`"
                 if color:
-                    text += f"   🎨 Цвет: {color}\n"
+                    text += f" | 🎨 {color}"
                 if is_private:
-                    text += f"   🔒 Приватный\n"
-                text += "\n"
+                    text += f" | 🔒 Приватный"
+                text += "\n\n"
             
             if len(projects) > 10:
                 text += f"_...и еще {len(projects) - 10} проектов_\n\n"
             
-            text += f"💡 *Используйте:*\n"
-            text += f"• `/weeek_tasks [ID]` - задачи проекта\n"
-            text += f"• `/weeek_task [название] | [задача]` - создать задачу"
+            text += (
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 *Команды:*\n"
+                "• `/weeek_tasks [ID]` — задачи\n"
+                "• `/weeek_task [проект] | [задача]` — создать"
+            )
         else:
-            text += "❌ Проектов не найдено\n\n"
-            text += "Создайте проект:\n"
-            text += "`/weeek_create_project [название]`"
+            text += (
+                "❌ Проектов не найдено\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Создайте проект:\n"
+                "`/weeek_create_project [название]`"
+            )
         
         await update.message.reply_text(text, parse_mode='Markdown')
         
@@ -144,7 +153,10 @@ async def weeek_projects_command(update: Update, context: ContextTypes.DEFAULT_T
         projects = await get_projects()
 
         if projects:
-            text = f"📋 *Проекты в WEEEK* (всего: {len(projects)})\n\n"
+            text = (
+                f"📋 *Проекты в WEEEK* ({len(projects)})\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            )
             for i, project in enumerate(projects[:20], 1):
                 title = project.get("title", "Без названия")
                 project_id = project.get("id", "")
@@ -226,23 +238,27 @@ async def weeek_update_command(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             return
         
-        # Показываем список проектов для выбора
+        # Показываем список проектов для выбора (группируем по 2)
         keyboard = []
-        for project in projects[:15]:
-            project_name = project.get("name", "Без названия")
-            project_id = project.get("id", "")
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"📁 {project_name}",
-                    callback_data=f"weeek_update_select_project_{project_id}"
-                )
-            ])
+        for i in range(0, len(projects[:15]), 2):
+            row = []
+            row.append(InlineKeyboardButton(
+                f"📁 {projects[i].get('name', 'Без названия')[:20]}",
+                callback_data=f"weeek_update_select_project_{projects[i].get('id')}"
+            ))
+            if i + 1 < len(projects[:15]):
+                row.append(InlineKeyboardButton(
+                    f"📁 {projects[i+1].get('name', 'Без названия')[:20]}",
+                    callback_data=f"weeek_update_select_project_{projects[i+1].get('id')}"
+                ))
+            keyboard.append(row)
         
         keyboard.append([InlineKeyboardButton("❌ Отмена", callback_data="back_to_menu")])
         
         await update.message.reply_text(
             "🔄 *Обновление задачи*\n\n"
-            "Шаг 1/3: Выберите проект с задачей:",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📋 Шаг 1/3: Выберите проект:",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -392,33 +408,49 @@ async def show_weeek_projects(query: CallbackQuery):
     try:
         from services.helpers.weeek_helper import get_projects
 
-        await query.edit_message_text("⏳ Загружаю проекты из WEEEK...")
+        await query.edit_message_text("⏳ Загружаю проекты...")
 
         projects = await get_projects()
 
         if not projects:
             keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
             await query.edit_message_text(
-                "❌ Проектов не найдено или WEEEK недоступен.",
+                "❌ *Проекты не найдены*\n\n"
+                "Создайте проект через меню или командой:\n"
+                "`/weeek_create_project [название]`",
+                parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return
         
         keyboard = []
-        for project in projects[:10]:  # Показываем первые 10
-            project_title = project.get("title", "Без названия")
-            project_id = project.get("id", "")
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"📁 {project_title}",
-                    callback_data=f"weeek_view_project_{project_id}"
-                )
-            ])
+        # Группируем кнопки по 2 в ряд для компактности
+        for i in range(0, len(projects[:10]), 2):
+            row = []
+            row.append(InlineKeyboardButton(
+                f"📁 {projects[i].get('title', 'Без названия')[:20]}",
+                callback_data=f"weeek_view_project_{projects[i].get('id')}"
+            ))
+            if i + 1 < len(projects[:10]):
+                row.append(InlineKeyboardButton(
+                    f"📁 {projects[i+1].get('title', 'Без названия')[:20]}",
+                    callback_data=f"weeek_view_project_{projects[i+1].get('id')}"
+                ))
+            keyboard.append(row)
         
         keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")])
         
-        text = f"📋 *Проекты в WEEEK* (всего: {len(projects)})\n\n"
-        text += "Выберите проект для просмотра:"
+        text = (
+            f"📋 *Проекты* ({len(projects)})\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        )
+        
+        for i, project in enumerate(projects[:10], 1):
+            title = project.get("title", "Без названия")
+            text += f"{i}. 📁 *{title}*\n"
+        
+        if len(projects) > 10:
+            text += f"\n_...и еще {len(projects) - 10} проектов_"
         
         await query.edit_message_text(
             text,
@@ -429,7 +461,7 @@ async def show_weeek_projects(query: CallbackQuery):
         log.error(f"❌ Ошибка получения проектов: {e}")
         keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu_projects")]]
         await query.edit_message_text(
-            f"❌ Ошибка загрузки проектов: {str(e)}",
+            f"❌ Ошибка: {str(e)}",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 

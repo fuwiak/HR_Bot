@@ -20,75 +20,118 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Автоматически подписываем пользователя на уведомления о почте
     add_email_subscriber(user_id)
     
+    # Группируем кнопки по 2 в ряд для компактности
     keyboard = [
-        [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
-        [InlineKeyboardButton("📋 WEEK", callback_data="menu_projects")],
-        [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
-        [InlineKeyboardButton("📧 Ответить на последний мейл", callback_data="email_reply_last")],
-        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
-        [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
+        [
+            InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base"),
+            InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")
+        ],
+        [
+            InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools"),
+            InlineKeyboardButton("💬 Чат с AI", callback_data="chat")
+        ],
+        [
+            InlineKeyboardButton("📧 Ответить на мейл", callback_data="email_reply_last"),
+            InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Улучшенное форматирование с разделителями
+    welcome_text = (
+        "✨ *Добро пожаловать!*\n"
+        "Я AI-ассистент Анастасии Новосёловой\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "🎯 *Возможности:*\n\n"
+        "🔍 *База знаний*\n"
+        "   Поиск методик, кейсов, шаблонов\n\n"
+        "📋 *Проекты*\n"
+        "   Управление задачами в WEEEK\n\n"
+        "🛠 *Инструменты*\n"
+        "   Генерация КП, суммаризация\n\n"
+        "💬 *Чат с AI*\n"
+        "   Общение с умным помощником\n\n"
+        "📧 *Email*\n"
+        "   Быстрые ответы на письма\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📬 Уведомления о новых письмах приходят автоматически"
+    )
+    
     await update.message.reply_text(
-        "✨ *Добро пожаловать! Я AI-ассистент Анастасии Новосёловой* ✨\n\n"
-        "🎯 *Что я умею:*\n"
-        "• 🔍 Искать в базе знаний (методики, кейсы, шаблоны)\n"
-        "• 📝 Генерировать коммерческие предложения\n"
-        "• 📊 Показывать статистику базы знаний\n"
-        "• 📚 Просматривать документы в базе\n"
-        "• 💬 Отвечать на вопросы с использованием базы знаний\n"
-        "• 📋 Управлять проектами и задачами\n"
-        "• 📧 Отвечать на последний мейл\n\n"
-        "📬 *Уведомления:*\n"
-        "Уведомления о новых письмах будут поступать в чат по мере их поступления.\n\n"
-        "Выберите раздел:",
+        welcome_text,
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Компактная группировка кнопок
     keyboard = [
-        [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
-        [InlineKeyboardButton("📋 WEEK", callback_data="menu_projects")],
-        [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
-        [InlineKeyboardButton("📧 Ответить на последний мейл", callback_data="email_reply_last")],
-        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
-        [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
+        [
+            InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base"),
+            InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")
+        ],
+        [
+            InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools"),
+            InlineKeyboardButton("💬 Чат с AI", callback_data="chat")
+        ],
+        [
+            InlineKeyboardButton("📧 Ответить на мейл", callback_data="email_reply_last"),
+            InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
+    
+    menu_text = (
         "🏠 *Главное меню*\n\n"
-        "📚 *База знаний* - поиск, документы, статистика\n"
-        "📋 *WEEK* - управление проектами и задачами\n"
-        "🛠 *Инструменты* - генерация КП, суммаризация\n"
-        "📧 *Ответить на последний мейл* - быстрый ответ на последнее письмо\n"
-        "💬 *Чат с AI* - общение с AI-помощником\n"
-        "❓ *Помощь* - справочная информация",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📚 *База знаний* — поиск и документы\n"
+        "📋 *Проекты* — управление задачами\n"
+        "🛠 *Инструменты* — генерация и анализ\n"
+        "💬 *Чат с AI* — умный помощник\n"
+        "📧 *Email* — быстрые ответы\n"
+        "❓ *Помощь* — справочная информация"
+    )
+    
+    await update.message.reply_text(
+        menu_text,
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
 
 async def show_main_menu(query):
-    """Показать главное меню"""
+    """Показать главное меню с улучшенным дизайном"""
     from telegram import InlineKeyboardButton, InlineKeyboardMarkup
     
+    # Компактная группировка кнопок
     keyboard = [
-        [InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base")],
-        [InlineKeyboardButton("📋 WEEK", callback_data="menu_projects")],
-        [InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools")],
-        [InlineKeyboardButton("📧 Ответить на последний мейл", callback_data="email_reply_last")],
-        [InlineKeyboardButton("💬 Чат с AI", callback_data="chat")],
-        [InlineKeyboardButton("❓ Помощь", callback_data="menu_help")]
+        [
+            InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base"),
+            InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")
+        ],
+        [
+            InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools"),
+            InlineKeyboardButton("💬 Чат с AI", callback_data="chat")
+        ],
+        [
+            InlineKeyboardButton("📧 Ответить на мейл", callback_data="email_reply_last"),
+            InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
+        ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await query.edit_message_text(
+    
+    menu_text = (
         "🏠 *Главное меню*\n\n"
-        "📚 *База знаний* - поиск, документы, статистика\n"
-        "📋 *WEEK* - управление проектами и задачами\n"
-        "🛠 *Инструменты* - генерация КП, суммаризация\n"
-        "📧 *Ответить на последний мейл* - быстрый ответ на последнее письмо\n"
-        "💬 *Чат с AI* - общение с AI-помощником\n"
-        "❓ *Помощь* - справочная информация",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "📚 *База знаний* — поиск и документы\n"
+        "📋 *Проекты* — управление задачами\n"
+        "🛠 *Инструменты* — генерация и анализ\n"
+        "💬 *Чат с AI* — умный помощник\n"
+        "📧 *Email* — быстрые ответы\n"
+        "❓ *Помощь* — справочная информация"
+    )
+    
+    await query.edit_message_text(
+        menu_text,
         parse_mode='Markdown',
         reply_markup=reply_markup
     )
@@ -102,20 +145,33 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         upcoming_tasks = await get_project_deadlines(days_ahead=7)
         
         if upcoming_tasks:
-            text = "📋 *Статус проектов и задачи*\n\n"
-            text += f"Задачи с дедлайнами на ближайшие 7 дней:\n\n"
+            text = (
+                "📊 *Статус проектов*\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📅 *Дедлайны на 7 дней*\n\n"
+            )
             
             for task in upcoming_tasks[:10]:  # Показываем первые 10
                 task_name = task.get("name", "Задача")
                 due_date = task.get("due_date", "Не указан")
-                status = task.get("status", "Не указан")
-                text += f"• *{task_name}*\n"
-                text += f"  Дедлайн: {due_date}\n"
-                text += f"  Статус: {status}\n\n"
+                status = task.get("status", "Активна")
+                
+                # Иконка статуса
+                status_icon = "✅" if status == "Завершена" else "⏳"
+                
+                text += f"{status_icon} *{task_name}*\n"
+                text += f"   📅 {due_date}\n"
+                text += f"   📊 {status}\n\n"
+            
+            if len(upcoming_tasks) > 10:
+                text += f"_...и еще {len(upcoming_tasks) - 10} задач_"
         else:
-            text = "📋 *Статус проектов*\n\n"
-            text += "Нет задач с ближайшими дедлайнами.\n\n"
-            text += "Используйте WEEEK для управления проектами."
+            text = (
+                "📊 *Статус проектов*\n\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "✅ Нет задач с ближайшими дедлайнами\n\n"
+                "Используйте WEEEK для управления проектами."
+            )
         
         await update.message.reply_text(text, parse_mode='Markdown')
     except Exception as e:
