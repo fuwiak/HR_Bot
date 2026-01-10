@@ -229,6 +229,202 @@ async def get_masters():
         )
 
 
+# ==================== YANDEX DISK API ====================
+
+@app.get("/api/yadisk/list")
+async def yadisk_list(path: str = "/"):
+    """Получить список файлов на Яндекс.Диске"""
+    try:
+        from services.helpers.yandex_disk_helper import list_files, get_disk_info
+        
+        result = await list_files(path=path, limit=50)
+        disk_info = await get_disk_info()
+        
+        items = result.get("_embedded", {}).get("items", []) if result else []
+        
+        formatted_items = []
+        for item in items:
+            formatted_items.append({
+                "name": item.get("name", ""),
+                "type": item.get("type", "file"),
+                "path": item.get("path", ""),
+                "size": item.get("size", 0),
+                "modified": item.get("modified", "")
+            })
+        
+        return {
+            "items": formatted_items,
+            "path": path,
+            "count": len(formatted_items),
+            "disk_info": {
+                "total_space": disk_info.get("total_space", 0) if disk_info else 0,
+                "used_space": disk_info.get("used_space", 0) if disk_info else 0
+            }
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/yadisk/list: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@app.get("/api/yadisk/search")
+async def yadisk_search(query: str):
+    """Поиск файлов на Яндекс.Диске"""
+    try:
+        from services.helpers.yandex_disk_helper import search_files
+        
+        files = await search_files(query, limit=50)
+        
+        formatted_files = []
+        for file in (files or []):
+            formatted_files.append({
+                "name": file.get("name", ""),
+                "type": file.get("type", "file"),
+                "path": file.get("path", ""),
+                "size": file.get("size", 0),
+                "modified": file.get("modified", "")
+            })
+        
+        return {
+            "files": formatted_files,
+            "query": query,
+            "count": len(formatted_files)
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/yadisk/search: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+@app.get("/api/yadisk/recent")
+async def yadisk_recent():
+    """Получить последние файлы на Яндекс.Диске"""
+    try:
+        from services.helpers.yandex_disk_helper import get_recent_files
+        
+        files = await get_recent_files(limit=20)
+        
+        formatted_files = []
+        for file in (files or []):
+            formatted_files.append({
+                "name": file.get("name", ""),
+                "type": file.get("type", "file"),
+                "path": file.get("path", ""),
+                "size": file.get("size", 0),
+                "modified": file.get("modified", "")
+            })
+        
+        return {
+            "files": formatted_files,
+            "count": len(formatted_files)
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/yadisk/recent: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+# ==================== BOOKING API ====================
+
+@app.post("/api/booking")
+async def create_booking(request: Request):
+    """Создать запись на услугу"""
+    try:
+        data = await request.json()
+        service = data.get("service", "")
+        master = data.get("master", "")
+        date = data.get("date", "")
+        time = data.get("time", "")
+        user_id = data.get("userId", "")
+        
+        if not all([service, master, date, time]):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Заполните все обязательные поля"}
+            )
+        
+        # Формируем запись
+        booking_info = f"ЗАПИСЬ: {service} | {master} | {date} {time}"
+        
+        log.info(f"📅 Новая запись от {user_id}: {booking_info}")
+        
+        # Отправляем уведомление администратору через Telegram (если настроено)
+        try:
+            admin_ids = os.getenv("TELEGRAM_ADMIN_IDS", "5305427956").split(",")
+            bot_token = os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
+            
+            if bot_token and admin_ids:
+                import aiohttp
+                async with aiohttp.ClientSession() as session:
+                    for admin_id in admin_ids:
+                        admin_id = admin_id.strip()
+                        if admin_id:
+                            message = (
+                                f"📅 *Новая запись из Mini App!*\n\n"
+                                f"📋 Услуга: {service}\n"
+                                f"👤 Специалист: {master}\n"
+                                f"📆 Дата: {date}\n"
+                                f"🕐 Время: {time}\n"
+                                f"🆔 Пользователь: {user_id}"
+                            )
+                            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                            await session.post(url, json={
+                                "chat_id": admin_id,
+                                "text": message,
+                                "parse_mode": "Markdown"
+                            })
+        except Exception as notify_error:
+            log.warning(f"⚠️ Не удалось отправить уведомление: {notify_error}")
+        
+        return {
+            "success": True,
+            "booking": {
+                "service": service,
+                "master": master,
+                "date": date,
+                "time": time,
+                "user_id": user_id
+            },
+            "message": "Запись успешно создана"
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/booking: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+# ==================== ADMIN API ====================
+
+@app.get("/api/admin/check")
+async def check_admin(user_id: str):
+    """Проверить, является ли пользователь администратором"""
+    try:
+        admin_ids_str = os.getenv("TELEGRAM_ADMIN_IDS", os.getenv("TELEGRAM_ADMIN_ID", "5305427956"))
+        admin_ids = [int(uid.strip()) for uid in admin_ids_str.split(",") if uid.strip().isdigit()]
+        
+        try:
+            user_id_int = int(user_id)
+            is_admin = user_id_int in admin_ids
+        except ValueError:
+            is_admin = False
+        
+        return {
+            "is_admin": is_admin,
+            "user_id": user_id
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/admin/check: {e}")
+        return {"is_admin": False}
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", os.getenv("WEB_PORT", "8081")))

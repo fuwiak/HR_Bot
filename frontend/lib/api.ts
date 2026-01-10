@@ -297,6 +297,89 @@ export async function sendChatMessage(message: string, userId?: string) {
   return response.json();
 }
 
+// Yandex Disk API
+export async function getYadiskFiles(path: string = '/') {
+  const response = await fetch(`${API_BASE}/yadisk/list?path=${encodeURIComponent(path)}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function searchYadiskFiles(query: string) {
+  const response = await fetch(`${API_BASE}/yadisk/search?query=${encodeURIComponent(query)}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getYadiskRecent() {
+  const response = await fetch(`${API_BASE}/yadisk/recent`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Services & Booking API
+export async function getServices() {
+  const response = await fetch(`${API_BASE}/services`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getMasters() {
+  const response = await fetch(`${API_BASE}/masters`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function createBooking(data: {
+  service: string;
+  master: string;
+  date: string;
+  time: string;
+  userId: string;
+}) {
+  const response = await fetch(`${API_BASE}/booking`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Admin check API
+export async function checkAdminStatus(userId: string) {
+  const response = await fetch(`${API_BASE}/admin/check?user_id=${userId}`);
+
+  if (!response.ok) {
+    return { is_admin: false };
+  }
+
+  return response.json();
+}
+
 
 
 

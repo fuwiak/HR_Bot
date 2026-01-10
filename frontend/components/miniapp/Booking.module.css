@@ -1,0 +1,383 @@
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.backButton {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.header h1 {
+  color: white;
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 8px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.tab.active {
+  background: white;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.content {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  min-height: 400px;
+}
+
+/* Services List */
+.servicesList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.serviceCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 12px;
+  gap: 12px;
+}
+
+.serviceInfo {
+  flex: 1;
+}
+
+.serviceInfo h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.category {
+  font-size: 12px;
+  color: #666;
+  margin: 0 0 8px 0;
+}
+
+.serviceDetails {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.price {
+  font-size: 16px;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.duration {
+  font-size: 13px;
+  color: #888;
+}
+
+.bookButton {
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bookButton:active {
+  transform: scale(0.98);
+}
+
+/* Progress */
+.progress {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  gap: 4px;
+}
+
+.step {
+  font-size: 11px;
+  color: #999;
+  text-align: center;
+  padding: 4px;
+  border-radius: 4px;
+  flex: 1;
+}
+
+.step.completed {
+  color: #667eea;
+  font-weight: 600;
+  background: rgba(102, 126, 234, 0.1);
+}
+
+/* Step Content */
+.stepContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.stepContent h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.selectedInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: #e8f5e9;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #2e7d32;
+}
+
+.optionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.optionCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  background: #f9fafb;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.optionCard:hover {
+  border-color: #667eea;
+}
+
+.optionCard:active {
+  background: #e5e7eb;
+}
+
+.optionName {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.optionPrice {
+  font-size: 14px;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.optionSub {
+  font-size: 13px;
+  color: #666;
+}
+
+.noOptions {
+  text-align: center;
+  color: #888;
+  padding: 20px;
+}
+
+/* Date/Time Form */
+.dateTimeForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dateTimeForm label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.dateInput {
+  padding: 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+}
+
+.dateInput:focus {
+  border-color: #667eea;
+}
+
+.timeSlots {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.timeSlot {
+  padding: 10px 8px;
+  background: #f5f5f5;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.timeSlot:hover {
+  border-color: #667eea;
+}
+
+.timeSlot.selected {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+/* Buttons */
+.nextButton {
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.nextButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.backStepButton {
+  background: transparent;
+  color: #666;
+  border: none;
+  padding: 12px;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+}
+
+/* Confirm */
+.confirmCard {
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.confirmRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.confirmLabel {
+  font-size: 14px;
+  color: #666;
+}
+
+.confirmValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.confirmButton {
+  background: linear-gradient(135deg, #4ade80, #22c55e);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.confirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Loading & Empty */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-size: 16px;
+}
+
+.empty {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+}
+
+.empty p {
+  font-size: 16px;
+  margin: 0 0 8px 0;
+}
+
+.hint {
+  font-size: 13px !important;
+  color: #aaa !important;
+}
+
+@media (max-width: 480px) {
+  .timeSlots {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

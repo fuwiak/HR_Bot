@@ -19,6 +19,16 @@ const nextConfig = {
           },
         ],
       },
+      // CORS для API
+      {
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Credentials', value: 'true' },
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,POST,PUT,DELETE,OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
     ];
   },
   
@@ -27,9 +37,10 @@ const nextConfig = {
     // В Railway это будет URL backend сервиса
     const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
     return [
+      // Проксируем все API запросы на backend
       {
         source: '/api/:path*',
-        destination: `${backendUrl}/:path*`, // Proxy to FastAPI backend
+        destination: `${backendUrl}/api/:path*`, // Proxy to FastAPI backend
       },
     ];
   },

@@ -20,6 +20,19 @@
   font-weight: 600;
   margin: 8px 0;
   opacity: 0.95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.adminBadge {
+  background: linear-gradient(135deg, #ffd700, #ffb347);
+  color: #1a1a1a;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
 }
 
 .subtitle {
@@ -49,6 +62,20 @@
 .card:active {
   transform: scale(0.98);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.adminCard {
+  background: linear-gradient(135deg, #2c3e50, #3498db);
+  grid-column: span 2;
+}
+
+.adminCard h2,
+.adminCard p {
+  color: white;
+}
+
+.adminCard p {
+  opacity: 0.9;
 }
 
 .icon {
@@ -86,5 +113,9 @@
   
   .card {
     padding: 16px;
+  }
+  
+  .adminCard {
+    grid-column: span 1;
   }
 }

@@ -3,15 +3,18 @@
 import { useWebApp } from '@/lib/useWebApp'
 import styles from './MainMenu.module.css'
 
+export type PageType = 'knowledge' | 'projects' | 'tools' | 'help' | 'chat' | 'email' | 'yadisk' | 'booking' | 'settings'
+
 interface MainMenuProps {
   user: any
-  onNavigate: (page: 'knowledge' | 'projects' | 'tools' | 'help' | 'chat' | 'email') => void
+  onNavigate: (page: PageType) => void
+  isAdmin?: boolean
 }
 
-export default function MainMenu({ user, onNavigate }: MainMenuProps) {
+export default function MainMenu({ user, onNavigate, isAdmin = false }: MainMenuProps) {
   const WebApp = useWebApp()
 
-  const handleNavigate = (page: 'knowledge' | 'projects' | 'tools' | 'help' | 'chat' | 'email') => {
+  const handleNavigate = (page: PageType) => {
     WebApp?.HapticFeedback?.impactOccurred('light')
     onNavigate(page)
   }
@@ -23,6 +26,7 @@ export default function MainMenu({ user, onNavigate }: MainMenuProps) {
         {user && (
           <p className={styles.userName}>
             {user.first_name} {user.last_name || ''}
+            {isAdmin && <span className={styles.adminBadge}>👑 Админ</span>}
           </p>
         )}
         <p className={styles.subtitle}>AI-ассистент Анастасии Новосёловой</p>
@@ -76,12 +80,41 @@ export default function MainMenu({ user, onNavigate }: MainMenuProps) {
 
         <button 
           className={styles.card}
+          onClick={() => handleNavigate('yadisk')}
+        >
+          <div className={styles.icon}>☁️</div>
+          <h2>Яндекс.Диск</h2>
+          <p>Файлы и документы</p>
+        </button>
+
+        <button 
+          className={styles.card}
+          onClick={() => handleNavigate('booking')}
+        >
+          <div className={styles.icon}>📅</div>
+          <h2>Запись</h2>
+          <p>Консультации и услуги</p>
+        </button>
+
+        <button 
+          className={styles.card}
           onClick={() => handleNavigate('help')}
         >
           <div className={styles.icon}>❓</div>
           <h2>Помощь</h2>
           <p>Справочная информация</p>
         </button>
+
+        {isAdmin && (
+          <button 
+            className={`${styles.card} ${styles.adminCard}`}
+            onClick={() => handleNavigate('settings')}
+          >
+            <div className={styles.icon}>⚙️</div>
+            <h2>Панель управления</h2>
+            <p>Настройки бота и RAG</p>
+          </button>
+        )}
       </div>
 
       <div className={styles.footer}>
