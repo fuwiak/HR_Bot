@@ -6,6 +6,7 @@
 import os
 import logging
 import asyncio
+import hashlib
 from typing import List, Dict, Any, Optional, Set
 from pathlib import Path
 from qdrant_client import QdrantClient
