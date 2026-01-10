@@ -36,6 +36,10 @@ COPY dashboard_static/ ./dashboard_static/
 COPY alembic.ini .
 COPY alembic/ ./alembic/
 
+# Copy entrypoint script
+COPY backend/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Expose port for backend API
 EXPOSE 8081
 
@@ -44,35 +48,6 @@ ARG RUN_TESTS=false
 ENV RUN_TESTS=${RUN_TESTS}
 ARG RUN_SERVICES_MIGRATION=false
 ENV RUN_SERVICES_MIGRATION=${RUN_SERVICES_MIGRATION}
-
-# Создаем entrypoint скрипт для миграций, инициализации Qdrant и условного запуска тестов
-RUN echo '#!/bin/sh\n\
-set -e\n\
-echo "🔍 Проверка DATABASE_URL..."\n\
-if [ -z "$DATABASE_URL" ]; then\n\
-    echo "❌ ОШИБКА: DATABASE_URL не установлен!"\n\
-    echo "В Railway добавьте переменную: DATABASE_URL=${{Postgres.DATABASE_URL}}"\n\
-    exit 1\n\
-fi\n\
-echo "🔄 Запуск миграций Alembic..."\n\
-if alembic upgrade head; then\n\
-    echo "✅ Миграции успешно применены"\n\
-else\n\
-    echo "❌ Ошибка применения миграций!"\n\
-    exit 1\n\
-fi\n\
-echo "🔧 Инициализация Qdrant коллекции..."\n\
-python scripts/init_qdrant.py || echo "⚠️ Инициализация Qdrant завершилась с ошибками, но продолжаем запуск"\n\
-if [ "$RUN_SERVICES_MIGRATION" = "true" ]; then\n\
-    echo "📦 Запуск миграции услуг в RAG коллекцию..."\n\
-    python scripts/migrate_services_to_rag.py || echo "⚠️ Миграция услуг завершилась с ошибками, но продолжаем запуск"\n\
-fi\n\
-if [ "$RUN_TESTS" = "true" ]; then\n\
-    echo "🧪 Запуск тестов перед стартом приложения..."\n\
-    python tests/run_tests.py || echo "⚠️ Тесты завершились с ошибками, но продолжаем запуск"\n\
-fi\n\
-exec python -u backend/web_interface.py\n\
-' > /entrypoint.sh && chmod +x /entrypoint.sh
 
 # Используем entrypoint для условного запуска тестов
 ENTRYPOINT ["/entrypoint.sh"]

@@ -139,15 +139,21 @@ def main():
     try:
         # Проверяем переменные окружения
         import os
-        required_vars = [
-            "QDRANT_URL",
-            "QDRANT_API_KEY",
-            "OPENROUTER_API_KEY"
-        ]
+        # Проверяем наличие Qdrant настроек (может быть QDRANT_HOST, QDRANT_URL или RAILWAY_SERVICE_QDRANT_URL)
+        qdrant_configured = (
+            os.getenv("QDRANT_HOST") or 
+            os.getenv("QDRANT_URL") or 
+            os.getenv("RAILWAY_SERVICE_QDRANT_URL")
+        )
         
-        missing_vars = [var for var in required_vars if not os.getenv(var)]
-        if missing_vars:
-            logger.warning(f"⚠️ Отсутствуют переменные окружения: {', '.join(missing_vars)}")
+        required_vars = []
+        if not qdrant_configured:
+            required_vars.append("QDRANT_HOST или QDRANT_URL или RAILWAY_SERVICE_QDRANT_URL")
+        if not os.getenv("OPENROUTER_API_KEY"):
+            required_vars.append("OPENROUTER_API_KEY")
+        
+        if required_vars:
+            logger.warning(f"⚠️ Отсутствуют переменные окружения: {', '.join(required_vars)}")
             logger.warning("⚠️ Некоторые тесты могут не работать")
         
         # Запускаем тесты
