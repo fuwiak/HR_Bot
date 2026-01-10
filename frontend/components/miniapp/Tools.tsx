@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { WebApp } from '@twa-dev/sdk'
+import WebApp from '@twa-dev/sdk'
 import { generateProposal } from '@/lib/api'
 import styles from './Tools.module.css'
 

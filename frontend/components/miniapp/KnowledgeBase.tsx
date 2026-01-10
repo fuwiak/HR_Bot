@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { WebApp } from '@twa-dev/sdk'
+import WebApp from '@twa-dev/sdk'
 import { searchRAG, getRAGStats, getRAGDocs } from '@/lib/api'
 import styles from './KnowledgeBase.module.css'
 

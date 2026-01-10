@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { initDataRaw, initData, WebApp } from '@twa-dev/sdk'
+import WebApp from '@twa-dev/sdk'
 import styles from './page.module.css'
 import MainMenu from '@/components/miniapp/MainMenu'
 import KnowledgeBase from '@/components/miniapp/KnowledgeBase'
@@ -28,11 +28,8 @@ export default function MiniAppPage() {
       WebApp.setBackgroundColor('#ffffff')
       
       // Получаем данные пользователя
-      if (initDataRaw) {
-        const data = initData
-        if (data?.user) {
-          setUser(data.user)
-        }
+      if (WebApp.initDataUnsafe?.user) {
+        setUser(WebApp.initDataUnsafe.user)
       }
       
       setIsReady(true)
