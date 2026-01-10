@@ -42,7 +42,7 @@ SUPPORTED_EXTENSIONS = {'.txt', '.md', '.pdf', '.docx', '.xlsx', '.xls', '.csv',
 
 try:
     from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
-    from text_splitter import RecursiveCharacterTextSplitter
+    from services.helpers.text_splitter import RecursiveCharacterTextSplitter
     from ydisk_indexer import extract_text_from_content  # Используем функцию из indexer
     log.info("✅ Все модули импортированы")
 except ImportError as e:

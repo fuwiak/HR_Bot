@@ -18,7 +18,16 @@ try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 except ImportError:
     # Fallback на легкую реализацию без зависимостей
-    from text_splitter import RecursiveCharacterTextSplitter
+    try:
+        from services.helpers.text_splitter import RecursiveCharacterTextSplitter
+    except ImportError:
+        # Если и это не работает, пробуем добавить путь
+        import sys
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        from services.helpers.text_splitter import RecursiveCharacterTextSplitter
 # Используем API эмбеддинги через qdrant_helper (OpenAI text-embedding-3-small)
 # from langchain_huggingface import HuggingFaceEmbeddings
 import uuid

@@ -18,10 +18,16 @@ try:
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 except ImportError:
     # Fallback на легкую реализацию без зависимостей
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from text_splitter import RecursiveCharacterTextSplitter
+    try:
+        from services.helpers.text_splitter import RecursiveCharacterTextSplitter
+    except ImportError:
+        # Если и это не работает, пробуем добавить путь
+        import sys
+        from pathlib import Path
+        project_root = Path(__file__).parent.parent.parent
+        if str(project_root) not in sys.path:
+            sys.path.insert(0, str(project_root))
+        from services.helpers.text_splitter import RecursiveCharacterTextSplitter
 # from langchain_huggingface import HuggingFaceEmbeddings  # Не используется, используем API эмбеддинги
 import uuid
 import re

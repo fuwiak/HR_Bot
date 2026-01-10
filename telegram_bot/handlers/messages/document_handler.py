@@ -76,7 +76,7 @@ async def upload_to_qdrant(text_content: str, file_name: str, user_id: int, user
         try:
             from langchain_text_splitters import RecursiveCharacterTextSplitter
         except ImportError:
-            from text_splitter import RecursiveCharacterTextSplitter
+            from services.helpers.text_splitter import RecursiveCharacterTextSplitter
         
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
