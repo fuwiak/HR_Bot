@@ -4,10 +4,14 @@ const nextConfig = {
   output: 'standalone', // Для Docker деплоя на Railway
   
   // Настройка путей для импортов
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    const path = require('path');
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@': require('path').resolve(__dirname),
+      '@': path.resolve(__dirname),
+      '@/lib': path.resolve(__dirname, 'lib'),
+      '@/components': path.resolve(__dirname, 'components'),
+      '@/app': path.resolve(__dirname, 'app'),
     };
     return config;
   },
