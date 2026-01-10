@@ -135,7 +135,7 @@ class QdrantLoader:
                 qdrant_port = os.getenv("QDRANT_PORT", "6333")
                 self.qdrant_url = f"http://qdrant.railway.internal:{qdrant_port}"
                 logger.info(f"⚠️ QDRANT_HOST не установлен, пробуем Railway private domain: {self.qdrant_url}")
-            else:
+        else:
                 # Приоритет 4: Локальная разработка
                 self.qdrant_url = qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
                 if self.qdrant_url == "http://localhost:6333":
