@@ -5,7 +5,15 @@
 
 // NEXT_PUBLIC_API_URL доступен и на клиенте, и на сервере в Next.js
 // Если не установлен, используем относительный путь /api (будет работать через прокси)
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+let API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+
+// Если URL не начинается с http:// или https://, и не относительный путь, добавляем https://
+if (API_BASE !== '/api' && !API_BASE.startsWith('http://') && !API_BASE.startsWith('https://')) {
+  API_BASE = `https://${API_BASE}`;
+}
+
+// Убираем trailing slash
+API_BASE = API_BASE.replace(/\/$/, '');
 
 export async function sendEmail(recipient: string, subject: string, body: string) {
   const formData = new URLSearchParams();

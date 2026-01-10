@@ -35,7 +35,21 @@ const nextConfig = {
   async rewrites() {
     // Используем переменную окружения для backend URL
     // В Railway это будет URL backend сервиса
-    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
+    let backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
+    
+    // Если URL не начинается с http:// или https://, добавляем https://
+    if (backendUrl && !backendUrl.startsWith('http://') && !backendUrl.startsWith('https://')) {
+      backendUrl = `https://${backendUrl}`;
+    }
+    
+    // Fallback для локальной разработки
+    if (!backendUrl) {
+      backendUrl = 'http://localhost:8081';
+    }
+    
+    // Убираем trailing slash
+    backendUrl = backendUrl.replace(/\/$/, '');
+    
     return [
       // Проксируем все API запросы на backend
       // Убираем /api из destination, так как в web_interface.py эндпоинты без префикса /api
