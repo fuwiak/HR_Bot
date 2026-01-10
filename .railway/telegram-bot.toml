@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile.telegram"
+dockerfilePath = "telegram_bot/Dockerfile"
 
 [deploy]
 numReplicas = 1

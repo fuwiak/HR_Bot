@@ -40,10 +40,12 @@ COPY alembic/ ./alembic/
 EXPOSE 8081
 
 # Опциональный запуск тестов и миграции услуг перед стартом
-ENV RUN_TESTS=${RUN_TESTS:-false}
-ENV RUN_SERVICES_MIGRATION=${RUN_SERVICES_MIGRATION:-false}
+ARG RUN_TESTS=false
+ENV RUN_TESTS=${RUN_TESTS}
+ARG RUN_SERVICES_MIGRATION=false
+ENV RUN_SERVICES_MIGRATION=${RUN_SERVICES_MIGRATION}
 
-# Создаем entrypoint скрипт для запуска миграций, инициализации Qdrant и тестов
+# Создаем entrypoint скрипт для миграций, инициализации Qdrant и условного запуска тестов
 RUN echo '#!/bin/sh\n\
 set -e\n\
 echo "🔍 Проверка DATABASE_URL..."\n\
@@ -72,5 +74,5 @@ fi\n\
 exec python -u backend/web_interface.py\n\
 ' > /entrypoint.sh && chmod +x /entrypoint.sh
 
-# Используем entrypoint для запуска миграций и условного запуска тестов
+# Используем entrypoint для условного запуска тестов
 ENTRYPOINT ["/entrypoint.sh"]
