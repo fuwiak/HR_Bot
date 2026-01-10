@@ -35,10 +35,17 @@ if not MINI_APP_URL:
     # Пытаемся получить из FRONTEND_URL или построить из домена
     FRONTEND_URL = os.getenv("FRONTEND_URL", "")
     if FRONTEND_URL:
+        # Если FRONTEND_URL указан, добавляем /miniapp
         MINI_APP_URL = FRONTEND_URL.rstrip("/") + "/miniapp"
     elif RAILWAY_PUBLIC_DOMAIN:
         # Предполагаем, что frontend на том же домене или отдельном сервисе
         MINI_APP_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}/miniapp"
+
+# Логирование настроенного URL
+if MINI_APP_URL:
+    log.info(f"🌐 Mini App URL настроен: {MINI_APP_URL}")
+else:
+    log.warning("⚠️ Mini App URL не настроен. Кнопка Mini App не будет отображаться.")
 
 # ===================== GOOGLE SHEETS CONFIG =====================
 GOOGLE_SHEETS_CREDENTIALS_PATH = os.getenv("GOOGLE_SHEETS_CREDENTIALS_PATH")

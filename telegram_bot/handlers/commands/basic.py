@@ -45,12 +45,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Добавляем кнопку Web App если URL настроен
         if MINI_APP_URL:
+            log.info(f"🌐 Добавлена кнопка Mini App с URL: {MINI_APP_URL}")
             keyboard.append([
                 InlineKeyboardButton(
                     "🌐 Открыть Mini App",
                     web_app=WebAppInfo(url=MINI_APP_URL)
                 )
             ])
+        else:
+            log.warning("⚠️ Mini App URL не настроен, кнопка не добавлена")
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         # Улучшенное форматирование с разделителями
