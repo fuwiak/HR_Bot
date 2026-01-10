@@ -115,7 +115,7 @@ export default function SubMenu({ type, onBack, onNavigate }: SubMenuProps) {
   const handleItemClick = (itemId: string) => {
     WebApp?.HapticFeedback?.impactOccurred('light')
     
-    // Маппинг действий для навигации
+    // Маппинг действий для навигации с учетом типа подменю
     const actionMap: Record<string, () => void> = {
       // Knowledge base
       'search': () => onNavigate('knowledge'),
@@ -126,18 +126,25 @@ export default function SubMenu({ type, onBack, onNavigate }: SubMenuProps) {
       'list': () => onNavigate('projects'),
       'create': () => onNavigate('projects'),
       'status': () => onNavigate('projects'),
-      'summary': () => onNavigate('projects'),
+      'projects_summary': () => onNavigate('projects'),
       
       // Tools
       'proposal': () => onNavigate('tools'),
-      'summary': () => onNavigate('tools'),
+      'tools_summary': () => onNavigate('tools'),
       
       // Help
       'commands': () => onNavigate('help'),
       'examples': () => onNavigate('help')
     }
     
-    const action = actionMap[itemId]
+    // Для summary используем префикс типа подменю
+    const key = type === 'projects' && itemId === 'summary' 
+      ? 'projects_summary'
+      : type === 'tools' && itemId === 'summary'
+      ? 'tools_summary'
+      : itemId
+    
+    const action = actionMap[key]
     if (action) {
       action()
     }
