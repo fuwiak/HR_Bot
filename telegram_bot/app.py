@@ -190,8 +190,11 @@ def main():
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).concurrent_updates(True).build()
     
     # Command handlers
+    log.info("📝 Регистрация обработчиков команд...")
     app.add_handler(CommandHandler("start", start))
+    log.info("✅ Обработчик /start зарегистрирован")
     app.add_handler(CommandHandler("menu", menu))
+    log.info("✅ Обработчик /menu зарегистрирован")
     
     # New commands for demonstration
     app.add_handler(CommandHandler("rag_search", rag_search_command))

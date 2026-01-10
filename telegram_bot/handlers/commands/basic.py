@@ -10,69 +10,89 @@ import logging
 log = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    username = update.message.from_user.username or "без username"
-    first_name = update.message.from_user.first_name or "без имени"
-    
-    # Логируем команду /start
-    log.info(f"🚀 КОМАНДА /start: user_id={user_id}, username=@{username}, name={first_name}")
-    
-    # Автоматически подписываем пользователя на уведомления о почте
-    add_email_subscriber(user_id)
-    
-    # Группируем кнопки по 2 в ряд для компактности
-    from telegram_bot.config import MINI_APP_URL
-    
-    keyboard = [
-        [
-            InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base"),
-            InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")
-        ],
-        [
-            InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools"),
-            InlineKeyboardButton("💬 Чат с AI", callback_data="chat")
-        ],
-        [
-            InlineKeyboardButton("📧 Ответить на мейл", callback_data="email_reply_last"),
-            InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
+    """Обработчик команды /start"""
+    try:
+        user_id = update.message.from_user.id
+        username = update.message.from_user.username or "без username"
+        first_name = update.message.from_user.first_name or "без имени"
+        
+        # Логируем команду /start
+        log.info(f"🚀 КОМАНДА /start: user_id={user_id}, username=@{username}, name={first_name}")
+        
+        # Автоматически подписываем пользователя на уведомления о почте
+        try:
+            add_email_subscriber(user_id)
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка подписки на email уведомления: {e}")
+        
+        # Группируем кнопки по 2 в ряд для компактности
+        from telegram_bot.config import MINI_APP_URL
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("📚 База знаний", callback_data="menu_knowledge_base"),
+                InlineKeyboardButton("📋 Проекты", callback_data="menu_projects")
+            ],
+            [
+                InlineKeyboardButton("🛠 Инструменты", callback_data="menu_tools"),
+                InlineKeyboardButton("💬 Чат с AI", callback_data="chat")
+            ],
+            [
+                InlineKeyboardButton("📧 Ответить на мейл", callback_data="email_reply_last"),
+                InlineKeyboardButton("❓ Помощь", callback_data="menu_help")
+            ]
         ]
-    ]
-    
-    # Добавляем кнопку Web App если URL настроен
-    if MINI_APP_URL:
-        keyboard.append([
-            InlineKeyboardButton(
-                "🌐 Открыть Mini App",
-                web_app=WebAppInfo(url=MINI_APP_URL)
+        
+        # Добавляем кнопку Web App если URL настроен
+        if MINI_APP_URL:
+            keyboard.append([
+                InlineKeyboardButton(
+                    "🌐 Открыть Mini App",
+                    web_app=WebAppInfo(url=MINI_APP_URL)
+                )
+            ])
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Улучшенное форматирование с разделителями
+        welcome_text = (
+            "✨ *Добро пожаловать!*\n"
+            "Я AI-ассистент Анастасии Новосёловой\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🎯 *Возможности:*\n\n"
+            "🔍 *База знаний*\n"
+            "   Поиск методик, кейсов, шаблонов\n\n"
+            "📋 *Проекты*\n"
+            "   Управление задачами в WEEEK\n\n"
+            "🛠 *Инструменты*\n"
+            "   Генерация КП, суммаризация\n\n"
+            "💬 *Чат с AI*\n"
+            "   Общение с умным помощником\n\n"
+            "📧 *Email*\n"
+            "   Быстрые ответы на письма\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📬 Уведомления о новых письмах приходят автоматически"
+        )
+        
+        await update.message.reply_text(
+            welcome_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        
+        log.info(f"✅ Команда /start выполнена успешно для user_id={user_id}")
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка в обработчике /start: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        
+        # Пытаемся отправить сообщение об ошибке
+        try:
+            await update.message.reply_text(
+                "❌ Произошла ошибка при обработке команды /start. Попробуйте позже."
             )
-        ])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Улучшенное форматирование с разделителями
-    welcome_text = (
-        "✨ *Добро пожаловать!*\n"
-        "Я AI-ассистент Анастасии Новосёловой\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "🎯 *Возможности:*\n\n"
-        "🔍 *База знаний*\n"
-        "   Поиск методик, кейсов, шаблонов\n\n"
-        "📋 *Проекты*\n"
-        "   Управление задачами в WEEEK\n\n"
-        "🛠 *Инструменты*\n"
-        "   Генерация КП, суммаризация\n\n"
-        "💬 *Чат с AI*\n"
-        "   Общение с умным помощником\n\n"
-        "📧 *Email*\n"
-        "   Быстрые ответы на письма\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "📬 Уведомления о новых письмах приходят автоматически"
-    )
-    
-    await update.message.reply_text(
-        welcome_text,
-        parse_mode='Markdown',
-        reply_markup=reply_markup
-    )
+        except:
+            pass
 
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Компактная группировка кнопок
