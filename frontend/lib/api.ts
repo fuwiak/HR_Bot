@@ -1,0 +1,175 @@
+// API client for FastAPI backend
+// Использует NEXT_PUBLIC_API_URL для подключения к backend
+// В development: использует прокси /api/ из next.config.js (если NEXT_PUBLIC_API_URL не установлен)
+// В production: использует абсолютный URL из NEXT_PUBLIC_API_URL
+
+// NEXT_PUBLIC_API_URL доступен и на клиенте, и на сервере в Next.js
+// Если не установлен, используем относительный путь /api (будет работать через прокси)
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+
+export async function sendEmail(recipient: string, subject: string, body: string) {
+  const formData = new URLSearchParams();
+  formData.append('recipient', recipient);
+  formData.append('subject', subject);
+  formData.append('body', body);
+
+  const response = await fetch(`${API_BASE}/demo/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function generateProposal(request: string) {
+  const response = await fetch(`${API_BASE}/demo/proposal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ request }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function searchRAG(query: string, limit: number = 5) {
+  const response = await fetch(`${API_BASE}/rag/search?query=${encodeURIComponent(query)}&limit=${limit}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getRAGStats() {
+  const response = await fetch(`${API_BASE}/rag/stats`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getRAGDocs(limit: number = 20) {
+  const response = await fetch(`${API_BASE}/rag/docs?limit=${limit}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// RAG Dashboard API
+export async function testRAGQuery(query: string, topK: number = 5) {
+  const response = await fetch(`${API_BASE}/rag/test?query=${encodeURIComponent(query)}&top_k=${topK}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function runRAGEvaluation() {
+  const response = await fetch(`${API_BASE}/rag/workflow/evaluate`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function loadPDF(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/rag/workflow/load-pdf`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function scrapeWebsites() {
+  const response = await fetch(`${API_BASE}/rag/workflow/scrape`, {
+    method: 'POST',
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getRAGMetrics() {
+  const response = await fetch(`${API_BASE}/rag/metrics/latest`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getRAGParameters() {
+  const response = await fetch(`${API_BASE}/rag/parameters`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function updateRAGParameters(params: {
+  chunk_size?: number;
+  chunk_overlap?: number;
+  top_k?: number;
+  min_score?: number;
+  temperature?: number;
+  max_tokens?: number;
+}) {
+  const response = await fetch(`${API_BASE}/rag/parameters`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+
+
+
+
+
+
+
+
+
+
+
