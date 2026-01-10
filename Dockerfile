@@ -1,0 +1,52 @@
+# Dockerfile для Telegram Bot сервиса (корневой, используется по умолчанию в Railway)
+# Этот файл копирует telegram_bot/Dockerfile для совместимости с Railway
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# Copy application code
+COPY telegram_bot/ ./telegram_bot/
+COPY backend/ ./backend/
+COPY services/ ./services/
+COPY tests/ ./tests/
+COPY scripts/ ./scripts/
+COPY config.yaml .
+COPY config/ ./config/
+COPY templates/ ./templates/
+COPY alembic.ini .
+COPY alembic/ ./alembic/
+
+# Copy entrypoint script
+COPY telegram_bot/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Expose port for Telegram webhook
+EXPOSE 8080
+
+# Опциональный запуск тестов перед стартом
+ARG RUN_TESTS=false
+ENV RUN_TESTS=${RUN_TESTS}
+
+# Используем entrypoint для условного запуска тестов
+ENTRYPOINT ["/entrypoint.sh"]
