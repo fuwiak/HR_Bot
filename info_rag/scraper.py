@@ -254,7 +254,10 @@ async def scrape_whitelist_urls(
 
 if __name__ == "__main__":
     import asyncio
-    from whitelist import WhitelistManager
+    try:
+        from services.rag.whitelist import WhitelistManager
+    except ImportError:
+        from whitelist import WhitelistManager
     
     async def main():
         whitelist = WhitelistManager()

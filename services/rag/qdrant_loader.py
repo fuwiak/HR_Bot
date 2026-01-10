@@ -35,7 +35,10 @@ import uuid
 import re
 from collections import defaultdict
 
-from whitelist import WhitelistManager
+try:
+    from services.rag.whitelist import WhitelistManager
+except ImportError:
+    from whitelist import WhitelistManager
 
 # Загружаем переменные окружения из .env файла
 try:

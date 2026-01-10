@@ -33,7 +33,13 @@ import uuid
 import re
 from collections import defaultdict
 
-from whitelist import WhitelistManager
+try:
+    from services.rag.whitelist import WhitelistManager
+except ImportError:
+    try:
+        from info_rag.whitelist import WhitelistManager
+    except ImportError:
+        from whitelist import WhitelistManager
 
 logger = logging.getLogger(__name__)
 
