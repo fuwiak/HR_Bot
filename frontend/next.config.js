@@ -37,13 +37,29 @@ const nextConfig = {
     // В Railway это будет URL backend сервиса
     let backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL;
     
+    // Логируем для отладки (только в development)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🔍 Backend URL config:', {
+        BACKEND_URL: process.env.BACKEND_URL,
+        NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+        resolved: backendUrl
+      });
+    }
+    
     // Если URL не начинается с http:// или https://, добавляем https://
     if (backendUrl && !backendUrl.startsWith('http://') && !backendUrl.startsWith('https://')) {
       backendUrl = `https://${backendUrl}`;
     }
     
-    // Fallback для локальной разработки
+    // Fallback для локальной разработки (только если не в production)
     if (!backendUrl) {
+      if (process.env.NODE_ENV === 'production') {
+        // В production на Railway не должно быть fallback - это ошибка конфигурации
+        console.error('❌ ERROR: BACKEND_URL or NEXT_PUBLIC_API_URL не установлены в production!');
+        // В production возвращаем пустой rewrites, чтобы не было ошибок
+        // API будет использовать прямой URL из NEXT_PUBLIC_API_URL в api.ts
+        return [];
+      }
       backendUrl = 'http://localhost:8081';
     }
     
