@@ -24,7 +24,8 @@ class TelegramAdapter(BaseAdapter):
     
     def __init__(self, token: str = None):
         super().__init__(platform="telegram")
-        self.token = token or os.getenv("TELEGRAM_BOT_TOKEN")
+        # Проверяем оба варианта имени переменной окружения
+        self.token = token or os.getenv("TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
         self.bot: Optional[Bot] = None
         self.application: Optional[Application] = None
     
@@ -35,7 +36,7 @@ class TelegramAdapter(BaseAdapter):
             return False
         
         if not self.token:
-            log.error("TELEGRAM_BOT_TOKEN не установлен")
+            log.error("TELEGRAM_TOKEN или TELEGRAM_BOT_TOKEN не установлен")
             return False
         
         try:
