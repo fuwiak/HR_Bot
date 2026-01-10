@@ -77,20 +77,14 @@ else:
     log.warning(f"⚠️ API ключ для эмбеддингов не установлен")
 
 # Railway Qdrant сервис
-# Проверяем Railway Qdrant сервис (приоритет: RAILWAY_SERVICE_QDRANT_URL -> QDRANT_HOST -> private domain -> localhost)
+# Проверяем Railway Qdrant сервис (приоритет: QDRANT_HOST -> RAILWAY_SERVICE_QDRANT_URL -> private domain -> localhost)
 RAILWAY_SERVICE_QDRANT_URL = os.getenv("RAILWAY_SERVICE_QDRANT_URL")
 RAILWAY_QDRANT_HOST = _qdrant_settings.get("host") or os.getenv("QDRANT_HOST")
 RAILWAY_QDRANT_PORT = _qdrant_settings.get("port") or os.getenv("QDRANT_PORT", "6333")
 RAILWAY_QDRANT_URL = None
 
-# Приоритет 1: RAILWAY_SERVICE_QDRANT_URL (автоматическая переменная Railway)
-if RAILWAY_SERVICE_QDRANT_URL:
-    if RAILWAY_SERVICE_QDRANT_URL.startswith("https://"):
-        RAILWAY_QDRANT_URL = RAILWAY_SERVICE_QDRANT_URL
-    else:
-        RAILWAY_QDRANT_URL = f"https://{RAILWAY_SERVICE_QDRANT_URL}"
-    log.info(f"🔧 Используется Railway Qdrant из RAILWAY_SERVICE_QDRANT_URL: {RAILWAY_QDRANT_URL}")
-elif RAILWAY_QDRANT_HOST:
+# Приоритет 1: QDRANT_HOST (явная настройка имеет приоритет над автоматической)
+if RAILWAY_QDRANT_HOST:
     # Приоритет 2: QDRANT_HOST из конфига или переменных окружения
     # Определяем, является ли домен публичным (Railway public domain)
     is_public_domain = (
@@ -112,6 +106,13 @@ elif RAILWAY_QDRANT_HOST:
         # Приватный домен Railway - используем HTTP с портом
         RAILWAY_QDRANT_URL = f"http://{RAILWAY_QDRANT_HOST}:{RAILWAY_QDRANT_PORT}"
         log.info(f"🔧 Обнаружен приватный Railway Qdrant сервис: {RAILWAY_QDRANT_URL}")
+# Приоритет 2: RAILWAY_SERVICE_QDRANT_URL (автоматическая переменная Railway, если QDRANT_HOST не установлен)
+elif RAILWAY_SERVICE_QDRANT_URL:
+    if RAILWAY_SERVICE_QDRANT_URL.startswith("https://"):
+        RAILWAY_QDRANT_URL = RAILWAY_SERVICE_QDRANT_URL
+    else:
+        RAILWAY_QDRANT_URL = f"https://{RAILWAY_SERVICE_QDRANT_URL}"
+    log.info(f"🔧 Используется Railway Qdrant из RAILWAY_SERVICE_QDRANT_URL: {RAILWAY_QDRANT_URL}")
 elif os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
     # Приоритет 3: В Railway, но QDRANT_HOST не установлен - пробуем private domain
     RAILWAY_QDRANT_URL = f"http://qdrant.railway.internal:{RAILWAY_QDRANT_PORT}"

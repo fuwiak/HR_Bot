@@ -97,18 +97,9 @@ class QdrantLoader:
         self.collection_name = collection_name
         
         # Определяем URL Qdrant (та же логика, что в qdrant_helper.py)
-        # Приоритет: 1) RAILWAY_SERVICE_QDRANT_URL, 2) QDRANT_HOST, 3) переданный qdrant_url, 4) QDRANT_URL, 5) private domain, 6) localhost
-        railway_service_qdrant_url = os.getenv("RAILWAY_SERVICE_QDRANT_URL")
-        if railway_service_qdrant_url:
-            # Приоритет 1: Автоматическая переменная Railway
-            if railway_service_qdrant_url.startswith("https://"):
-                self.qdrant_url = railway_service_qdrant_url
-            else:
-                self.qdrant_url = f"https://{railway_service_qdrant_url}"
-            logger.info(f"🔧 Используется Railway Qdrant из RAILWAY_SERVICE_QDRANT_URL: {self.qdrant_url}")
-        else:
-            qdrant_host = os.getenv("QDRANT_HOST")
-            if qdrant_host:
+        # Приоритет: 1) QDRANT_HOST, 2) RAILWAY_SERVICE_QDRANT_URL, 3) переданный qdrant_url, 4) QDRANT_URL, 5) private domain, 6) localhost
+        qdrant_host = os.getenv("QDRANT_HOST")
+        if qdrant_host:
                 # Приоритет 2: QDRANT_HOST из конфига или переменных окружения
                 # Определяем, является ли домен публичным (Railway public domain)
                 is_public_domain = (
@@ -131,7 +122,15 @@ class QdrantLoader:
                     qdrant_port = os.getenv("QDRANT_PORT", "6333")
                     self.qdrant_url = f"http://{qdrant_host}:{qdrant_port}"
                     logger.info(f"🔧 Используется приватный Railway Qdrant: {self.qdrant_url}")
-            elif os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+        # Приоритет 2: RAILWAY_SERVICE_QDRANT_URL (автоматическая переменная Railway, если QDRANT_HOST не установлен)
+        elif railway_service_qdrant_url := os.getenv("RAILWAY_SERVICE_QDRANT_URL"):
+            # Автоматическая переменная Railway
+            if railway_service_qdrant_url.startswith("https://"):
+                self.qdrant_url = railway_service_qdrant_url
+            else:
+                self.qdrant_url = f"https://{railway_service_qdrant_url}"
+            logger.info(f"🔧 Используется Railway Qdrant из RAILWAY_SERVICE_QDRANT_URL: {self.qdrant_url}")
+        elif os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
                 # Приоритет 3: В Railway, но QDRANT_HOST не установлен - пробуем private domain
                 qdrant_port = os.getenv("QDRANT_PORT", "6333")
                 self.qdrant_url = f"http://qdrant.railway.internal:{qdrant_port}"
