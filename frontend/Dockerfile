@@ -37,6 +37,7 @@ RUN adduser --system --uid 1001 nextjs
 # Next.js standalone включает все необходимое в .next/standalone
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Copy public folder (created if it doesn't exist)
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs
