@@ -68,9 +68,9 @@ export default function MiniAppPage() {
   }, [])
 
   // Обработка навигации
-  const handleNavigate = (page: PageType) => {
-    setNavigationHistory(prev => [...prev, page])
-    setCurrentPage(page)
+  const handleNavigate = (page: PageType | `submenu_${SubMenuType}`) => {
+    setNavigationHistory(prev => [...prev, page as Page])
+    setCurrentPage(page as Page)
   }
 
   const handleBack = () => {
