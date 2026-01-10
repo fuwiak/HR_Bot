@@ -1,41 +1,84 @@
 'use client'
 
 import { useWebApp } from '@/lib/useWebApp'
+import { getUnreadEmailCount } from '@/lib/api'
+import { useState, useEffect } from 'react'
+import Notifications from './Notifications'
+import { SubMenuType } from './SubMenu'
 import styles from './MainMenu.module.css'
 
 export type PageType = 'knowledge' | 'projects' | 'tools' | 'help' | 'chat' | 'email' | 'yadisk' | 'booking' | 'settings'
 
+// Re-export SubMenuType для удобства
+export type { SubMenuType } from './SubMenu'
+
 interface MainMenuProps {
   user: any
-  onNavigate: (page: PageType) => void
+  onNavigate: (page: PageType | `submenu_${SubMenuType}`) => void
   isAdmin?: boolean
 }
 
 export default function MainMenu({ user, onNavigate, isAdmin = false }: MainMenuProps) {
   const WebApp = useWebApp()
+  const [unreadEmailCount, setUnreadEmailCount] = useState(0)
 
-  const handleNavigate = (page: PageType) => {
+  useEffect(() => {
+    if (user?.id) {
+      loadUnreadEmailCount()
+      // Обновляем каждые 30 секунд
+      const interval = setInterval(loadUnreadEmailCount, 30000)
+      return () => clearInterval(interval)
+    }
+  }, [user?.id])
+
+  const loadUnreadEmailCount = async () => {
+    try {
+      const result = await getUnreadEmailCount(user?.id?.toString())
+      setUnreadEmailCount(result.unread_count || 0)
+    } catch (error) {
+      console.error('Ошибка загрузки количества писем:', error)
+    }
+  }
+
+  const handleNavigate = (page: PageType | `submenu_${SubMenuType}`) => {
     WebApp?.HapticFeedback?.impactOccurred('light')
     onNavigate(page)
+  }
+
+  const handleCardClick = (page: PageType) => {
+    // Для страниц с подменю открываем подменю, иначе переходим напрямую
+    const pagesWithSubMenu: PageType[] = ['knowledge', 'projects', 'tools', 'help']
+    if (pagesWithSubMenu.includes(page)) {
+      handleNavigate(`submenu_${page}` as `submenu_${SubMenuType}`)
+    } else {
+      handleNavigate(page)
+    }
   }
 
   return (
     <div className={styles.menu}>
       <div className={styles.header}>
-        <h1>✨ Добро пожаловать!</h1>
-        {user && (
-          <p className={styles.userName}>
-            {user.first_name} {user.last_name || ''}
-            {isAdmin && <span className={styles.adminBadge}>👑 Админ</span>}
-          </p>
-        )}
-        <p className={styles.subtitle}>AI-ассистент Анастасии Новосёловой</p>
+        <div className={styles.headerTop}>
+          <div>
+            <h1>✨ Добро пожаловать!</h1>
+            {user && (
+              <p className={styles.userName}>
+                {user.first_name} {user.last_name || ''}
+                {isAdmin && <span className={styles.adminBadge}>👑 Админ</span>}
+              </p>
+            )}
+            <p className={styles.subtitle}>AI-ассистент Анастасии Новосёловой</p>
+          </div>
+          {user?.id && (
+            <Notifications userId={user.id.toString()} />
+          )}
+        </div>
       </div>
 
       <div className={styles.grid}>
         <button 
           className={styles.card}
-          onClick={() => handleNavigate('knowledge')}
+          onClick={() => handleCardClick('knowledge')}
         >
           <div className={styles.icon}>📚</div>
           <h2>База знаний</h2>
@@ -44,7 +87,7 @@ export default function MainMenu({ user, onNavigate, isAdmin = false }: MainMenu
 
         <button 
           className={styles.card}
-          onClick={() => handleNavigate('projects')}
+          onClick={() => handleCardClick('projects')}
         >
           <div className={styles.icon}>📋</div>
           <h2>Проекты</h2>
@@ -53,7 +96,7 @@ export default function MainMenu({ user, onNavigate, isAdmin = false }: MainMenu
 
         <button 
           className={styles.card}
-          onClick={() => handleNavigate('tools')}
+          onClick={() => handleCardClick('tools')}
         >
           <div className={styles.icon}>🛠</div>
           <h2>Инструменты</h2>
@@ -76,6 +119,9 @@ export default function MainMenu({ user, onNavigate, isAdmin = false }: MainMenu
           <div className={styles.icon}>📧</div>
           <h2>Email</h2>
           <p>Проверка писем, черновики</p>
+          {unreadEmailCount > 0 && (
+            <span className={styles.badge}>{unreadEmailCount > 99 ? '99+' : unreadEmailCount}</span>
+          )}
         </button>
 
         <button 
@@ -98,7 +144,7 @@ export default function MainMenu({ user, onNavigate, isAdmin = false }: MainMenu
 
         <button 
           className={styles.card}
-          onClick={() => handleNavigate('help')}
+          onClick={() => handleCardClick('help')}
         >
           <div className={styles.icon}>❓</div>
           <h2>Помощь</h2>

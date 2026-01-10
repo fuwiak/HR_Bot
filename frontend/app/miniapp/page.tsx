@@ -16,8 +16,9 @@ import YandexDisk from '@/components/miniapp/YandexDisk'
 import Booking from '@/components/miniapp/Booking'
 import Settings from '@/components/miniapp/Settings'
 import { checkAdminStatus } from '@/lib/api'
+import SubMenu, { SubMenuType } from '@/components/miniapp/SubMenu'
 
-type Page = 'main' | PageType
+type Page = 'main' | PageType | `submenu_${SubMenuType}`
 
 // Список ID администраторов (можно расширить через env)
 const ADMIN_IDS = [5305427956, 123456789] // Добавьте свои ID
@@ -27,6 +28,7 @@ export default function MiniAppPage() {
   const [isReady, setIsReady] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [navigationHistory, setNavigationHistory] = useState<Page[]>(['main'])
 
   useEffect(() => {
     // Динамический импорт @twa-dev/sdk только на клиенте
@@ -65,14 +67,40 @@ export default function MiniAppPage() {
     }
   }, [])
 
+  // Обработка навигации
+  const handleNavigate = (page: PageType) => {
+    setNavigationHistory(prev => [...prev, page])
+    setCurrentPage(page)
+  }
+
+  const handleBack = () => {
+    if (navigationHistory.length > 1) {
+      const newHistory = [...navigationHistory]
+      newHistory.pop() // Удаляем текущую страницу
+      const previousPage = newHistory[newHistory.length - 1]
+      setNavigationHistory(newHistory)
+      setCurrentPage(previousPage)
+    } else {
+      setCurrentPage('main')
+      setNavigationHistory(['main'])
+    }
+  }
+
+  const handleSubMenuNavigate = (subMenuType: SubMenuType) => {
+    setNavigationHistory(prev => [...prev, `submenu_${subMenuType}` as Page])
+    setCurrentPage(`submenu_${subMenuType}` as Page)
+  }
+
   // Обработка кнопки "Назад" в Telegram
   useEffect(() => {
     if (typeof window !== 'undefined' && currentPage !== 'main') {
       import('@twa-dev/sdk').then(({ default: WebApp }) => {
         WebApp.BackButton.show()
         WebApp.BackButton.onClick(() => {
-          setCurrentPage('main')
-          WebApp.BackButton.hide()
+          handleBack()
+          if (navigationHistory.length <= 1) {
+            WebApp.BackButton.hide()
+          }
         })
       })
     } else if (typeof window !== 'undefined') {
@@ -80,7 +108,7 @@ export default function MiniAppPage() {
         WebApp.BackButton.hide()
       })
     }
-  }, [currentPage])
+  }, [currentPage, navigationHistory])
 
   if (!isReady) {
     return (
@@ -91,59 +119,81 @@ export default function MiniAppPage() {
     )
   }
 
+  // Определяем, показывать ли подменю
+  const getSubMenuType = (): SubMenuType | null => {
+    if (currentPage.startsWith('submenu_')) {
+      return currentPage.replace('submenu_', '') as SubMenuType
+    }
+    return null
+  }
+
+  const subMenuType = getSubMenuType()
+
   return (
     <div className={styles.container}>
       {currentPage === 'main' && (
         <MainMenu 
           user={user}
-          onNavigate={(page) => setCurrentPage(page)}
+          onNavigate={handleNavigate}
           isAdmin={isAdmin}
         />
       )}
-      {currentPage === 'knowledge' && (
+      
+      {subMenuType && (
+        <SubMenu
+          type={subMenuType}
+          onBack={handleBack}
+          onNavigate={(page) => {
+            // При навигации из подменю переходим на страницу
+            setNavigationHistory(prev => [...prev, page as Page])
+            setCurrentPage(page as Page)
+          }}
+        />
+      )}
+      {currentPage === 'knowledge' && !subMenuType && (
         <KnowledgeBase 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
         />
       )}
-      {currentPage === 'projects' && (
+      {currentPage === 'projects' && !subMenuType && (
         <Projects 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
         />
       )}
-      {currentPage === 'tools' && (
+      {currentPage === 'tools' && !subMenuType && (
         <Tools 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
         />
       )}
-      {currentPage === 'help' && (
+      {currentPage === 'help' && !subMenuType && (
         <Help 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
         />
       )}
       {currentPage === 'chat' && (
         <Chat 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
         />
       )}
       {currentPage === 'email' && (
         <Email 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
         />
       )}
       {currentPage === 'yadisk' && (
         <YandexDisk 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
         />
       )}
       {currentPage === 'booking' && (
         <Booking 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
           userId={user?.id?.toString()}
         />
       )}
       {currentPage === 'settings' && isAdmin && (
         <Settings 
-          onBack={() => setCurrentPage('main')}
+          onBack={handleBack}
         />
       )}
     </div>

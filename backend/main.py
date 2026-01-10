@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from datetime import datetime
 
 # Настройка логирования
 logging.basicConfig(
@@ -423,6 +424,197 @@ async def check_admin(user_id: str):
     except Exception as e:
         log.error(f"❌ Ошибка в /api/admin/check: {e}")
         return {"is_admin": False}
+
+
+# ==================== NOTIFICATIONS API ====================
+
+# In-memory хранилище уведомлений (можно заменить на Redis или БД)
+_notifications_store: dict = {}  # {user_id: [notifications]}
+
+def _get_user_notifications(user_id: str) -> list:
+    """Получить уведомления пользователя"""
+    return _notifications_store.get(user_id, [])
+
+def _add_notification(user_id: str, notification: dict):
+    """Добавить уведомление"""
+    if user_id not in _notifications_store:
+        _notifications_store[user_id] = []
+    
+    # Добавляем ID и timestamp если их нет
+    if "id" not in notification:
+        notification["id"] = f"{user_id}_{datetime.now().timestamp()}"
+    if "created_at" not in notification:
+        notification["created_at"] = datetime.now().isoformat()
+    if "read" not in notification:
+        notification["read"] = False
+    
+    _notifications_store[user_id].append(notification)
+    # Ограничиваем количество уведомлений (последние 50)
+    if len(_notifications_store[user_id]) > 50:
+        _notifications_store[user_id] = _notifications_store[user_id][-50:]
+
+@app.get("/api/notifications")
+async def get_notifications(user_id: str = None, limit: int = 20):
+    """Получить список уведомлений для пользователя"""
+    try:
+        if not user_id:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "user_id обязателен"}
+            )
+        
+        notifications = _get_user_notifications(user_id)
+        unread_count = sum(1 for n in notifications if not n.get("read", False))
+        
+        # Сортируем по дате (новые первыми) и ограничиваем
+        sorted_notifications = sorted(
+            notifications,
+            key=lambda x: x.get("created_at", ""),
+            reverse=True
+        )[:limit]
+        
+        return {
+            "notifications": sorted_notifications,
+            "unread_count": unread_count,
+            "total": len(notifications)
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/notifications: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+@app.get("/api/notifications/unread-count")
+async def get_unread_notification_count(user_id: str = None):
+    """Получить количество непрочитанных уведомлений"""
+    try:
+        if not user_id:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "user_id обязателен"}
+            )
+        
+        notifications = _get_user_notifications(user_id)
+        unread_count = sum(1 for n in notifications if not n.get("read", False))
+        
+        return {
+            "unread_count": unread_count,
+            "user_id": user_id
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/notifications/unread-count: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+@app.post("/api/notifications/mark-read")
+async def mark_notification_read(request: Request):
+    """Отметить уведомление как прочитанное"""
+    try:
+        data = await request.json()
+        user_id = data.get("user_id")
+        notification_id = data.get("notification_id")
+        
+        if not user_id:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "user_id обязателен"}
+            )
+        
+        notifications = _get_user_notifications(user_id)
+        
+        if notification_id:
+            # Отмечаем конкретное уведомление
+            for notification in notifications:
+                if notification.get("id") == notification_id:
+                    notification["read"] = True
+                    notification["read_at"] = datetime.now().isoformat()
+                    break
+        else:
+            # Отмечаем все уведомления как прочитанные
+            for notification in notifications:
+                notification["read"] = True
+                notification["read_at"] = datetime.now().isoformat()
+        
+        return {
+            "success": True,
+            "message": "Уведомление отмечено как прочитанное"
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/notifications/mark-read: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
+
+
+# ==================== EMAIL API ====================
+
+@app.get("/api/email/unread-count")
+async def get_unread_email_count(user_id: str = None):
+    """Получить количество непрочитанных писем"""
+    try:
+        from services.helpers.email_helper import check_new_emails
+        
+        # Проверяем новые письма за последний день
+        emails = await check_new_emails(since_days=1, limit=10)
+        
+        # Фильтруем непрочитанные (можно добавить логику проверки прочитанности)
+        unread_count = len(emails) if emails else 0
+        
+        return {
+            "unread_count": unread_count,
+            "user_id": user_id
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/email/unread-count: {e}")
+        # Возвращаем 0 вместо ошибки, чтобы не ломать UI
+        return {
+            "unread_count": 0,
+            "user_id": user_id,
+            "error": str(e)
+        }
+
+@app.get("/api/email/recent")
+async def get_recent_emails(user_id: str = None, limit: int = 10):
+    """Получить последние письма"""
+    try:
+        from services.helpers.email_helper import check_new_emails
+        
+        emails = await check_new_emails(since_days=7, limit=limit)
+        
+        formatted_emails = []
+        for email in (emails or []):
+            formatted_emails.append({
+                "id": email.get("id", ""),
+                "subject": email.get("subject", "Без темы"),
+                "from": email.get("from", "Неизвестно"),
+                "date": email.get("date", ""),
+                "preview": email.get("preview", "")[:100] if email.get("preview") else ""
+            })
+        
+        # Создаем уведомления для новых писем (если user_id указан)
+        if user_id and formatted_emails:
+            for email in formatted_emails[:3]:  # Только последние 3 письма
+                _add_notification(user_id, {
+                    "type": "email",
+                    "title": f"Новое письмо: {email['subject']}",
+                    "message": f"От: {email['from']}",
+                    "action_url": f"/email"
+                })
+        
+        return {
+            "emails": formatted_emails,
+            "count": len(formatted_emails)
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/email/recent: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e)}
+        )
 
 
 if __name__ == "__main__":

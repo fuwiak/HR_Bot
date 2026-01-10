@@ -297,6 +297,16 @@ export async function sendChatMessage(message: string, userId?: string) {
   return response.json();
 }
 
+export async function getChatHistory(userId: string, limit: number = 20) {
+  const response = await fetch(`${API_BASE}/chat/history?user_id=${encodeURIComponent(userId)}&limit=${limit}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 // Yandex Disk API
 export async function getYadiskFiles(path: string = '/') {
   const response = await fetch(`${API_BASE}/yadisk/list?path=${encodeURIComponent(path)}`);
@@ -375,6 +385,59 @@ export async function checkAdminStatus(userId: string) {
 
   if (!response.ok) {
     return { is_admin: false };
+  }
+
+  return response.json();
+}
+
+// Notifications API
+export async function getNotifications(userId: string, limit: number = 20) {
+  const response = await fetch(`${API_BASE}/notifications?user_id=${encodeURIComponent(userId)}&limit=${limit}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getUnreadNotificationCount(userId: string) {
+  const response = await fetch(`${API_BASE}/notifications/unread-count?user_id=${encodeURIComponent(userId)}`);
+
+  if (!response.ok) {
+    // Возвращаем 0 вместо ошибки, чтобы не ломать UI
+    return { unread_count: 0 };
+  }
+
+  return response.json();
+}
+
+export async function markNotificationAsRead(userId: string, notificationId?: string) {
+  const response = await fetch(`${API_BASE}/notifications/mark-read`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      user_id: userId,
+      notification_id: notificationId
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getUnreadEmailCount(userId?: string) {
+  const url = userId 
+    ? `${API_BASE}/email/unread-count?user_id=${encodeURIComponent(userId)}`
+    : `${API_BASE}/email/unread-count`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    // Возвращаем 0 вместо ошибки, чтобы не ломать UI
+    return { unread_count: 0 };
   }
 
   return response.json();

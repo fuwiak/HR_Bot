@@ -718,6 +718,267 @@ async def health():
         "rag_system": rag_status
     })
 
+
+# ==================== NOTIFICATIONS API ====================
+
+# In-memory хранилище уведомлений (можно заменить на Redis или БД)
+_notifications_store: dict = {}  # {user_id: [notifications]}
+
+def _get_user_notifications(user_id: str) -> list:
+    """Получить уведомления пользователя"""
+    return _notifications_store.get(user_id, [])
+
+def _add_notification(user_id: str, notification: dict):
+    """Добавить уведомление"""
+    if user_id not in _notifications_store:
+        _notifications_store[user_id] = []
+    
+    if "id" not in notification:
+        notification["id"] = f"{user_id}_{datetime.now().timestamp()}"
+    if "created_at" not in notification:
+        notification["created_at"] = datetime.now().isoformat()
+    if "read" not in notification:
+        notification["read"] = False
+    
+    _notifications_store[user_id].append(notification)
+    if len(_notifications_store[user_id]) > 50:
+        _notifications_store[user_id] = _notifications_store[user_id][-50:]
+
+@app.get("/notifications")
+async def get_notifications(user_id: str = None, limit: int = 20):
+    """Получить список уведомлений для пользователя"""
+    try:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id обязателен")
+        
+        notifications = _get_user_notifications(user_id)
+        unread_count = sum(1 for n in notifications if not n.get("read", False))
+        
+        sorted_notifications = sorted(
+            notifications,
+            key=lambda x: x.get("created_at", ""),
+            reverse=True
+        )[:limit]
+        
+        return JSONResponse({
+            "notifications": sorted_notifications,
+            "unread_count": unread_count,
+            "total": len(notifications)
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /notifications: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/notifications/unread-count")
+async def get_unread_notification_count(user_id: str = None):
+    """Получить количество непрочитанных уведомлений"""
+    try:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id обязателен")
+        
+        notifications = _get_user_notifications(user_id)
+        unread_count = sum(1 for n in notifications if not n.get("read", False))
+        
+        return JSONResponse({
+            "unread_count": unread_count,
+            "user_id": user_id
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /notifications/unread-count: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/notifications/mark-read")
+async def mark_notification_read(request_data: dict):
+    """Отметить уведомление как прочитанное"""
+    try:
+        user_id = request_data.get("user_id")
+        notification_id = request_data.get("notification_id")
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id обязателен")
+        
+        notifications = _get_user_notifications(user_id)
+        
+        if notification_id:
+            for notification in notifications:
+                if notification.get("id") == notification_id:
+                    notification["read"] = True
+                    notification["read_at"] = datetime.now().isoformat()
+                    break
+        else:
+            for notification in notifications:
+                notification["read"] = True
+                notification["read_at"] = datetime.now().isoformat()
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Уведомление отмечено как прочитанное"
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /notifications/mark-read: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== EMAIL API ====================
+
+@app.get("/email/unread-count")
+async def get_unread_email_count(user_id: str = None):
+    """Получить количество непрочитанных писем"""
+    try:
+        from services.helpers.email_helper import check_new_emails
+        
+        emails = await check_new_emails(since_days=1, limit=10)
+        unread_count = len(emails) if emails else 0
+        
+        return JSONResponse({
+            "unread_count": unread_count,
+            "user_id": user_id
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /email/unread-count: {e}")
+        return JSONResponse({
+            "unread_count": 0,
+            "user_id": user_id,
+            "error": str(e)
+        })
+
+@app.get("/email/recent")
+async def get_recent_emails(user_id: str = None, limit: int = 10):
+    """Получить последние письма"""
+    try:
+        from services.helpers.email_helper import check_new_emails
+        
+        emails = await check_new_emails(since_days=7, limit=limit)
+        
+        formatted_emails = []
+        for email in (emails or []):
+            formatted_emails.append({
+                "id": email.get("id", ""),
+                "subject": email.get("subject", "Без темы"),
+                "from": email.get("from", "Неизвестно"),
+                "date": email.get("date", ""),
+                "preview": email.get("preview", "")[:100] if email.get("preview") else ""
+            })
+        
+        # Создаем уведомления для новых писем
+        if user_id and formatted_emails:
+            for email in formatted_emails[:3]:
+                _add_notification(user_id, {
+                    "type": "email",
+                    "title": f"Новое письмо: {email['subject']}",
+                    "message": f"От: {email['from']}",
+                    "action_url": f"/email"
+                })
+        
+        return JSONResponse({
+            "emails": formatted_emails,
+            "count": len(formatted_emails)
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /email/recent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== CHAT SYNC API ====================
+
+@app.post("/chat")
+async def chat_sync(request_data: dict):
+    """Синхронизировать сообщение из mini app с базой данных"""
+    try:
+        from backend.database.message_storage import save_telegram_message
+        
+        message = request_data.get("message", "")
+        user_id = request_data.get("user_id", "anonymous")
+        platform = request_data.get("platform", "miniapp")
+        
+        if not message:
+            raise HTTPException(status_code=400, detail="Сообщение не может быть пустым")
+        
+        # Сохраняем сообщение в базу данных
+        try:
+            user_id_int = int(user_id) if user_id != "anonymous" and str(user_id).isdigit() else None
+            if user_id_int:
+                save_telegram_message(
+                    user_id=user_id_int,
+                    chat_id=user_id_int,
+                    message_id=None,
+                    role="user",
+                    content=message,
+                    message_type="text",
+                    metadata={"platform": platform},
+                    save_to_redis=True,
+                    save_to_postgres=True,
+                    save_to_qdrant=True
+                )
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка сохранения сообщения: {e}")
+        
+        # Используем LangGraph workflow
+        from backend.api.services import query_with_conversation_workflow
+        
+        result = await query_with_conversation_workflow(
+            message=message,
+            user_id=str(user_id),
+            platform=platform
+        )
+        
+        # Сохраняем ответ ассистента
+        if user_id_int and result.get("response"):
+            try:
+                save_telegram_message(
+                    user_id=user_id_int,
+                    chat_id=user_id_int,
+                    message_id=None,
+                    role="assistant",
+                    content=result.get("response", ""),
+                    message_type="text",
+                    metadata={"platform": platform},
+                    save_to_redis=True,
+                    save_to_postgres=True,
+                    save_to_qdrant=False
+                )
+            except Exception as e:
+                log.warning(f"⚠️ Ошибка сохранения ответа: {e}")
+        
+        return JSONResponse({
+            "response": result.get("response", ""),
+            "status": result.get("status", "success"),
+            "task_type": result.get("task_type", "general")
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /chat: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/chat/history")
+async def get_chat_history(user_id: str, limit: int = 20):
+    """Получить историю чата пользователя (синхронизированную между Telegram и mini app)"""
+    try:
+        from backend.database import get_user_memory
+        
+        user_id_int = int(user_id) if user_id.isdigit() else None
+        if not user_id_int:
+            raise HTTPException(status_code=400, detail="Неверный user_id")
+        
+        history = get_user_memory(user_id_int, limit=limit)
+        
+        formatted_history = []
+        for msg in history:
+            formatted_history.append({
+                "role": msg.get("role", "user"),
+                "content": msg.get("text", msg.get("content", "")),
+                "created_at": msg.get("created_at", ""),
+                "platform": msg.get("platform", "unknown")
+            })
+        
+        return JSONResponse({
+            "history": formatted_history,
+            "count": len(formatted_history)
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /chat/history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ===================== MAIN =====================
 
 def main():

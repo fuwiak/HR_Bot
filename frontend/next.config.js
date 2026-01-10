@@ -38,9 +38,10 @@ const nextConfig = {
     const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
     return [
       // Проксируем все API запросы на backend
+      // Убираем /api из destination, так как в web_interface.py эндпоинты без префикса /api
       {
         source: '/api/:path*',
-        destination: `${backendUrl}/api/:path*`, // Proxy to FastAPI backend
+        destination: `${backendUrl}/:path*`, // Proxy to FastAPI backend
       },
     ];
   },
