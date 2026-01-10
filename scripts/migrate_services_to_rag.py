@@ -35,17 +35,55 @@ from qdrant_client.http.models import PointStruct
 # КОНФИГ
 # =============================================================================
 
-QDRANT_URL = "https://qdrant-production-bf97.up.railway.app"
-COLLECTION_NAME = "hr2137_bot_knowledge_base"
+# Используем ту же логику определения URL что и в qdrant_helper.py
+try:
+    from config import load_config
+    _qdrant_config = load_config("qdrant")
+    _qdrant_settings = _qdrant_config.get("qdrant", {})
+except Exception:
+    _qdrant_settings = {}
+
+# Приоритет: QDRANT_HOST -> RAILWAY_SERVICE_QDRANT_URL -> private domain -> QDRANT_URL
+QDRANT_HOST = _qdrant_settings.get("host") or os.getenv("QDRANT_HOST")
+RAILWAY_SERVICE_QDRANT_URL = os.getenv("RAILWAY_SERVICE_QDRANT_URL")
+QDRANT_PORT = _qdrant_settings.get("port") or os.getenv("QDRANT_PORT", "6333")
+
+if QDRANT_HOST:
+    # Определяем, является ли домен публичным
+    is_public_domain = (
+        ".up.railway.app" in QDRANT_HOST or
+        ".railway.app" in QDRANT_HOST or
+        QDRANT_HOST.startswith("https://")
+    )
+    if is_public_domain:
+        if QDRANT_HOST.startswith("https://"):
+            QDRANT_URL = QDRANT_HOST
+        elif QDRANT_HOST.startswith("http://"):
+            QDRANT_URL = QDRANT_HOST.replace("http://", "https://")
+        else:
+            QDRANT_URL = f"https://{QDRANT_HOST}"
+    else:
+        QDRANT_URL = f"http://{QDRANT_HOST}:{QDRANT_PORT}"
+elif RAILWAY_SERVICE_QDRANT_URL:
+    if RAILWAY_SERVICE_QDRANT_URL.startswith("https://"):
+        QDRANT_URL = RAILWAY_SERVICE_QDRANT_URL
+    else:
+        QDRANT_URL = f"https://{RAILWAY_SERVICE_QDRANT_URL}"
+elif os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_PROJECT_ID"):
+    QDRANT_URL = f"http://qdrant.railway.internal:{QDRANT_PORT}"
+else:
+    QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+
+COLLECTION_NAME = _qdrant_settings.get("collection_name", "hr2137_bot_knowledge_base")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")  # Опциональный API ключ для Qdrant
 EMBEDDING_MODEL = "qwen/qwen3-embedding-8b"  # 1536-мерные эмбеддинги для совместимости с Qdrant коллекцией
 
-# Таймауты для Qdrant
-QDRANT_TIMEOUT = 30.0  # Увеличенный таймаут для SSL handshake
-QDRANT_MAX_RETRIES = 3
-QDRANT_RETRY_DELAY = 2.0
+# Таймауты для Qdrant (уменьшены для быстрого запуска)
+QDRANT_TIMEOUT = 10.0  # Уменьшенный таймаут для быстрого запуска
+QDRANT_MAX_RETRIES = 2  # Меньше попыток
+QDRANT_RETRY_DELAY = 1.0  # Меньше задержка
 
 if not OPENROUTER_API_KEY:
     print("❌ Установите переменную окружения OPENROUTER_API_KEY=sk-or-...")
