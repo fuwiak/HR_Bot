@@ -7,13 +7,20 @@ import styles from './Notifications.module.css'
 
 interface Notification {
   id: string
-  type: 'email' | 'task' | 'project' | 'system'
+  type: 'email' | 'task' | 'project' | 'system' | 'hrtime' | 'deadline'
   title: string
   message: string
   created_at: string
   read: boolean
   read_at?: string
   action_url?: string
+  metadata?: {
+    order_id?: string
+    score?: number
+    category?: string
+    client_name?: string
+    client_email?: string
+  }
 }
 
 interface NotificationsProps {
@@ -26,6 +33,7 @@ export default function Notifications({ userId }: NotificationsProps) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [previousUnreadCount, setPreviousUnreadCount] = useState(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const loadNotifications = async () => {
@@ -38,8 +46,25 @@ export default function Notifications({ userId }: NotificationsProps) {
         getUnreadNotificationCount(userId)
       ])
       
-      setNotifications(notificationsData.notifications || [])
-      setUnreadCount(unreadData.unread_count || 0)
+      const newNotifications = notificationsData.notifications || []
+      const newUnreadCount = unreadData.unread_count || 0
+      
+      setNotifications(newNotifications)
+      
+      // Toast notification для новых уведомлений
+      if (newUnreadCount > previousUnreadCount && previousUnreadCount > 0) {
+        const newNotificationsCount = newUnreadCount - previousUnreadCount
+        if (newNotificationsCount > 0) {
+          // Haptic feedback для новых уведомлений
+          WebApp?.HapticFeedback?.impactOccurred('medium')
+          
+          // Можно добавить toast notification здесь
+          console.log(`🔔 ${newNotificationsCount} новое(ых) уведомление(й)`)
+        }
+      }
+      
+      setPreviousUnreadCount(newUnreadCount)
+      setUnreadCount(newUnreadCount)
     } catch (error: any) {
       console.error('Ошибка загрузки уведомлений:', error)
     } finally {
@@ -121,6 +146,10 @@ export default function Notifications({ userId }: NotificationsProps) {
     switch (type) {
       case 'email':
         return '📧'
+      case 'hrtime':
+        return '🔥'
+      case 'deadline':
+        return '⏰'
       case 'task':
         return '📋'
       case 'project':
@@ -186,6 +215,7 @@ export default function Notifications({ userId }: NotificationsProps) {
                   key={notification.id}
                   className={`${styles.notification} ${!notification.read ? styles.unread : ''}`}
                   onClick={() => handleNotificationClick(notification)}
+                  data-type={notification.type}
                 >
                   <div className={styles.notificationIcon}>
                     {getNotificationIcon(notification.type)}

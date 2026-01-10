@@ -451,6 +451,62 @@ export async function getUnreadEmailCount(userId?: string) {
   return response.json();
 }
 
+// HRTime Notifications API
+export async function getHRTimeNotifications(userId: string, limit: number = 20) {
+  const response = await fetch(`${API_BASE}/notifications/hrtime?user_id=${encodeURIComponent(userId)}&limit=${limit}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function createHRTimeNotification(
+  userId: string,
+  orderId: string,
+  orderData: {
+    title?: string
+    client_name?: string
+    client_email?: string
+    score?: number
+    category?: string
+  }
+) {
+  const response = await fetch(`${API_BASE}/notifications/hrtime`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      order_id: orderId,
+      order_data: orderData
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function syncNotificationsFromTelegram(userId: string, notifications: any[]) {
+  const response = await fetch(`${API_BASE}/notifications/sync-from-telegram`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      notifications: notifications
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 
 
 

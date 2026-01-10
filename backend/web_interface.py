@@ -818,6 +818,111 @@ async def mark_notification_read(request_data: dict):
         log.error(f"❌ Ошибка в /notifications/mark-read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/notifications/hrtime")
+async def create_hrtime_notification(request_data: dict):
+    """Создать уведомление из HRTime заказа"""
+    try:
+        user_id = request_data.get("user_id")
+        order_id = request_data.get("order_id")
+        order_data = request_data.get("order_data", {})
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id обязателен")
+        if not order_id:
+            raise HTTPException(status_code=400, detail="order_id обязателен")
+        
+        client_name = order_data.get("client_name", "Неизвестно")
+        client_email = order_data.get("client_email", "")
+        score = order_data.get("score", 0)
+        category = order_data.get("category", "")
+        
+        notification = {
+            "type": "hrtime",
+            "title": f"🔥 Новый заказ HR Time #{order_id}",
+            "message": f"Клиент: {client_name}" + (f" | Email: {client_email}" if client_email else ""),
+            "action_url": f"/projects?order={order_id}",
+            "metadata": {
+                "order_id": order_id,
+                "score": score,
+                "category": category,
+                "client_name": client_name,
+                "client_email": client_email
+            }
+        }
+        
+        _add_notification(user_id, notification)
+        log.info(f"✅ Создано уведомление HRTime для пользователя {user_id}, заказ {order_id}")
+        
+        return JSONResponse({
+            "success": True,
+            "notification": notification
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /notifications/hrtime: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/notifications/hrtime")
+async def get_hrtime_notifications(user_id: str = None, limit: int = 20):
+    """Получить список уведомлений HRTime для пользователя"""
+    try:
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id обязателен")
+        
+        notifications = _get_user_notifications(user_id)
+        hrtime_notifications = [
+            n for n in notifications 
+            if n.get("type") == "hrtime"
+        ]
+        
+        sorted_notifications = sorted(
+            hrtime_notifications,
+            key=lambda x: x.get("created_at", ""),
+            reverse=True
+        )[:limit]
+        
+        return JSONResponse({
+            "notifications": sorted_notifications,
+            "count": len(sorted_notifications),
+            "total": len(hrtime_notifications)
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /notifications/hrtime: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/notifications/sync-from-telegram")
+async def sync_notifications_from_telegram(request_data: dict):
+    """Синхронизировать уведомления из Telegram бота с Mini App"""
+    try:
+        user_id = request_data.get("user_id")
+        telegram_notifications = request_data.get("notifications", [])
+        
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id обязателен")
+        
+        synced_count = 0
+        for tg_notification in telegram_notifications:
+            # Преобразуем формат Telegram уведомления в формат Mini App
+            notification = {
+                "type": tg_notification.get("type", "system"),
+                "title": tg_notification.get("title", "Уведомление"),
+                "message": tg_notification.get("message", ""),
+                "action_url": tg_notification.get("action_url"),
+                "metadata": tg_notification.get("metadata", {})
+            }
+            
+            _add_notification(user_id, notification)
+            synced_count += 1
+        
+        log.info(f"✅ Синхронизировано {synced_count} уведомлений для пользователя {user_id}")
+        
+        return JSONResponse({
+            "success": True,
+            "synced_count": synced_count
+        })
+    except Exception as e:
+        log.error(f"❌ Ошибка в /notifications/sync-from-telegram: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ==================== EMAIL API ====================
 

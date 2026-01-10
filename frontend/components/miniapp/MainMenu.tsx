@@ -21,6 +21,8 @@ interface MainMenuProps {
 export default function MainMenu({ user, onNavigate, isAdmin = false }: MainMenuProps) {
   const WebApp = useWebApp()
   const [unreadEmailCount, setUnreadEmailCount] = useState(0)
+  const [loadingEmailCount, setLoadingEmailCount] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (user?.id) {
@@ -32,17 +34,30 @@ export default function MainMenu({ user, onNavigate, isAdmin = false }: MainMenu
   }, [user?.id])
 
   const loadUnreadEmailCount = async () => {
+    if (!user?.id) return
+    
     try {
-      const result = await getUnreadEmailCount(user?.id?.toString())
+      setLoadingEmailCount(true)
+      setError(null)
+      const result = await getUnreadEmailCount(user.id.toString())
       setUnreadEmailCount(result.unread_count || 0)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Ошибка загрузки количества писем:', error)
+      setError('Не удалось загрузить количество писем')
+      // Не показываем ошибку пользователю, просто логируем
+    } finally {
+      setLoadingEmailCount(false)
     }
   }
 
   const handleNavigate = (page: PageType | `submenu_${SubMenuType}`) => {
+    // Haptic feedback
     WebApp?.HapticFeedback?.impactOccurred('light')
-    onNavigate(page)
+    
+    // Smooth transition - небольшая задержка для визуального эффекта
+    setTimeout(() => {
+      onNavigate(page)
+    }, 100)
   }
 
   const handleCardClick = (page: PageType) => {

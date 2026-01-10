@@ -114,7 +114,7 @@ async def monitor_hrtime_orders(telegram_bot, interval_minutes: int = 30):
                                 last_channel_message_id = message_id
                             orders_found += 1
                             
-                            # Отправляем уведомление консультанту
+                            # Отправляем уведомление консультанту в Telegram
                             if result.get("notification_text") and telegram_bot:
                                 consultant_chat_id = os.getenv("TELEGRAM_CONSULTANT_CHAT_ID")
                                 if consultant_chat_id:
@@ -127,6 +127,52 @@ async def monitor_hrtime_orders(telegram_bot, interval_minutes: int = 30):
                                         log.info(f"✅ [Мониторинг] Консультант уведомлен о заказе {order_id}")
                                     except Exception as e:
                                         log.error(f"❌ [Мониторинг] Ошибка отправки уведомления: {e}")
+                            
+                            # Создаем уведомление в Mini App через Backend API
+                            try:
+                                backend_url = os.getenv("BACKEND_URL") or os.getenv("NEXT_PUBLIC_API_URL") or "http://localhost:8081"
+                                if not backend_url.startswith("http"):
+                                    backend_url = f"https://{backend_url}"
+                                
+                                # Получаем данные заказа для уведомления
+                                order_title = order_data.get("title", f"Заказ #{order_id}")
+                                client_name = order_data.get("client_name", "Неизвестно")
+                                client_email = order_data.get("client_email", "")
+                                score = result.get("score", 0)
+                                category = result.get("category", "")
+                                
+                                # Отправляем уведомление всем админам
+                                admin_ids = os.getenv("TELEGRAM_ADMIN_IDS", "5305427956").split(",")
+                                import aiohttp
+                                async with aiohttp.ClientSession() as session:
+                                    for admin_id in admin_ids:
+                                        admin_id = admin_id.strip()
+                                        if admin_id:
+                                            try:
+                                                notification_data = {
+                                                    "user_id": admin_id,
+                                                    "order_id": order_id,
+                                                    "order_data": {
+                                                        "title": order_title,
+                                                        "client_name": client_name,
+                                                        "client_email": client_email,
+                                                        "score": score,
+                                                        "category": category
+                                                    }
+                                                }
+                                                async with session.post(
+                                                    f"{backend_url}/notifications/hrtime",
+                                                    json=notification_data,
+                                                    timeout=aiohttp.ClientTimeout(total=5)
+                                                ) as response:
+                                                    if response.status == 200:
+                                                        log.info(f"✅ [Мониторинг] Уведомление Mini App создано для админа {admin_id}, заказ {order_id}")
+                                                    else:
+                                                        log.warning(f"⚠️ [Мониторинг] Ошибка создания уведомления Mini App: {response.status}")
+                                            except Exception as e:
+                                                log.warning(f"⚠️ [Мониторинг] Не удалось создать уведомление Mini App для {admin_id}: {e}")
+                            except Exception as e:
+                                log.warning(f"⚠️ [Мониторинг] Ошибка создания уведомления Mini App: {e}")
                         
                         await asyncio.sleep(2)
                     
