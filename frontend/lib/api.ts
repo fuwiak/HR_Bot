@@ -162,6 +162,141 @@ export async function updateRAGParameters(params: {
   return response.json();
 }
 
+// Email API
+export async function checkEmails() {
+  const response = await fetch(`${API_BASE}/email/check`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function generateEmailDraft(request: string) {
+  const response = await fetch(`${API_BASE}/email/draft`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ request }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// WEEEK API
+export async function getWEEEKProjects() {
+  const response = await fetch(`${API_BASE}/weeek/projects`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getWEEEKTasks(projectId?: string) {
+  const url = projectId 
+    ? `${API_BASE}/weeek/tasks?project_id=${projectId}`
+    : `${API_BASE}/weeek/tasks`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function createWEEEKTask(projectName: string, taskName: string) {
+  const response = await fetch(`${API_BASE}/weeek/task`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: projectName, task: taskName }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getWEEEKStatus() {
+  const response = await fetch(`${API_BASE}/weeek/status`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Tools API
+export async function generateSummary(projectName: string) {
+  const response = await fetch(`${API_BASE}/tools/summary`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: projectName }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function generateReport(projectName: string) {
+  const response = await fetch(`${API_BASE}/tools/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ project: projectName }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function generateHypothesis(description: string) {
+  const response = await fetch(`${API_BASE}/tools/hypothesis`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Chat API
+export async function sendChatMessage(message: string, userId?: string) {
+  const response = await fetch(`${API_BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      message,
+      user_id: userId || 'miniapp_user',
+      platform: 'miniapp'
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 
 
 

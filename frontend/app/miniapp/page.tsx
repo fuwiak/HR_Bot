@@ -11,8 +11,9 @@ import Projects from '@/components/miniapp/Projects'
 import Tools from '@/components/miniapp/Tools'
 import Help from '@/components/miniapp/Help'
 import Chat from '@/components/miniapp/Chat'
+import Email from '@/components/miniapp/Email'
 
-type Page = 'main' | 'knowledge' | 'projects' | 'tools' | 'help' | 'chat'
+type Page = 'main' | 'knowledge' | 'projects' | 'tools' | 'help' | 'chat' | 'email'
 
 export default function MiniAppPage() {
   const [currentPage, setCurrentPage] = useState<Page>('main')
@@ -80,6 +81,11 @@ export default function MiniAppPage() {
       )}
       {currentPage === 'chat' && (
         <Chat 
+          onBack={() => setCurrentPage('main')}
+        />
+      )}
+      {currentPage === 'email' && (
+        <Email 
           onBack={() => setCurrentPage('main')}
         />
       )}

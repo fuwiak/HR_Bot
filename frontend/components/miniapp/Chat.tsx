@@ -20,14 +20,21 @@ export default function Chat({ onBack }: ChatProps) {
     setMessages(prev => [...prev, { role: 'user', text: userMessage }])
     setLoading(true)
 
-    // TODO: Implement API call to backend chat endpoint
-    setTimeout(() => {
+    try {
+      const { sendChatMessage } = await import('@/lib/api')
+      const result = await sendChatMessage(userMessage)
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        text: 'Функция чата будет доступна в следующей версии. Пока используйте команды в боте.' 
+        text: result.response || result.text || 'Извините, не удалось получить ответ.' 
       }])
+    } catch (error: any) {
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        text: `Ошибка: ${error.message || 'Не удалось отправить сообщение'}` 
+      }])
+    } finally {
       setLoading(false)
-    }, 1000)
+    }
   }
 
   return (

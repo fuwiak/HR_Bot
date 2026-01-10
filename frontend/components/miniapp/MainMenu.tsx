@@ -5,13 +5,13 @@ import styles from './MainMenu.module.css'
 
 interface MainMenuProps {
   user: any
-  onNavigate: (page: 'knowledge' | 'projects' | 'tools' | 'help' | 'chat') => void
+  onNavigate: (page: 'knowledge' | 'projects' | 'tools' | 'help' | 'chat' | 'email') => void
 }
 
 export default function MainMenu({ user, onNavigate }: MainMenuProps) {
   const WebApp = useWebApp()
 
-  const handleNavigate = (page: 'knowledge' | 'projects' | 'tools' | 'help' | 'chat') => {
+  const handleNavigate = (page: 'knowledge' | 'projects' | 'tools' | 'help' | 'chat' | 'email') => {
     WebApp?.HapticFeedback?.impactOccurred('light')
     onNavigate(page)
   }
@@ -63,6 +63,15 @@ export default function MainMenu({ user, onNavigate }: MainMenuProps) {
           <div className={styles.icon}>💬</div>
           <h2>Чат с AI</h2>
           <p>Общение с умным помощником</p>
+        </button>
+
+        <button 
+          className={styles.card}
+          onClick={() => handleNavigate('email')}
+        >
+          <div className={styles.icon}>📧</div>
+          <h2>Email</h2>
+          <p>Проверка писем, черновики</p>
         </button>
 
         <button 
