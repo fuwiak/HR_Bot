@@ -3,6 +3,15 @@ const nextConfig = {
   reactStrictMode: true,
   output: 'standalone', // Для Docker деплоя на Railway
   
+  // Настройка путей для импортов
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': require('path').resolve(__dirname),
+    };
+    return config;
+  },
+  
   // Настройки для Telegram Mini App
   async headers() {
     return [
