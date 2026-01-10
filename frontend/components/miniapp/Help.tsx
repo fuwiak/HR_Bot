@@ -1,6 +1,5 @@
 'use client'
 
-import WebApp from '@twa-dev/sdk'
 import styles from './Help.module.css'
 
 interface HelpProps {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import WebApp from '@twa-dev/sdk'
+import { useWebApp } from '@/lib/useWebApp'
 import styles from './Projects.module.css'
 
 interface ProjectsProps {
@@ -9,6 +9,7 @@ interface ProjectsProps {
 }
 
 export default function Projects({ onBack }: ProjectsProps) {
+  const WebApp = useWebApp()
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'status' | 'summary'>('list')
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -19,9 +20,9 @@ export default function Projects({ onBack }: ProjectsProps) {
     try {
       // const result = await getProjects()
       // setProjects(result)
-      WebApp.showAlert('Функция в разработке')
+      WebApp?.showAlert('Функция в разработке')
     } catch (error: any) {
-      WebApp.showAlert(error.message)
+      WebApp?.showAlert(error.message)
     } finally {
       setLoading(false)
     }

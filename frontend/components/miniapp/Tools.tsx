@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import WebApp from '@twa-dev/sdk'
+import { useWebApp } from '@/lib/useWebApp'
 import { generateProposal } from '@/lib/api'
 import styles from './Tools.module.css'
 
@@ -10,6 +10,7 @@ interface ToolsProps {
 }
 
 export default function Tools({ onBack }: ToolsProps) {
+  const WebApp = useWebApp()
   const [activeTab, setActiveTab] = useState<'proposal' | 'summary'>('proposal')
   const [proposalRequest, setProposalRequest] = useState('')
   const [proposalResult, setProposalResult] = useState<string | null>(null)
@@ -17,18 +18,18 @@ export default function Tools({ onBack }: ToolsProps) {
 
   const handleGenerateProposal = async () => {
     if (!proposalRequest.trim()) {
-      WebApp.showAlert('Введите запрос клиента')
+      WebApp?.showAlert('Введите запрос клиента')
       return
     }
 
     setLoading(true)
-    WebApp.HapticFeedback.impactOccurred('medium')
+    WebApp?.HapticFeedback?.impactOccurred('medium')
     
     try {
       const result = await generateProposal(proposalRequest)
       setProposalResult(result.proposal || result.text || JSON.stringify(result, null, 2))
     } catch (error: any) {
-      WebApp.showAlert(error.message)
+      WebApp?.showAlert(error.message)
     } finally {
       setLoading(false)
     }
@@ -89,7 +90,7 @@ export default function Tools({ onBack }: ToolsProps) {
                   className={styles.copyButton}
                   onClick={() => {
                     navigator.clipboard.writeText(proposalResult)
-                    WebApp.showAlert('Скопировано!')
+                    WebApp?.showAlert('Скопировано!')
                   }}
                 >
                   📋 Копировать

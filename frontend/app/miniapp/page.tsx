@@ -1,7 +1,9 @@
 'use client'
 
+// Отключаем SSR для этой страницы, так как она использует Telegram WebApp API
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState } from 'react'
-import WebApp from '@twa-dev/sdk'
 import styles from './page.module.css'
 import MainMenu from '@/components/miniapp/MainMenu'
 import KnowledgeBase from '@/components/miniapp/KnowledgeBase'
@@ -18,21 +20,24 @@ export default function MiniAppPage() {
   const [user, setUser] = useState<any>(null)
 
   useEffect(() => {
-    // Инициализация Telegram WebApp
+    // Динамический импорт @twa-dev/sdk только на клиенте
     if (typeof window !== 'undefined') {
-      WebApp.ready()
-      WebApp.expand()
-      
-      // Настройка темы
-      WebApp.setHeaderColor('#667eea')
-      WebApp.setBackgroundColor('#ffffff')
-      
-      // Получаем данные пользователя
-      if (WebApp.initDataUnsafe?.user) {
-        setUser(WebApp.initDataUnsafe.user)
-      }
-      
-      setIsReady(true)
+      import('@twa-dev/sdk').then(({ default: WebApp }) => {
+        // Инициализация Telegram WebApp
+        WebApp.ready()
+        WebApp.expand()
+        
+        // Настройка темы
+        WebApp.setHeaderColor('#667eea')
+        WebApp.setBackgroundColor('#ffffff')
+        
+        // Получаем данные пользователя
+        if (WebApp.initDataUnsafe?.user) {
+          setUser(WebApp.initDataUnsafe.user)
+        }
+        
+        setIsReady(true)
+      })
     }
   }, [])
 

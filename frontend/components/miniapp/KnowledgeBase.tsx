@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import WebApp from '@twa-dev/sdk'
+import { useWebApp } from '@/lib/useWebApp'
 import { searchRAG, getRAGStats, getRAGDocs } from '@/lib/api'
 import styles from './KnowledgeBase.module.css'
 
@@ -10,6 +10,7 @@ interface KnowledgeBaseProps {
 }
 
 export default function KnowledgeBase({ onBack }: KnowledgeBaseProps) {
+  const WebApp = useWebApp()
   const [activeTab, setActiveTab] = useState<'search' | 'docs' | 'stats'>('search')
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<any>(null)
@@ -21,13 +22,13 @@ export default function KnowledgeBase({ onBack }: KnowledgeBaseProps) {
     if (!searchQuery.trim()) return
     
     setLoading(true)
-    WebApp.HapticFeedback.impactOccurred('light')
+    WebApp?.HapticFeedback?.impactOccurred('light')
     
     try {
       const results = await searchRAG(searchQuery, 5)
       setSearchResults(results)
     } catch (error: any) {
-      WebApp.showAlert(error.message)
+      WebApp?.showAlert(error.message)
     } finally {
       setLoading(false)
     }
@@ -39,7 +40,7 @@ export default function KnowledgeBase({ onBack }: KnowledgeBaseProps) {
       const result = await getRAGDocs(20)
       setDocs(result.docs || [])
     } catch (error: any) {
-      WebApp.showAlert(error.message)
+      WebApp?.showAlert(error.message)
     } finally {
       setLoading(false)
     }
@@ -51,7 +52,7 @@ export default function KnowledgeBase({ onBack }: KnowledgeBaseProps) {
       const result = await getRAGStats()
       setStats(result)
     } catch (error: any) {
-      WebApp.showAlert(error.message)
+      WebApp?.showAlert(error.message)
     } finally {
       setLoading(false)
     }

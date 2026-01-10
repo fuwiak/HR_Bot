@@ -1,6 +1,6 @@
 'use client'
 
-import WebApp from '@twa-dev/sdk'
+import { useWebApp } from '@/lib/useWebApp'
 import styles from './MainMenu.module.css'
 
 interface MainMenuProps {
@@ -9,8 +9,10 @@ interface MainMenuProps {
 }
 
 export default function MainMenu({ user, onNavigate }: MainMenuProps) {
+  const WebApp = useWebApp()
+
   const handleNavigate = (page: 'knowledge' | 'projects' | 'tools' | 'help' | 'chat') => {
-    WebApp.HapticFeedback.impactOccurred('light')
+    WebApp?.HapticFeedback?.impactOccurred('light')
     onNavigate(page)
   }
 

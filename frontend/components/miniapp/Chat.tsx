@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import WebApp from '@twa-dev/sdk'
 import styles from './Chat.module.css'
 
 interface ChatProps {
