@@ -68,16 +68,24 @@
 
 .card {
   position: relative;
-  background: white;
-  border: none;
-  border-radius: 16px;
+  /* Retro dark theme с неоморфизмом */
+  background: linear-gradient(135deg, #2a2a3e 0%, #1e1e2e 100%);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
   padding: 20px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   text-align: left;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08),
-              0 2px 4px rgba(0, 0, 0, 0.04);
+  /* Retro неоморфизм с темным фоном */
+  box-shadow: 
+    8px 8px 16px rgba(0, 0, 0, 0.4),
+    -8px -8px 16px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   overflow: hidden;
+  /* Retro текстура */
+  background-image: 
+    radial-gradient(circle at 20% 50%, rgba(102, 126, 234, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.1) 0%, transparent 50%);
 }
 
 .card::before {
@@ -93,9 +101,13 @@
 }
 
 .card:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12),
-              0 4px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-6px) scale(1.03);
+  border-color: rgba(102, 126, 234, 0.5);
+  box-shadow: 
+    12px 12px 24px rgba(0, 0, 0, 0.5),
+    -12px -12px 24px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 20px rgba(102, 126, 234, 0.3); /* Retro glow */
 }
 
 .card:hover::before {
@@ -107,11 +119,10 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
-/* Уникальные градиенты для каждой категории (Modern + Retro mix) */
+/* Уникальные градиенты для каждой категории (Modern + Retro mix) - Dark theme */
 .card:nth-child(1) {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: linear-gradient(135deg, #2a2a3e 0%, #1e1e2e 50%, #2a2a4e 100%);
+  border: 2px solid rgba(102, 126, 234, 0.2);
   position: relative;
 }
 
@@ -119,14 +130,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 50%, rgba(240, 147, 251, 0.3) 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .card:nth-child(1):hover::after {
@@ -134,9 +142,8 @@
 }
 
 .card:nth-child(2) {
-  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: linear-gradient(135deg, #1e2e3e 0%, #1a2a2e 50%, #1e3e4e 100%);
+  border: 2px solid rgba(79, 172, 254, 0.2);
   position: relative;
 }
 
@@ -144,14 +151,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 50%, #43e97b 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(79, 172, 254, 0.3) 0%, rgba(0, 242, 254, 0.3) 50%, rgba(67, 233, 123, 0.3) 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .card:nth-child(2):hover::after {
@@ -159,9 +163,8 @@
 }
 
 .card:nth-child(3) {
-  background: linear-gradient(135deg, #ffffff 0%, #fff5f5 100%);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: linear-gradient(135deg, #3e2a2a 0%, #2e1e1e 50%, #4e2a2a 100%);
+  border: 2px solid rgba(250, 112, 154, 0.2);
   position: relative;
 }
 
@@ -169,14 +172,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 50%, #ff6b6b 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(250, 112, 154, 0.3) 0%, rgba(254, 225, 64, 0.3) 50%, rgba(255, 107, 107, 0.3) 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .card:nth-child(3):hover::after {
@@ -184,9 +184,8 @@
 }
 
 .card:nth-child(4) {
-  background: linear-gradient(135deg, #ffffff 0%, #fef7ff 100%);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: linear-gradient(135deg, #2e1e2e 0%, #1e1e2e 50%, #2e2e3e 100%);
+  border: 2px solid rgba(168, 237, 234, 0.2);
   position: relative;
 }
 
@@ -194,14 +193,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 50%, #ff9a9e 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(168, 237, 234, 0.3) 0%, rgba(254, 214, 227, 0.3) 50%, rgba(255, 154, 158, 0.3) 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .card:nth-child(4):hover::after {
@@ -209,9 +205,8 @@
 }
 
 .card:nth-child(5) {
-  background: linear-gradient(135deg, #ffffff 0%, #f0f4ff 100%);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: linear-gradient(135deg, #2a2a3e 0%, #1e1e2e 50%, #2a2a4e 100%);
+  border: 2px solid rgba(102, 126, 234, 0.2);
   position: relative;
 }
 
@@ -219,14 +214,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .card:nth-child(5):hover::after {
@@ -234,9 +226,8 @@
 }
 
 .card:nth-child(6) {
-  background: linear-gradient(135deg, #ffffff 0%, #fffbf0 100%);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: linear-gradient(135deg, #3e2a1e 0%, #2e1e1e 50%, #4e2a1e 100%);
+  border: 2px solid rgba(250, 217, 97, 0.2);
   position: relative;
 }
 
@@ -244,14 +235,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, #fad961 0%, #f76b1c 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(250, 217, 97, 0.3) 0%, rgba(247, 107, 28, 0.3) 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .card:nth-child(6):hover::after {
@@ -259,9 +247,8 @@
 }
 
 .card:nth-child(7) {
-  background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: linear-gradient(135deg, #1e2e3e 0%, #1a2a2e 50%, #1e3e4e 100%);
+  border: 2px solid rgba(48, 207, 208, 0.2);
   position: relative;
 }
 
@@ -269,14 +256,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(48, 207, 208, 0.3) 0%, rgba(51, 8, 103, 0.3) 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .card:nth-child(7):hover::after {
@@ -284,9 +268,8 @@
 }
 
 .card:nth-child(8) {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: linear-gradient(135deg, #2a2a3e 0%, #1e1e2e 50%, #2a2a4e 100%);
+  border: 2px solid rgba(168, 192, 255, 0.2);
   position: relative;
 }
 
@@ -294,14 +277,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 16px;
-  padding: 2px;
-  background: linear-gradient(135deg, #a8c0ff 0%, #3f2b96 100%);
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(168, 192, 255, 0.3) 0%, rgba(63, 43, 150, 0.3) 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
 }
 
 .card:nth-child(8):hover::after {
@@ -370,7 +350,9 @@
   font-size: 18px;
   font-weight: 700;
   margin: 0 0 8px 0;
-  color: #1a1a1a;
+  /* Retro светлый текст для темного фона */
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   position: relative;
   z-index: 1;
   letter-spacing: -0.3px;
@@ -378,7 +360,7 @@
 
 .card p {
   font-size: 13px;
-  color: #666;
+  color: rgba(255, 255, 255, 0.7);
   margin: 0;
   line-height: 1.5;
   position: relative;
@@ -427,20 +409,20 @@
   backdrop-filter: blur(10px);
 }
 
-/* Retro неоморфизм эффекты для некоторых элементов */
-@media (prefers-color-scheme: light) {
-  .card {
-    /* Легкий неоморфизм */
-    box-shadow: 
-      8px 8px 16px rgba(0, 0, 0, 0.1),
-      -8px -8px 16px rgba(255, 255, 255, 0.8);
-  }
-  
-  .card:hover {
-    box-shadow: 
-      12px 12px 24px rgba(0, 0, 0, 0.15),
-      -12px -12px 24px rgba(255, 255, 255, 0.9);
-  }
+/* Retro неоморфизм - всегда активен для dark theme */
+.card {
+  box-shadow: 
+    8px 8px 16px rgba(0, 0, 0, 0.4),
+    -8px -8px 16px rgba(255, 255, 255, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.card:hover {
+  box-shadow: 
+    12px 12px 24px rgba(0, 0, 0, 0.5),
+    -12px -12px 24px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 20px rgba(102, 126, 234, 0.3);
 }
 
 @media (max-width: 480px) {
