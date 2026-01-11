@@ -465,7 +465,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if parsed_data:
                 # Создаем запись
-                result = await create_real_booking(user_id, parsed_data, context)
+                result = create_booking_from_parsed_data(user_id, parsed_data)
                 if result:
                     # Сохраняем ответ бота
                     try:
