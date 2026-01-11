@@ -453,49 +453,101 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обновляем индикатор перед RAG поиском
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
         
-        # Используем RAG поиск если нужно
+        # ВСЕГДА используем RAG поиск в базе знаний (это основной функционал приложения)
         rag_context = ""
-        if len(text) > 10:  # Только для достаточно длинных запросов
-            try:
-                log.info(f"🔍 [RAG] Поиск в коллекции 'hr2137_bot_knowledge_base' для запроса: '{text[:100]}'")
-                results = search_service(text, limit=3)
-                if results:
-                    log.info(f"✅ [RAG] Найдено {len(results)} результатов в коллекции 'hr2137_bot_knowledge_base'")
-                    # Сортируем по score (уже отсортировано в search_service, но на всякий случай)
-                    results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
-                    rag_context = "\n\nРелевантная информация из базы знаний:\n"
-                    for i, result in enumerate(results_sorted[:3], 1):
-                        title = result.get('title', 'Без названия')
-                        price_str = result.get('price_str', '')
-                        score = result.get('score', 0)
-                        # Используем price_str если есть, иначе пытаемся получить из content
-                        content = result.get('content', '')
-                        if price_str:
-                            rag_context += f"{i}. {title} - {price_str} (релевантность: {score:.2f})\n"
-                        elif content:
-                            rag_context += f"{i}. {title}: {content[:200]}... (релевантность: {score:.2f})\n"
+        try:
+            from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
+            
+            log.info(f"🔍 [RAG] Поиск в базе знаний для запроса: '{text[:100]}'")
+            
+            client = get_qdrant_client()
+            if client:
+                # Генерируем эмбеддинг для запроса
+                query_embedding = await generate_embedding_async(text)
+                
+                if query_embedding:
+                    collection_name = "hr2137_bot_knowledge_base"
+                    
+                    try:
+                        # Ищем в Qdrant
+                        search_results = client.query_points(
+                            collection_name=collection_name,
+                            query=query_embedding,
+                            limit=5
+                        )
+                        
+                        if search_results.points:
+                            log.info(f"✅ [RAG] Найдено {len(search_results.points)} результатов в базе знаний")
+                            
+                            # Собираем результаты
+                            results = []
+                            for point in search_results.points:
+                                payload = point.payload if hasattr(point, 'payload') else {}
+                                score = point.score if hasattr(point, 'score') else 0.0
+                                
+                                # Извлекаем информацию о документе
+                                file_name = payload.get("file_name") or payload.get("title") or payload.get("source", "Документ")
+                                text_content = payload.get("text") or payload.get("content", "")
+                                
+                                if text_content and score > 0.3:  # Минимальный порог релевантности
+                                    results.append({
+                                        "file_name": file_name,
+                                        "text": text_content,
+                                        "score": score
+                                    })
+                            
+                            # Сортируем по score и берем топ-3
+                            results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)[:3]
+                            
+                            if results_sorted:
+                                rag_context = "\n\n📚 Релевантная информация из базы знаний:\n\n"
+                                for i, result in enumerate(results_sorted, 1):
+                                    file_name = result.get('file_name', 'Документ')
+                                    text_snippet = result.get('text', '')[:300]  # Первые 300 символов
+                                    score = result.get('score', 0)
+                                    rag_context += f"{i}. {file_name} (релевантность: {score:.2f}):\n{text_snippet}...\n\n"
+                                log.info(f"✅ [RAG] Сформирован контекст из {len(results_sorted)} документов")
+                            else:
+                                log.info(f"ℹ️ [RAG] Результаты найдены, но не прошли порог релевантности")
                         else:
-                            rag_context += f"{i}. {title} (релевантность: {score:.2f})\n"
+                            log.info(f"ℹ️ [RAG] Результаты не найдены в базе знаний для запроса: '{text[:100]}'")
+                    except Exception as search_error:
+                        error_str = str(search_error).lower()
+                        if "timeout" in error_str or "timed out" in error_str:
+                            log.warning(f"⚠️ [RAG] Таймаут при поиске в базе знаний: {search_error}")
+                        else:
+                            log.warning(f"⚠️ [RAG] Ошибка поиска в базе знаний: {search_error}")
                 else:
-                    log.info(f"ℹ️ [RAG] Результаты не найдены в коллекции 'hr2137_bot_knowledge_base' для запроса: '{text[:100]}'")
-            except Exception as e:
-                log.warning(f"⚠️ Ошибка RAG поиска в коллекции 'hr2137_bot_knowledge_base': {e}")
+                    log.warning(f"⚠️ [RAG] Не удалось создать эмбеддинг для запроса")
+            else:
+                log.warning(f"⚠️ [RAG] Qdrant клиент недоступен")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка RAG поиска: {e}")
+            import traceback
+            log.debug(traceback.format_exc())
         
-        # Формируем промпт
+        # Формируем промпт с подстановкой переменных
         system_prompt = CHAT_PROMPT
+        
+        # Подставляем RAG контекст (если есть)
         if rag_context:
-            system_prompt += rag_context
+            system_prompt = system_prompt.replace("{{rag_context}}", rag_context)
+        else:
+            system_prompt = system_prompt.replace("{{rag_context}}", "")
+        
+        # Подставляем историю
+        history_text = history if history else "Истории разговора нет."
+        system_prompt = system_prompt.replace("{{history}}", history_text)
+        
+        # Подставляем текущее сообщение
+        system_prompt = system_prompt.replace("{{message}}", text)
         
         # Формируем сообщения для LLM
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         
-        # Добавляем историю
-        if history:
-            messages.append({"role": "user", "content": history})
-        
-        # Добавляем текущее сообщение
+        # Добавляем текущее сообщение как user сообщение (для совместимости)
         messages.append({"role": "user", "content": text})
         
         # Обновляем индикатор перед генерацией ответа (может занять время)
@@ -518,7 +570,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         typing_task = asyncio.create_task(keep_typing())
         
         try:
-            # Получаем ответ от LLM
+        # Получаем ответ от LLM
             log.info(f"🤖 Генерация ответа для пользователя {user_id}...")
             response = await openrouter_chat(messages, use_system_message=False)
             log.info(f"✅ Ответ сгенерирован: {response[:100] if response else 'None'}...")

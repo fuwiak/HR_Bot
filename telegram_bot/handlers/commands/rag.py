@@ -356,6 +356,7 @@ async def rag_upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 • 📝 Word (`.docx`, `.doc`)
 • 📊 Excel (`.xlsx`, `.xls`)
 • 📋 Текст (`.txt`)
+• 📝 Markdown (`.md`)
 
 *Ограничения:*
 • Максимальный размер файла: 20 МБ

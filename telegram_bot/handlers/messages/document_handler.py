@@ -52,6 +52,11 @@ async def extract_text_from_file(file_path: str, file_extension: str) -> str:
             with open(file_path, 'r', encoding='utf-8') as f:
                 return f.read()
         
+        elif file_extension == 'md':
+            # Markdown файл
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        
         else:
             return ""
     
@@ -203,7 +208,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file_extension = file_name.split('.')[-1].lower() if '.' in file_name else ''
         
         # Проверяем формат файла
-        supported_formats = ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'txt']
+        supported_formats = ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'txt', 'md']
         if file_extension not in supported_formats:
             await update.message.reply_text(
                 f"❌ Формат `.{file_extension}` не поддерживается.\n\n"
