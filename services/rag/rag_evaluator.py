@@ -479,3 +479,123 @@ class RAGEvaluator:
         """Закрывает ресурсы"""
         await self.rag_chain.close()
 
+
+# ===================== RAGAS EVALUATION (для логирования в реальном времени) =====================
+
+@dataclass
+class RAGEvaluationResult:
+    """Результат оценки RAG ответа с помощью RAGAS"""
+    faithfulness: float  # Верность ответа контексту (0-1)
+    answer_relevancy: float  # Релевантность ответа вопросу (0-1)
+    context_precision: float  # Точность контекста (0-1)
+    context_recall: float  # Полнота контекста (0-1)
+    average_score: float  # Средняя оценка
+    details: Dict[str, Any]  # Дополнительные детали
+
+
+async def evaluate_rag_response(
+    question: str,
+    answer: str,
+    contexts: List[str],
+    ground_truth: Optional[str] = None
+) -> Optional[RAGEvaluationResult]:
+    """
+    Оценивает качество RAG ответа с помощью RAGAS метрик
+    Используется для логирования в реальном времени при ответах бота
+    
+    Args:
+        question: Вопрос пользователя
+        answer: Сгенерированный ответ
+        contexts: Список контекстов из базы знаний
+        ground_truth: Опциональный правильный ответ (для context_recall)
+    
+    Returns:
+        RAGEvaluationResult или None при ошибке
+    """
+    try:
+        from ragas import evaluate
+        from ragas.metrics import (
+            faithfulness,
+            answer_relevancy,
+            context_precision,
+            context_recall
+        )
+        from datasets import Dataset
+        
+        # Подготавливаем данные для RAGAS
+        # RAGAS ожидает список словарей с полями: question, answer, contexts, ground_truth
+        data = {
+            "question": [question],
+            "answer": [answer],
+            "contexts": [[ctx for ctx in contexts]],  # Список списков контекстов
+        }
+        
+        # Добавляем ground_truth если есть
+        if ground_truth:
+            data["ground_truth"] = [ground_truth]
+        
+        dataset = Dataset.from_dict(data)
+        
+        # Определяем метрики для оценки
+        metrics = [
+            faithfulness,
+            answer_relevancy,
+            context_precision,
+        ]
+        
+        # Добавляем context_recall только если есть ground_truth
+        if ground_truth:
+            metrics.append(context_recall)
+        
+        # Выполняем оценку
+        result = evaluate(dataset, metrics=metrics)
+        
+        # Извлекаем результаты
+        scores = result.to_pandas().iloc[0].to_dict()
+        
+        # Формируем результат
+        evaluation = RAGEvaluationResult(
+            faithfulness=scores.get('faithfulness', 0.0),
+            answer_relevancy=scores.get('answer_relevancy', 0.0),
+            context_precision=scores.get('context_precision', 0.0),
+            context_recall=scores.get('context_recall', 0.0) if ground_truth else 0.0,
+            average_score=(
+                scores.get('faithfulness', 0.0) +
+                scores.get('answer_relevancy', 0.0) +
+                scores.get('context_precision', 0.0) +
+                (scores.get('context_recall', 0.0) if ground_truth else 0.0)
+            ) / (4 if ground_truth else 3),
+            details=scores
+        )
+        
+        return evaluation
+        
+    except ImportError as e:
+        logger.warning(f"⚠️ [RAGAS] Библиотека ragas не установлена: {e}")
+        logger.warning("⚠️ [RAGAS] Установите: pip install ragas datasets")
+        return None
+    except Exception as e:
+        logger.error(f"❌ [RAGAS] Ошибка оценки ответа: {e}")
+        import traceback
+        logger.debug(traceback.format_exc())
+        return None
+
+
+def format_evaluation_log(evaluation: RAGEvaluationResult) -> str:
+    """
+    Форматирует результат оценки для логирования
+    
+    Args:
+        evaluation: Результат оценки
+    
+    Returns:
+        Отформатированная строка для логов
+    """
+    return (
+        f"📊 [RAGAS Evaluation]\n"
+        f"  Faithfulness (верность): {evaluation.faithfulness:.3f}\n"
+        f"  Answer Relevancy (релевантность): {evaluation.answer_relevancy:.3f}\n"
+        f"  Context Precision (точность контекста): {evaluation.context_precision:.3f}\n"
+        f"  Context Recall (полнота контекста): {evaluation.context_recall:.3f}\n"
+        f"  Average Score (средняя оценка): {evaluation.average_score:.3f}"
+    )

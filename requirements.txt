@@ -54,3 +54,5 @@ psycopg2-binary>=2.9.0  # PostgreSQL драйвер для Railway
 sqlalchemy>=2.0.0  # ORM для работы с базой данных
 alembic>=1.13.0  # Миграции базы данных
 redis>=5.0.0  # Redis клиент для кэширования
+ragas>=0.1.0  # RAG Assessment для оценки качества ответов
+datasets>=2.14.0  # Требуется для RAGAS

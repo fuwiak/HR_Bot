@@ -487,81 +487,92 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rag_decision = await should_use_rag_async(text, context={"user_id": user_id})
         use_rag = rag_decision.get("use_rag", False)
         rag_context = ""
+        rag_documents = []  # Сохраняем информацию о найденных документах для логирования и RAGAS
         
         log.info(f"🔍 [RAG Decision] use_rag={use_rag}, intent={rag_decision.get('intent')}, confidence={rag_decision.get('confidence', 0):.2f}, reason={rag_decision.get('reason')}")
         
         if use_rag:
             log.info(f"🔍 [RAG] Запрос требует поиска в базе знаний: '{text[:100]}'")
-            try:
-                from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
+        try:
+            from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
+            
+            log.info(f"🔍 [RAG] Поиск в базе знаний для запроса: '{text[:100]}'")
+            
+            client = get_qdrant_client()
+            if client:
+                # Генерируем эмбеддинг для запроса
+                query_embedding = await generate_embedding_async(text)
                 
-                log.info(f"🔍 [RAG] Поиск в базе знаний для запроса: '{text[:100]}'")
-                
-                client = get_qdrant_client()
-                if client:
-                    # Генерируем эмбеддинг для запроса
-                    query_embedding = await generate_embedding_async(text)
+                if query_embedding:
+                    collection_name = "hr2137_bot_knowledge_base"
                     
-                    if query_embedding:
-                        collection_name = "hr2137_bot_knowledge_base"
+                    try:
+                        # Ищем в Qdrant
+                        search_results = client.query_points(
+                            collection_name=collection_name,
+                            query=query_embedding,
+                            limit=5
+                        )
                         
-                        try:
-                            # Ищем в Qdrant
-                            search_results = client.query_points(
-                                collection_name=collection_name,
-                                query=query_embedding,
-                                limit=5
-                            )
+                        if search_results.points:
+                            log.info(f"✅ [RAG] Найдено {len(search_results.points)} результатов в базе знаний")
                             
-                            if search_results.points:
-                                log.info(f"✅ [RAG] Найдено {len(search_results.points)} результатов в базе знаний")
+                            # Собираем результаты
+                            results = []
+                            for point in search_results.points:
+                                payload = point.payload if hasattr(point, 'payload') else {}
+                                score = point.score if hasattr(point, 'score') else 0.0
                                 
-                                # Собираем результаты
-                                results = []
-                                for point in search_results.points:
-                                    payload = point.payload if hasattr(point, 'payload') else {}
-                                    score = point.score if hasattr(point, 'score') else 0.0
+                                # Извлекаем информацию о документе
+                                file_name = payload.get("file_name") or payload.get("title") or payload.get("source", "Документ")
+                                text_content = payload.get("text") or payload.get("content", "")
+                                
+                                if text_content and score > 0.3:  # Минимальный порог релевантности
+                                    results.append({
+                                        "file_name": file_name,
+                                        "text": text_content,
+                                        "score": score
+                                    })
+                            
+                            # Сортируем по score и берем топ-3
+                            results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)[:3]
+                            
+                            if results_sorted:
+                                rag_context = "\n\n📚 Релевантная информация из базы знаний:\n\n"
+                                for i, result in enumerate(results_sorted, 1):
+                                    file_name = result.get('file_name', 'Документ')
+                                    text_snippet = result.get('text', '')[:300]  # Первые 300 символов
+                                    score = result.get('score', 0)
+                                    rag_context += f"{i}. {file_name} (релевантность: {score:.2f}):\n{text_snippet}...\n\n"
                                     
-                                    # Извлекаем информацию о документе
-                                    file_name = payload.get("file_name") or payload.get("title") or payload.get("source", "Документ")
-                                    text_content = payload.get("text") or payload.get("content", "")
+                                    # Сохраняем полные тексты документов для RAGAS оценки
+                                    rag_documents = [r.get('text', '') for r in results_sorted]
                                     
-                                    if text_content and score > 0.3:  # Минимальный порог релевантности
-                                        results.append({
-                                            "file_name": file_name,
-                                            "text": text_content,
-                                            "score": score
-                                        })
-                                
-                                # Сортируем по score и берем топ-3
-                                results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)[:3]
-                                
-                                if results_sorted:
-                                    rag_context = "\n\n📚 Релевантная информация из базы знаний:\n\n"
+                                    # Детальное логирование найденных документов
+                                    log.info(f"✅ [RAG] Сформирован контекст из {len(results_sorted)} документов:")
                                     for i, result in enumerate(results_sorted, 1):
                                         file_name = result.get('file_name', 'Документ')
-                                        text_snippet = result.get('text', '')[:300]  # Первые 300 символов
                                         score = result.get('score', 0)
-                                        rag_context += f"{i}. {file_name} (релевантность: {score:.2f}):\n{text_snippet}...\n\n"
-                                    log.info(f"✅ [RAG] Сформирован контекст из {len(results_sorted)} документов")
-                                else:
-                                    log.info(f"ℹ️ [RAG] Результаты найдены, но не прошли порог релевантности")
+                                        text_length = len(result.get('text', ''))
+                                        log.info(f"  📄 Документ {i}: {file_name} | Релевантность: {score:.3f} | Длина: {text_length} символов")
                             else:
-                                log.info(f"ℹ️ [RAG] Результаты не найдены в базе знаний для запроса: '{text[:100]}'")
-                        except Exception as search_error:
-                            error_str = str(search_error).lower()
-                            if "timeout" in error_str or "timed out" in error_str:
-                                log.warning(f"⚠️ [RAG] Таймаут при поиске в базе знаний: {search_error}")
-                            else:
-                                log.warning(f"⚠️ [RAG] Ошибка поиска в базе знаний: {search_error}")
+                                log.info(f"ℹ️ [RAG] Результаты найдены, но не прошли порог релевантности")
                         else:
-                            log.warning(f"⚠️ [RAG] Не удалось создать эмбеддинг для запроса")
+                            log.info(f"ℹ️ [RAG] Результаты не найдены в базе знаний для запроса: '{text[:100]}'")
+                    except Exception as search_error:
+                        error_str = str(search_error).lower()
+                        if "timeout" in error_str or "timed out" in error_str:
+                            log.warning(f"⚠️ [RAG] Таймаут при поиске в базе знаний: {search_error}")
+                        else:
+                            log.warning(f"⚠️ [RAG] Ошибка поиска в базе знаний: {search_error}")
                 else:
-                    log.warning(f"⚠️ [RAG] Qdrant клиент недоступен")
-            except Exception as e:
-                log.warning(f"⚠️ Ошибка RAG поиска: {e}")
-                import traceback
-                log.debug(traceback.format_exc())
+                    log.warning(f"⚠️ [RAG] Не удалось создать эмбеддинг для запроса")
+            else:
+                log.warning(f"⚠️ [RAG] Qdrant клиент недоступен")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка RAG поиска: {e}")
+            import traceback
+            log.debug(traceback.format_exc())
         else:
             log.info(f"ℹ️ [RAG] Запрос не требует поиска в базе знаний (приветствие/простой вопрос): '{text[:100]}'")
         
@@ -611,6 +622,9 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
         # Получаем ответ от LLM
             log.info(f"🤖 Генерация ответа для пользователя {user_id}...")
+            if rag_context and rag_documents:
+                log.info(f"📝 [RAG Response] Используется RAG контекст из {len(rag_documents)} документов")
+                log.info(f"📝 [RAG Response] Размер контекста: {len(rag_context)} символов")
             response = await openrouter_chat(messages, use_system_message=False)
             log.info(f"✅ Ответ сгенерирован: {response[:100] if response else 'None'}...")
         finally:
@@ -624,6 +638,58 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Обновляем индикатор перед отправкой ответа
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        
+        # Детальное логирование RAG ответа - почему так отвечает
+        if rag_context and rag_documents:
+            log.info(f"📊 [RAG Response Analysis] Анализ ответа на основе RAG:")
+            log.info(f"  ❓ Вопрос: {text[:200]}")
+            log.info(f"  📚 Использовано документов: {len(rag_documents)}")
+            log.info(f"  💬 Длина ответа: {len(response)} символов")
+            
+            # Логируем влияние каждого документа на ответ
+            for i, doc_text in enumerate(rag_documents, 1):
+                # Простая проверка: есть ли ключевые слова из документа в ответе
+                doc_words = set(doc_text.lower().split()[:50])  # Первые 50 слов документа
+                response_words = set(response.lower().split())
+                common_words = doc_words.intersection(response_words)
+                influence_score = len(common_words) / max(len(doc_words), 1) if doc_words else 0
+                log.info(f"  📄 Документ {i}: Влияние на ответ ~{influence_score:.1%} (общих слов: {len(common_words)})")
+        
+        # Оценка ответа с помощью RAGAS (если использовался RAG)
+        if use_rag and rag_documents and response:
+            try:
+                from services.rag.rag_evaluator import evaluate_rag_response, format_evaluation_log
+                
+                log.info(f"🔍 [RAGAS] Запуск оценки качества RAG ответа...")
+                evaluation = await evaluate_rag_response(
+                    question=text,
+                    answer=response,
+                    contexts=rag_documents
+                )
+                
+                if evaluation:
+                    log.info(format_evaluation_log(evaluation))
+                    
+                    # Дополнительный анализ оценок
+                    if evaluation.faithfulness < 0.5:
+                        log.warning(f"⚠️ [RAGAS] Низкая верность ответа ({evaluation.faithfulness:.3f}) - ответ может содержать информацию не из контекста")
+                    if evaluation.answer_relevancy < 0.5:
+                        log.warning(f"⚠️ [RAGAS] Низкая релевантность ответа ({evaluation.answer_relevancy:.3f}) - ответ может не соответствовать вопросу")
+                    if evaluation.context_precision < 0.5:
+                        log.warning(f"⚠️ [RAGAS] Низкая точность контекста ({evaluation.context_precision:.3f}) - возможно, использованы нерелевантные документы")
+                    
+                    if evaluation.average_score >= 0.7:
+                        log.info(f"✅ [RAGAS] Высокое качество ответа (средняя оценка: {evaluation.average_score:.3f})")
+                    elif evaluation.average_score >= 0.5:
+                        log.info(f"ℹ️ [RAGAS] Среднее качество ответа (средняя оценка: {evaluation.average_score:.3f})")
+                    else:
+                        log.warning(f"⚠️ [RAGAS] Низкое качество ответа (средняя оценка: {evaluation.average_score:.3f})")
+                else:
+                    log.warning(f"⚠️ [RAGAS] Не удалось выполнить оценку (возможно, библиотека не установлена)")
+            except Exception as e:
+                log.warning(f"⚠️ [RAGAS] Ошибка при оценке ответа: {e}")
+                import traceback
+                log.debug(traceback.format_exc())
         
         # Сохраняем ответ в память
         add_memory(user_id, "assistant", response)
