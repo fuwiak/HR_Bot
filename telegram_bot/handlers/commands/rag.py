@@ -320,20 +320,26 @@ async def rag_docs_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         docs = await list_documents(limit=limit)
         
         if docs:
-            text = f"📚 *Документы в базе знаний* (показано: {len(docs)})\n\n"
+            text = f"📚 Документы в базе знаний (показано: {len(docs)})\n\n"
             
             for i, doc in enumerate(docs[:limit], 1):
                 title = doc.get("title", "Без названия")
                 category = doc.get("category", "Неизвестно")
-                text += f"*{i}. {title}*\n"
+                text += f"{i}. {title}\n"
                 text += f"   Категория: {category}\n\n"
             
-            await update.message.reply_text(text, parse_mode='Markdown')
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, reply_markup=reply_markup)
         else:
-            await update.message.reply_text("❌ В базе знаний нет документов.")
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("❌ В базе знаний нет документов.", reply_markup=reply_markup)
     except Exception as e:
         log.error(f"❌ Ошибка получения списка документов: {e}")
-        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}", reply_markup=reply_markup)
 
 async def rag_upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /rag_upload - инструкция по загрузке документов в RAG"""

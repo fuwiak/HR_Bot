@@ -674,17 +674,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if docs:
                 text = (
-                    f"📚 *Документы в базе*\n"
+                    f"📚 Документы в базе\n"
                     f"Показано: {len(docs)}\n\n"
                     "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                 )
                 for i, doc in enumerate(docs[:10], 1):
                     title = doc.get("title", "Без названия")
                     category = doc.get("category", "Неизвестно")
-                    text += f"{i}. 📄 *{title}*\n"
+                    text += f"{i}. 📄 {title}\n"
                     text += f"   🏷 {category}\n\n"
                 if len(docs) > 10:
-                    text += f"_...и еще {len(docs) - 10} документов_"
+                    text += f"...и еще {len(docs) - 10} документов"
             else:
                 text = "❌ В базе знаний нет документов."
             
@@ -694,7 +694,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             await query.edit_message_text(
                 text,
-                parse_mode='Markdown',
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         except Exception as e:
