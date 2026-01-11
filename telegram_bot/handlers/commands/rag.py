@@ -164,7 +164,7 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
         
         # Формируем контекст для LLM
-        context = "\n\n".join([
+        llm_context = "\n\n".join([
             f"Источник: {r['file_name']}\n{r['text'][:500]}"
             for r in results[:3]  # Берем топ-3 для контекста
         ])
@@ -181,7 +181,7 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 Вопрос: {query}
 
 Документы:
-{context}
+{llm_context}
 
 Ответь подробно и структурированно, ссылаясь на источники. Если информации недостаточно, укажи это.
 
