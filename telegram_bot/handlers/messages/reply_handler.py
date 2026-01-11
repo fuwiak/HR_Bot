@@ -464,9 +464,54 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parsed_data = parse_booking_message(text, history)
             
             if parsed_data:
-                # Создаем запись
-                result = create_booking_from_parsed_data(user_id, parsed_data)
-                if result:
+                try:
+                    # Создаем запись
+                    result = create_booking_from_parsed_data(user_id, parsed_data)
+                    if result:
+                        # Сохраняем ответ бота
+                        try:
+                            save_telegram_message(
+                                user_id=user_id,
+                                chat_id=chat_id,
+                                message_id=None,
+                                role="assistant",
+                                content=result
+                            )
+                        except Exception:
+                            pass
+                        return
+                except Exception as booking_error:
+                    # Ошибка при создании записи - отправляем в LLM для помощи пользователю
+                    error_message = str(booking_error)
+                    log.error(f"❌ Ошибка создания записи: {error_message}")
+                    log.error(f"📊 Parsed data: {parsed_data}")
+                    
+                    # Формируем промпт для LLM с информацией об ошибке
+                    error_prompt = f"""Произошла ошибка при попытке создать запись на основе сообщения пользователя.
+
+Сообщение пользователя: "{text}"
+
+Распарсенные данные:
+- Услуга: {parsed_data.get('service', 'не найдена')}
+- Мастер: {parsed_data.get('master', 'не найден')}
+- Дата и время: {parsed_data.get('datetime', 'не найдено')}
+- Все данные найдены: {parsed_data.get('has_all_info', False)}
+
+Ошибка: {error_message}
+
+Помоги пользователю понять, что пошло не так и что нужно исправить в его сообщении. Будь дружелюбным и конкретным. Если не хватает данных, объясни, какие именно данные нужны и как их указать."""
+                    
+                    # Отправляем в LLM
+                    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+                    error_messages = [
+                        {"role": "system", "content": "Ты помощник HR-бота. Помогаешь пользователям понять ошибки и исправить их запросы."},
+                        {"role": "user", "content": error_prompt}
+                    ]
+                    error_response = await openrouter_chat(error_messages, use_system_message=False)
+                    
+                    # Отправляем ответ пользователю
+                    await update.message.reply_text(error_response, parse_mode=ParseMode.MARKDOWN)
+                    
                     # Сохраняем ответ бота
                     try:
                         save_telegram_message(
@@ -474,7 +519,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=chat_id,
                             message_id=None,
                             role="assistant",
-                            content=result
+                            content=error_response
                         )
                     except Exception:
                         pass
@@ -723,9 +768,38 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log.error(f"❌ Ошибка обработки сообщения: {e}")
         import traceback
-        log.error(traceback.format_exc())
-        await update.message.reply_text(
-            "Извините, произошла ошибка при обработке вашего сообщения. Попробуйте еще раз."
-        )
+        error_traceback = traceback.format_exc()
+        log.error(error_traceback)
+        
+        # Отправляем ошибку в LLM для помощи пользователю
+        try:
+            error_message = str(e)
+            user_text = update.message.text if update.message and update.message.text else "неизвестное сообщение"
+            
+            # Формируем промпт для LLM с информацией об ошибке
+            error_prompt = f"""Произошла ошибка при обработке сообщения пользователя.
+
+Сообщение пользователя: "{user_text}"
+
+Ошибка: {error_message}
+
+Помоги пользователю понять, что произошло. Будь дружелюбным и объясни ситуацию простым языком. Если возможно, предложи, что пользователь может сделать."""
+            
+            # Отправляем в LLM
+            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            error_messages = [
+                {"role": "system", "content": "Ты помощник HR-бота. Помогаешь пользователям понять ошибки и решить проблемы."},
+                {"role": "user", "content": error_prompt}
+            ]
+            error_response = await openrouter_chat(error_messages, use_system_message=False)
+            
+            # Отправляем ответ пользователю
+            await update.message.reply_text(error_response, parse_mode=ParseMode.MARKDOWN)
+        except Exception as llm_error:
+            # Если LLM тоже не работает, отправляем базовое сообщение с реальной ошибкой
+            log.error(f"❌ Ошибка при обращении к LLM для обработки ошибки: {llm_error}")
+            await update.message.reply_text(
+                f"❌ Произошла ошибка: {str(e)}\n\nПопробуйте еще раз или обратитесь в поддержку."
+            )
 
 __all__ = ['reply']
