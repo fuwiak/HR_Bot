@@ -1,10 +1,12 @@
 """
 Rag команды
 """
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.constants import ChatAction
 from telegram_bot.nlp.text_utils import remove_markdown
 import logging
+import asyncio
 
 log = logging.getLogger(__name__)
 
@@ -12,26 +14,69 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Команда /rag_search - поиск в RAG базе знаний с генерацией ответа"""
     query = " ".join(context.args) if context.args else "помощь"
     
+    # Показываем индикатор "печатает..."
+    chat_id = update.effective_chat.id
+    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    
+    # Функция для периодического обновления typing
+    async def keep_typing():
+        """Периодически обновляет typing индикатор каждые 3 секунды"""
+        while True:
+            await asyncio.sleep(3)
+            try:
+                await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            except Exception:
+                break
+    
     try:
         await update.message.reply_text(f"🔍 Ищу в базе знаний: *{query}*...", parse_mode='Markdown')
         
         from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
         from services.helpers.llm_helper import generate_with_fallback
         
+        # Обновляем индикатор перед получением клиента
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        
         client = get_qdrant_client()
         if not client:
-            await update.message.reply_text("❌ Qdrant недоступен")
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("❌ Qdrant недоступен", reply_markup=reply_markup)
             return
         
-        # Генерируем эмбеддинг для запроса
-        query_embedding = await generate_embedding_async(query)
+        # Обновляем индикатор перед генерацией эмбеддинга (может занять время)
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        
+        # Создаем задачу для периодического обновления typing во время генерации эмбеддинга
+        typing_task = asyncio.create_task(keep_typing())
+        
+        try:
+            # Генерируем эмбеддинг для запроса
+            query_embedding = await generate_embedding_async(query)
+        finally:
+            # Останавливаем задачу обновления typing
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
+        
         if not query_embedding:
-            await update.message.reply_text("❌ Ошибка создания эмбеддинга")
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("❌ Ошибка создания эмбеддинга", reply_markup=reply_markup)
             return
+        
+        # Обновляем индикатор перед поиском в Qdrant
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
         
         # Ищем в Qdrant с обработкой таймаутов
         collection_name = "hr2137_bot_knowledge_base"
         log.info(f"🔍 [RAG] Поиск в коллекции '{collection_name}' для команды /rag_search: '{query}'")
+        
+        # Создаем задачу для периодического обновления typing во время поиска
+        typing_task = asyncio.create_task(keep_typing())
         
         try:
             search_results = client.query_points(
@@ -41,6 +86,14 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
             log.info(f"✅ [RAG] Найдено {len(search_results.points) if search_results.points else 0} результатов в коллекции '{collection_name}'")
         except Exception as search_error:
+            # Останавливаем задачу обновления typing при ошибке
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
+            
             error_str = str(search_error).lower()
             if "timeout" in error_str or "timed out" in error_str:
                 log.error(f"❌ [RAG] Таймаут при поиске в Qdrant: {search_error}")
@@ -66,6 +119,14 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     reply_markup=reply_markup
                 )
                 return
+        finally:
+            # Останавливаем задачу обновления typing после поиска
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
         
         if not search_results.points:
             await update.message.reply_text(f"❌ По запросу '{query}' ничего не найдено в базе знаний.")
@@ -108,6 +169,12 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             for r in results[:3]  # Берем топ-3 для контекста
         ])
         
+        # Обновляем индикатор перед генерацией ответа (может занять время)
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        
+        # Создаем задачу для периодического обновления typing во время генерации ответа
+        typing_task = asyncio.create_task(keep_typing())
+        
         # Генерируем ответ через LLM
         prompt = f"""На основе следующих документов из базы знаний ответь на вопрос пользователя.
 
@@ -120,13 +187,22 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 ВАЖНО: Не используй Markdown форматирование (**, ###, __ и т.д.). Пиши обычным текстом."""
         
-        answer = await generate_with_fallback(
-            messages=[{"role": "user", "content": prompt}],
-            use_system_message=True,
-            system_content="Ты AI-ассистент HR консультанта. Отвечай профессионально и по делу на основе предоставленных документов.",
-            max_tokens=1000,
-            temperature=0.7
-        )
+        try:
+            answer = await generate_with_fallback(
+                messages=[{"role": "user", "content": prompt}],
+                use_system_message=True,
+                system_content="Ты AI-ассистент HR консультанта. Отвечай профессионально и по делу на основе предоставленных документов.",
+                max_tokens=1000,
+                temperature=0.7
+            )
+        finally:
+            # Останавливаем задачу обновления typing
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
         
         # Убираем Markdown из ответа
         if answer:
