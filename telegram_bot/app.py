@@ -237,28 +237,12 @@ def main():
     app.add_handler(CallbackQueryHandler(button_callback))
     
     # Channel post handler for @HRTime_bot
-    # Примечание: channel_post обрабатывается через Update, а не через MessageHandler
-    # Поэтому используем специальный обработчик через PreCheckoutQueryHandler или другой механизм
-    # Или обрабатываем в основном обработчике сообщений
+    # Примечание: channel_post обрабатывается через Update в основном обработчике reply
+    # MessageHandler не подходит для channel_post, так как он работает с message, а не update.channel_post
     try:
         from telegram_bot.handlers.channel.hrtime_channel_handler import handle_channel_post
-        from telegram.ext import filters
-        from telegram import Update
-        
-        # Создаем фильтр, который проверяет update.channel_post
-        # MessageHandler не подходит для channel_post, используем обходной путь
-        class ChannelPostFilter(filters.MessageFilter):
-            def filter(self, message):
-                # MessageHandler работает с message, но channel_post - это поле Update
-                # Поэтому этот фильтр всегда возвращает False для MessageHandler
-                # Обработка channel_post будет в основном обработчике или через другой механизм
-                return False
-        
-        # Временно отключаем обработчик channel_post через MessageHandler
-        # Вместо этого channel_post будет обрабатываться в основном обработчике reply
-        # или через отдельный механизм
-        # app.add_handler(MessageHandler(filters=ChannelPostFilter(), callback=handle_channel_post))
-        log.info("ℹ️ Обработчик channel_post отключен (используется другой механизм)")
+        # channel_post обрабатывается в reply_handler.py
+        log.info("ℹ️ Обработчик channel_post будет работать через reply_handler")
     except Exception as e:
         log.warning(f"⚠️ Не удалось загрузить обработчик канала: {e}")
         import traceback
