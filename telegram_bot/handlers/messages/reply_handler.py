@@ -48,6 +48,15 @@ except ImportError:
 
 async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Основной обработчик сообщений"""
+    # Обрабатываем channel_post если есть
+    if update.channel_post:
+        try:
+            from telegram_bot.handlers.channel.hrtime_channel_handler import handle_channel_post
+            await handle_channel_post(update, context)
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка обработки channel_post: {e}")
+        return
+    
     if not update.message or not update.message.text:
         return
     
