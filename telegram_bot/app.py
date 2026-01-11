@@ -117,6 +117,8 @@ from telegram_bot.services.email_monitor import (
 
 # ===================== RUN BOT ========================
 def main():
+    # Убеждаемся, что filters доступен (импортирован глобально в строке 21)
+    global filters
     # Инициализация PostgreSQL базы данных
     if DATABASE_AVAILABLE:
         try:
@@ -231,6 +233,7 @@ def main():
     
     # Document upload command and handler
     app.add_handler(CommandHandler("upload", upload_document_command))
+    # Используем filters из глобального импорта (строка 21)
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     
     # Callback query handler for inline buttons
