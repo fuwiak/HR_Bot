@@ -201,6 +201,11 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Получаем проекты с ближайшими дедлайнами
         upcoming_tasks = await get_project_deadlines(days_ahead=7)
         
+        keyboard = [
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         if upcoming_tasks:
             text = (
                 "📊 *Статус проектов*\n\n"
@@ -230,13 +235,16 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Используйте WEEEK для управления проектами."
             )
         
-        await update.message.reply_text(text, parse_mode='Markdown')
+        await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
     except Exception as e:
         log.error(f"❌ Ошибка получения статуса: {e}")
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             "📋 *Статус проектов*\n\n"
             "Используйте WEEEK для управления проектами и задачами.",
-            parse_mode='Markdown'
+            parse_mode='Markdown',
+            reply_markup=reply_markup
         )
 
 async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):

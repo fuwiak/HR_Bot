@@ -30,22 +30,33 @@ async def email_check_command(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await send_email_notification(context.bot, email_data)
                 processed_email_ids.add(email_id)
                 
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
                     f"✅ *Найдено новое письмо*\n\n"
                     f"*Тема:* {email_data.get('subject', 'Без темы')}\n"
                     f"*От:* {email_data.get('from', 'Неизвестно')}\n\n"
                     f"Уведомление отправлено всем подписчикам.",
-                    parse_mode='Markdown'
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
                 )
             else:
+                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
                     f"📧 *Самое новое письмо уже обработано*\n\n"
                     f"*Тема:* {email_data.get('subject', 'Без темы')}\n\n"
                     f"Используйте кнопки в уведомлениях для работы с письмами.",
-                    parse_mode='Markdown'
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
                 )
         else:
-            await update.message.reply_text("📧 Новых писем нет или email недоступен")
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("📧 Новых писем нет или email недоступен", reply_markup=reply_markup)
     except Exception as e:
         log.error(f"❌ Ошибка проверки email: {e}")
         import traceback
@@ -76,13 +87,21 @@ async def email_draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         text = f"📧 *Черновик ответа на письмо:*\n\n{draft}\n\n"
         text += "💡 Отредактируйте черновик и отправьте через WEEEK или почтовый клиент."
         
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         # Разбиваем длинное сообщение если нужно
         if len(text) > 4000:
             parts = [text[i:i+4000] for i in range(0, len(text), 4000)]
-            for part in parts:
-                await update.message.reply_text(part, parse_mode='Markdown')
+            for i, part in enumerate(parts):
+                # Добавляем кнопку только к последнему сообщению
+                if i == len(parts) - 1:
+                    await update.message.reply_text(part, parse_mode='Markdown', reply_markup=reply_markup)
+                else:
+                    await update.message.reply_text(part, parse_mode='Markdown')
         else:
-            await update.message.reply_text(text, parse_mode='Markdown')
+            await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
     except Exception as e:
         log.error(f"❌ Ошибка подготовки черновика: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
@@ -107,7 +126,10 @@ async def unsubscribe_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         text += "Вы больше не будете получать уведомления о новых письмах.\n\n"
         text += "Чтобы снова подписаться, используйте команду /start"
         
-        await update.message.reply_text(text, parse_mode='Markdown')
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
         
         log.info(f"❌ Пользователь {user_id} (@{username}) отписался от уведомлений")
         

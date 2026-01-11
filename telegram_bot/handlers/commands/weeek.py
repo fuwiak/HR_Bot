@@ -71,13 +71,17 @@ async def weeek_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "`/weeek_create_project [название]`"
             )
         
-        await update.message.reply_text(text, parse_mode='Markdown')
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
         
     except Exception as e:
         log.error(f"❌ Ошибка получения workspace info: {e}")
         import traceback
         log.error(f"❌ Traceback: {traceback.format_exc()}")
-        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}", reply_markup=reply_markup)
 
 async def weeek_create_task_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /weeek_task - создание задачи в Weeek"""
@@ -130,15 +134,19 @@ async def weeek_create_task_command(update: Update, context: ContextTypes.DEFAUL
             description=f"Создано через Telegram бот"
         )
         
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         if task:
             await update.message.reply_text(
                 f"✅ *Задача создана в WEEEK!*\n\n"
                 f"Проект: {project_name}\n"
                 f"Задача: {task_name}",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
         else:
-            await update.message.reply_text("❌ Не удалось создать задачу в WEEEK")
+            await update.message.reply_text("❌ Не удалось создать задачу в WEEEK", reply_markup=reply_markup)
     except Exception as e:
         log.error(f"❌ Ошибка создания задачи в Weeek: {e}")
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
@@ -167,11 +175,16 @@ async def weeek_projects_command(update: Update, context: ContextTypes.DEFAULT_T
                     text += f" • {color}"
                 text += "\n\n"
 
-            await update.message.reply_text(text, parse_mode='Markdown')
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
         else:
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await update.message.reply_text(
                 "❌ Проектов не найдено.\n\n"
-                "Проверьте WEEEK_TOKEN в настройках."
+                "Проверьте WEEEK_TOKEN в настройках.",
+                reply_markup=reply_markup
             )
     except Exception as e:
         log.error(f"❌ Ошибка получения проектов: {e}")
@@ -203,6 +216,9 @@ async def weeek_create_project_command(update: Update, context: ContextTypes.DEF
             description=f"Создано через Telegram бот пользователем @{username}"
         )
         
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
         if project:
             project_id = project.get("id")
             await update.message.reply_text(
@@ -212,11 +228,12 @@ async def weeek_create_project_command(update: Update, context: ContextTypes.DEF
                 f"Теперь можете добавить задачи:\n"
                 f"`/weeek_task {project_name} | Название задачи`\n"
                 f"или через меню: `/weeek_update`",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
             log.info(f"✅ Проект создан: {project_name} (ID: {project_id})")
         else:
-            await update.message.reply_text("❌ Не удалось создать проект в WEEEK")
+            await update.message.reply_text("❌ Не удалось создать проект в WEEEK", reply_markup=reply_markup)
             
     except Exception as e:
         log.error(f"❌ Ошибка создания проекта: {e}")
@@ -387,12 +404,17 @@ async def weeek_tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             
             text += f"\n💡 Для редактирования: `/weeek_update`"
             
-            await update.message.reply_text(text, parse_mode='Markdown')
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(text, parse_mode='Markdown', reply_markup=reply_markup)
         else:
+            keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await update.message.reply_text(
                 f"📋 *Проект: {project_title}*\n\n"
                 "❌ Задач не найдено.",
-                parse_mode='Markdown'
+                parse_mode='Markdown',
+                reply_markup=reply_markup
             )
             
     except ValueError:

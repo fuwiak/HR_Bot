@@ -50,7 +50,8 @@ async def send_email_notification(bot, email_data: Dict):
         
         keyboard = [
             [InlineKeyboardButton("📧 Ответить", callback_data=f"email_reply_{email_id}")],
-            [InlineKeyboardButton("📋 Полный текст", callback_data=f"email_full_{email_id}")]
+            [InlineKeyboardButton("📋 Полный текст", callback_data=f"email_full_{email_id}")],
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         

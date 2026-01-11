@@ -103,14 +103,18 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         return
                     
                     result = await update_task(task_id, title=new_title)
+                    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                    keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
                     if result:
                         await update.message.reply_text(
                             f"✅ *Название задачи обновлено!*\n\n"
                             f"📝 Новое название: *{new_title}*",
-                            parse_mode=ParseMode.MARKDOWN
+                            parse_mode=ParseMode.MARKDOWN,
+                            reply_markup=reply_markup
                         )
                     else:
-                        await update.message.reply_text("❌ Ошибка обновления названия задачи")
+                        await update.message.reply_text("❌ Ошибка обновления названия задачи", reply_markup=reply_markup)
                 
                 elif field == "date":
                     # Редактирование даты
@@ -166,14 +170,18 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 date_obj = datetime.strptime(date_str, '%d.%m.%Y')
                                 api_date = date_obj.strftime('%Y-%m-%d')
                                 result = await update_task(task_id, due_date=api_date)
+                                from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+                                keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+                                reply_markup = InlineKeyboardMarkup(keyboard)
                                 if result:
                                     await update.message.reply_text(
                                         f"✅ *Дата задачи обновлена!*\n\n"
                                         f"📅 Новая дата: *{date_str}*",
-                                        parse_mode=ParseMode.MARKDOWN
+                                        parse_mode=ParseMode.MARKDOWN,
+                                        reply_markup=reply_markup
                                     )
                                 else:
-                                    await update.message.reply_text("❌ Ошибка обновления даты")
+                                    await update.message.reply_text("❌ Ошибка обновления даты", reply_markup=reply_markup)
                             except ValueError:
                                 await update.message.reply_text("❌ Неверный формат даты. Используйте ДД.ММ.ГГГГ или ДД.ММ")
                         else:
@@ -373,7 +381,8 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         [InlineKeyboardButton("✏️ Редактировать задачу", callback_data=f"weeek_edit_task_{task_id}")],
                         [InlineKeyboardButton("📅 Изменить дату", callback_data=f"weeek_edit_date_{task_id}")],
                         [InlineKeyboardButton("➕ Создать еще задачу", callback_data="weeek_create_task_menu")],
-                        [InlineKeyboardButton("🔙 В меню проектов", callback_data="menu_projects")]
+                        [InlineKeyboardButton("🔙 В меню проектов", callback_data="menu_projects")],
+                        [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
                     ]
                     
                     await update.message.reply_text(
