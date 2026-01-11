@@ -456,6 +456,59 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Получаем историю для контекста (нужна для booking parser и RAG)
         history = get_recent_history(user_id)
         
+        # Проверяем, является ли это Q&A парой для добавления в RAG
+        import re
+        qa_pattern = re.compile(r'Q:\s*(.+?)\s*A:\s*(.+?)$', re.DOTALL | re.IGNORECASE)
+        qa_match = qa_pattern.search(text)
+        
+        if qa_match:
+            question = qa_match.group(1).strip()
+            answer = qa_match.group(2).strip()
+            
+            if question and answer:
+                log.info(f"📝 Обнаружена Q&A пара для добавления в RAG: Q='{question[:50]}...', A='{answer[:50]}...'")
+                
+                try:
+                    from services.rag.qdrant_helper import index_qa_to_qdrant
+                    
+                    success = index_qa_to_qdrant(
+                        question=question,
+                        answer=answer,
+                        metadata={
+                            "user_id": user_id,
+                            "username": username,
+                            "added_via": "telegram_bot"
+                        }
+                    )
+                    
+                    if success:
+                        response = f"✅ Q&A пара добавлена в базу знаний!\n\n" \
+                                 f"❓ **Вопрос:** {question}\n" \
+                                 f"💡 **Ответ:** {answer}"
+                        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
+                        
+                        # Сохраняем ответ бота
+                        try:
+                            save_telegram_message(
+                                user_id=user_id,
+                                chat_id=chat_id,
+                                message_id=None,
+                                role="assistant",
+                                content=response
+                            )
+                        except Exception:
+                            pass
+                        return
+                    else:
+                        await update.message.reply_text("❌ Ошибка при добавлении Q&A пары в базу знаний")
+                        return
+                except Exception as e:
+                    log.error(f"❌ Ошибка добавления Q&A пары: {e}")
+                    import traceback
+                    log.error(traceback.format_exc())
+                    await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+                return
+        
         # Проверяем, является ли это запросом на запись
         if is_booking(text):
             log.info(f"🔍 Обнаружен запрос на запись: {text}")
@@ -798,8 +851,8 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as llm_error:
             # Если LLM тоже не работает, отправляем базовое сообщение с реальной ошибкой
             log.error(f"❌ Ошибка при обращении к LLM для обработки ошибки: {llm_error}")
-            await update.message.reply_text(
+        await update.message.reply_text(
                 f"❌ Произошла ошибка: {str(e)}\n\nПопробуйте еще раз или обратитесь в поддержку."
-            )
+        )
 
 __all__ = ['reply']

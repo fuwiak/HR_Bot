@@ -832,3 +832,76 @@ def index_message_to_qdrant(text: str, metadata: Optional[Dict[str, Any]] = None
         log.error(f"❌ Traceback: {traceback.format_exc()}")
         return False
 
+
+def index_qa_to_qdrant(question: str, answer: str, metadata: Optional[Dict[str, Any]] = None) -> bool:
+    """
+    Индексировать пару вопрос-ответ в Qdrant для RAG базы знаний
+    
+    Args:
+        question: Вопрос
+        answer: Ответ
+        metadata: Дополнительные метаданные (user_id, category, etc.)
+    
+    Returns:
+        True если успешно, False при ошибке
+    """
+    if not question or not answer or not question.strip() or not answer.strip():
+        log.warning("⚠️ Вопрос и ответ не могут быть пустыми")
+        return False
+    
+    try:
+        # Генерируем эмбеддинг для вопроса (для поиска)
+        embedding = generate_embedding(question)
+        if not embedding:
+            log.warning("⚠️ Не удалось сгенерировать эмбеддинг для вопроса")
+            return False
+        
+        # Получаем клиент Qdrant
+        client = get_qdrant_client()
+        if not client:
+            log.warning("⚠️ Qdrant клиент недоступен")
+            return False
+        
+        # Убеждаемся что коллекция существует
+        if not ensure_collection():
+            log.error("❌ Не удалось создать/проверить коллекцию")
+            return False
+        
+        # Подготавливаем метаданные
+        payload = {
+            "source": "manual_qa",
+            "type": "qa_pair",
+            "question": question,
+            "answer": answer,
+            "text": f"Вопрос: {question}\nОтвет: {answer}",  # Полный текст для поиска
+            "content": answer,  # Ответ для отображения
+            "timestamp": datetime.now().isoformat()
+        }
+        if metadata:
+            payload.update(metadata)
+        
+        # Генерируем ID для точки
+        text_hash = hashlib.md5(f"qa_{question}_{answer}".encode()).hexdigest()
+        point_id = int(text_hash[:8], 16)
+        
+        # Добавляем точку в Qdrant
+        client.upsert(
+            collection_name=COLLECTION_NAME,
+            points=[
+                PointStruct(
+                    id=point_id,
+                    vector=embedding,
+                    payload=payload
+                )
+            ]
+        )
+        
+        log.info(f"✅ Q&A пара индексирована в Qdrant (point_id={point_id})")
+        return True
+        
+    except Exception as e:
+        log.error(f"❌ Ошибка индексации Q&A пары в Qdrant: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        return False
+
