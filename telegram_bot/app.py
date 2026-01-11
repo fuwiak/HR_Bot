@@ -46,6 +46,7 @@ from telegram_bot.handlers import (
     rag_search_command,
     rag_stats_command,
     rag_docs_command,
+    rag_upload_command,
     demo_proposal_command,
     summary_command,
     status_command,
@@ -202,6 +203,7 @@ def main():
     app.add_handler(CommandHandler("rag_search", rag_search_command))
     app.add_handler(CommandHandler("rag_stats", rag_stats_command))
     app.add_handler(CommandHandler("rag_docs", rag_docs_command))
+    app.add_handler(CommandHandler("rag_upload", rag_upload_command))
     app.add_handler(CommandHandler("demo_proposal", demo_proposal_command))
     app.add_handler(CommandHandler("summary", summary_command))
     app.add_handler(CommandHandler("status", status_command))

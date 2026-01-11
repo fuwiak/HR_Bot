@@ -2,7 +2,7 @@
 Обработчики команд
 """
 from .basic import start, menu, status_command, myid_command
-from .rag import rag_search_command, rag_stats_command, rag_docs_command
+from .rag import rag_search_command, rag_stats_command, rag_docs_command, rag_upload_command
 from .weeek import (
     weeek_info_command,
     weeek_create_task_command,
@@ -31,6 +31,7 @@ __all__ = [
     'rag_search_command',
     'rag_stats_command',
     'rag_docs_command',
+    'rag_upload_command',
     # WEEEK
     'weeek_info_command',
     'weeek_create_task_command',

@@ -110,7 +110,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 InlineKeyboardButton("🔍 Поиск", callback_data="rag_search_menu"),
                 InlineKeyboardButton("📚 Документы", callback_data="rag_docs")
             ],
-            [InlineKeyboardButton("📊 Статистика", callback_data="rag_stats")],
+            [
+                InlineKeyboardButton("📊 Статистика", callback_data="rag_stats"),
+                InlineKeyboardButton("📤 Загрузить", callback_data="rag_upload_menu")
+            ],
             [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
         ]
         message_text = (
@@ -121,7 +124,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📚 *Документы* — список всех\n"
             "   документов в базе\n\n"
             "📊 *Статистика* — информация\n"
-            "   о базе знаний"
+            "   о базе знаний\n\n"
+            "📤 *Загрузить* — инструкция\n"
+            "   по загрузке документов"
         )
         await query.edit_message_text(
             message_text,
@@ -422,8 +427,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "`/menu` — главное меню\n\n"
             "📚 *База знаний:*\n"
             "`/rag_search [запрос]` — поиск\n"
+            "`/rag_upload` — загрузка документов\n"
             "`/rag_stats` — статистика\n"
-            "`/rag_docs` — список документов\n\n"
+            "`/rag_docs` — список документов\n"
+            "`/rag_upload` — загрузка документов\n\n"
             "📋 *WEEEK проекты:*\n"
             "`/weeek_info` — workspace info\n"
             "`/weeek_projects` — список проектов\n"
@@ -697,6 +704,44 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ Ошибка: {str(e)}",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
+    elif query.data == "rag_upload_menu":
+        keyboard = [
+            [InlineKeyboardButton("🔙 Назад", callback_data="menu_knowledge_base")],
+            [InlineKeyboardButton("🏠 Главное меню", callback_data="back_to_menu")]
+        ]
+        text = (
+            "📤 *Загрузка документов в базу знаний*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "*Как загрузить документ:*\n\n"
+            "1️⃣ Просто отправьте файл боту\n"
+            "   (перетащите файл в чат или\n"
+            "   используйте кнопку \"📎\")\n\n"
+            "2️⃣ Бот автоматически:\n"
+            "   • Извлечет текст из документа\n"
+            "   • Разобьет на части (чанки)\n"
+            "   • Создаст векторные представления\n"
+            "   • Загрузит в базу знаний\n\n"
+            "*Поддерживаемые форматы:*\n"
+            "• 📄 PDF (`.pdf`)\n"
+            "• 📝 Word (`.docx`, `.doc`)\n"
+            "• 📊 Excel (`.xlsx`, `.xls`)\n"
+            "• 📋 Текст (`.txt`)\n\n"
+            "*Ограничения:*\n"
+            "• Максимальный размер: 20 МБ\n"
+            "• Документ должен содержать текст\n\n"
+            "*После загрузки:*\n"
+            "Используйте `/rag_search [запрос]`\n"
+            "для поиска информации в\n"
+            "загруженных документах.\n\n"
+            "*Примеры:*\n"
+            "• `/rag_search подбор персонала`\n"
+            "• `/rag_search автоматизация HR`"
+        )
+        await query.edit_message_text(
+            text,
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     elif query.data == "status":
         try:
             from services.helpers.weeek_helper import get_project_deadlines
