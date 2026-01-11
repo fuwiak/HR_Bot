@@ -147,8 +147,9 @@ def get_qdrant_client():
         # Определяем, является ли URL публичным доменом
         is_public = QDRANT_URL.startswith("https://")
         
-        # Быстрый таймаут для всех подключений (15 секунд максимум)
-        timeout_seconds = 15.0
+        # Увеличенный таймаут для публичных доменов (30 секунд для поиска)
+        # Для публичных Railway доменов нужен больший таймаут из-за задержек сети
+        timeout_seconds = 30.0 if is_public else 15.0
         
         # Проверяем, нужен ли API ключ для публичных доменов
         qdrant_api_key = os.getenv("QDRANT_API_KEY")

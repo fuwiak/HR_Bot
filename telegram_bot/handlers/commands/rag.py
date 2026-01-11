@@ -29,15 +29,43 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await update.message.reply_text("❌ Ошибка создания эмбеддинга")
             return
         
-        # Ищем в Qdrant
+        # Ищем в Qdrant с обработкой таймаутов
         collection_name = "hr2137_bot_knowledge_base"
         log.info(f"🔍 [RAG] Поиск в коллекции '{collection_name}' для команды /rag_search: '{query}'")
-        search_results = client.query_points(
-            collection_name=collection_name,
-            query=query_embedding,
-            limit=5
-        )
-        log.info(f"✅ [RAG] Найдено {len(search_results.points) if search_results.points else 0} результатов в коллекции '{collection_name}'")
+        
+        try:
+            search_results = client.query_points(
+                collection_name=collection_name,
+                query=query_embedding,
+                limit=5
+            )
+            log.info(f"✅ [RAG] Найдено {len(search_results.points) if search_results.points else 0} результатов в коллекции '{collection_name}'")
+        except Exception as search_error:
+            error_str = str(search_error).lower()
+            if "timeout" in error_str or "timed out" in error_str:
+                log.error(f"❌ [RAG] Таймаут при поиске в Qdrant: {search_error}")
+                keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    f"⏱️ *Таймаут при поиске*\n\n"
+                    f"Поиск в базе знаний занял слишком много времени.\n"
+                    f"Попробуйте позже или упростите запрос.",
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+                return
+            else:
+                log.error(f"❌ [RAG] Ошибка поиска в Qdrant: {search_error}")
+                keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    f"❌ *Ошибка поиска*\n\n"
+                    f"Не удалось выполнить поиск в базе знаний.\n"
+                    f"Ошибка: {str(search_error)[:200]}",
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+                return
         
         if not search_results.points:
             await update.message.reply_text(f"❌ По запросу '{query}' ничего не найдено в базе знаний.")
@@ -157,7 +185,31 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         log.error(f"❌ Ошибка поиска в RAG: {e}")
         import traceback
         log.error(traceback.format_exc())
-        await update.message.reply_text(f"❌ Ошибка поиска: {str(e)}")
+        error_str = str(e).lower()
+        
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if "timeout" in error_str or "timed out" in error_str:
+            error_message = (
+                f"⏱️ *Таймаут при поиске*\n\n"
+                f"Поиск в базе знаний занял слишком много времени.\n"
+                f"Возможные причины:\n"
+                f"• Qdrant сервер перегружен\n"
+                f"• Проблемы с сетью\n"
+                f"• Слишком сложный запрос\n\n"
+                f"Попробуйте позже или упростите запрос."
+            )
+        elif "connect" in error_str or "connection" in error_str:
+            error_message = (
+                f"🔌 *Ошибка подключения*\n\n"
+                f"Не удалось подключиться к базе знаний.\n"
+                f"Проверьте доступность Qdrant сервера."
+            )
+        else:
+            error_message = f"❌ *Ошибка поиска*\n\n{str(e)[:300]}"
+        
+        await update.message.reply_text(error_message, parse_mode='Markdown', reply_markup=reply_markup)
 
 async def rag_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /rag_stats - статистика RAG базы знаний"""
