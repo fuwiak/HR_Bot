@@ -58,6 +58,8 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.message.from_user.username or "без username"
     first_name = update.message.from_user.first_name or "без имени"
     
+    log.info(f"💬 Получено сообщение от {user_id} (@{username}): {text[:100]}")
+    
     # Сохраняем входящее сообщение: Redis -> PostgreSQL -> Qdrant
     try:
         save_telegram_message(
@@ -439,6 +441,9 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Получаем историю для контекста
         history = get_recent_history(user_id)
         
+        # Обновляем индикатор перед RAG поиском
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        
         # Используем RAG поиск если нужно
         rag_context = ""
         if len(text) > 10:  # Только для достаточно длинных запросов
@@ -484,8 +489,41 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Добавляем текущее сообщение
         messages.append({"role": "user", "content": text})
         
-        # Получаем ответ от LLM
-        response = await openrouter_chat(messages, use_system_message=False)
+        # Обновляем индикатор перед генерацией ответа (может занять время)
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        
+        # Создаем задачу для периодического обновления typing индикатора во время долгой генерации
+        import asyncio
+        typing_task = None
+        
+        async def keep_typing():
+            """Периодически обновляет typing индикатор каждые 3 секунды"""
+            while True:
+                await asyncio.sleep(3)
+                try:
+                    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+                except Exception:
+                    break
+        
+        # Запускаем задачу обновления typing
+        typing_task = asyncio.create_task(keep_typing())
+        
+        try:
+            # Получаем ответ от LLM
+            log.info(f"🤖 Генерация ответа для пользователя {user_id}...")
+            response = await openrouter_chat(messages, use_system_message=False)
+            log.info(f"✅ Ответ сгенерирован: {response[:100] if response else 'None'}...")
+        finally:
+            # Останавливаем задачу обновления typing
+            if typing_task:
+                typing_task.cancel()
+                try:
+                    await typing_task
+                except asyncio.CancelledError:
+                    pass
+        
+        # Обновляем индикатор перед отправкой ответа
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
         
         # Сохраняем ответ в память
         add_memory(user_id, "assistant", response)
