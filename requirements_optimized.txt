@@ -1,6 +1,7 @@
-# Оптимизированная версия requirements.txt без langchain/langgraph
-# Используется только langchain-text-splitters для RecursiveCharacterTextSplitter
+# Оптимизированная версия requirements.txt для быстрой установки
+# Используйте: pip install --only-binary=:all: -r requirements_optimized.txt
 
+# Основные зависимости
 anyio==4.11.0
 certifi==2025.10.5
 charset-normalizer==3.4.4
@@ -12,41 +13,64 @@ python-dotenv==1.1.1
 python-telegram-bot[webhooks]==21.6
 requests==2.32.3
 aiohttp>=3.9.0
+aiosmtplib>=3.0.0
 fuzzywuzzy==0.18.0
 python-levenshtein==0.27.1
 sniffio==1.3.1
 typing_extensions==4.15.0
 urllib3==2.5.0
+
+# Google APIs
 gspread==6.1.4
 google-auth==2.34.0
 google-auth-oauthlib==1.2.1
 google-auth-httplib2==0.2.0
+
+# Vector DB
 qdrant-client>=1.7.0
-# sentence-transformers - удалено, используем API эмбеддинги
-# sentence-transformers>=2.2.0
+
+# Data processing
 numpy>=1.24.0,<2.0.0
-# transformers, torch, sentencepiece - удалены, используем API эмбеддинги вместо локальных
-# transformers>=4.30.0
-# torch>=2.0.0
-# sentencepiece>=0.1.99
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-python-multipart>=0.0.6
-# langchain и langchain-community удалены - не используются напрямую
-# langgraph - тяжелая зависимость langchain, не нужна
-# Используем только langchain-text-splitters для RecursiveCharacterTextSplitter
-langchain-text-splitters>=0.0.1
-rank-bm25>=0.2.2
-scikit-learn>=1.3.0
-beautifulsoup4>=4.12.0
-lxml>=4.9.0
 pandas>=2.0.0
 openpyxl>=3.1.0
 PyPDF2>=3.0.0
+python-docx>=1.1.0
+scikit-learn>=1.3.0
+rank-bm25>=0.2.2
+
+# Web scraping
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+jinja2>=3.1.0
+
+# LangGraph - зафиксированы версии для быстрой установки
+langchain-core==0.3.23
+langgraph==0.2.40
+
+# Config
 pyyaml>=6.0.1
-yadisk>=0.4.8  # Опционально, для скачивания файлов с Яндекс Диска
-itsdangerous>=2.1.0  # Для сессий и подписей cookies
-pytest>=7.4.0  # Для тестирования
-pytest-asyncio>=0.21.0  # Для async тестов
-pytest-cov>=4.1.0  # Для покрытия кода
-pytest-mock>=3.12.0  # Для моков в тестах
+itsdangerous>=2.1.0
+
+# Storage
+yadisk>=0.4.8
+
+# Database
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+redis>=5.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# RAG Evaluation
+ragas>=0.1.0
+datasets>=2.14.0

@@ -32,7 +32,9 @@ uvicorn[standard]>=0.24.0
 python-multipart>=0.0.6
 jinja2>=3.1.0  # Для Jinja2Templates в FastAPI
 # langchain и langchain-community удалены - не используются напрямую
-langgraph>=0.2.0  # Для улучшенной работы с RAG и точного извлечения цен
+# Зафиксированы версии для быстрой установки (избегаем долгого поиска совместимых версий)
+langchain-core==0.3.23  # Фиксированная версия для быстрой установки (wheel доступен)
+langgraph==0.2.40  # Для улучшенной работы с RAG и точного извлечения цен
 # langchain-text-splitters опционален - есть fallback на легкую реализацию в text_splitter.py
 # langchain-text-splitters>=0.0.1  # Опционально, если нужна оригинальная реализация
 rank-bm25>=0.2.2

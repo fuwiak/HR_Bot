@@ -21,8 +21,10 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 
 # Install Python dependencies
+# Используем --prefer-binary для быстрой установки wheel пакетов
+# и --timeout для избежания зависаний
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install --prefer-binary --timeout=100 -r requirements.txt
 
 # Copy application code
 COPY backend/ ./backend/
