@@ -296,10 +296,15 @@ def main():
                 log.warning(f"⚠️ Не удалось запустить фоновые задачи: {e}")
             
             try:
-                asyncio.create_task(email_monitor_task(app.bot))
+                # Сохраняем задачу в переменную, чтобы она не была удалена сборщиком мусора
+                email_task = asyncio.create_task(email_monitor_task(app.bot))
+                # Сохраняем задачу в атрибут приложения для доступа из других мест
+                app.email_monitor_task = email_task
                 log.info("✅ Фоновая задача мониторинга почты запущена")
             except Exception as e:
                 log.warning(f"⚠️ Не удалось запустить мониторинг почты: {e}")
+                import traceback
+                log.error(traceback.format_exc())
             
             await app.updater.start_webhook(
                 listen="0.0.0.0",
@@ -342,10 +347,15 @@ def main():
                 log.warning(f"⚠️ Не удалось запустить фоновые задачи: {e}")
             
             try:
-                asyncio.create_task(email_monitor_task(app.bot))
+                # Сохраняем задачу в переменную, чтобы она не была удалена сборщиком мусора
+                email_task = asyncio.create_task(email_monitor_task(app.bot))
+                # Сохраняем задачу в атрибут приложения для доступа из других мест
+                app.email_monitor_task = email_task
                 log.info("✅ Фоновая задача мониторинга почты запущена")
             except Exception as e:
                 log.warning(f"⚠️ Не удалось запустить мониторинг почты: {e}")
+                import traceback
+                log.error(traceback.format_exc())
             
             log.info("💡 Для production установите USE_WEBHOOK=true и WEBHOOK_URL")
             
