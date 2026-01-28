@@ -819,6 +819,69 @@ async def test_cold_lead_sent_to_channel():
         assert "cold" in channel_message.lower() or "0.3" in channel_message
 
 
+@pytest.mark.asyncio
+async def test_send_lead_to_channel_mock():
+    """Тест отправки mock сообщения в канал HRAI_ANovoselova_Лиды"""
+    
+    # Создаем mock Telegram бота
+    mock_telegram_bot = AsyncMock()
+    mock_telegram_bot.send_message = AsyncMock()
+    
+    # Создаем mock данные лида
+    mock_lead_info = {
+        "source": "🧪 Тестовый источник",
+        "title": "Тестовый лид для проверки канала",
+        "client_name": "Анастасия Новоселова",
+        "client_email": "test@example.com",
+        "client_phone": "+79001234567",
+        "message": "Это тестовое сообщение для проверки отправки лидов в канал HRAI_ANovoselova_Лиды",
+        "score": 0.85,
+        "status": "warm",
+        "category": "подбор персонала"
+    }
+    
+    # Импортируем функцию для тестирования
+    from services.agents.scenario_workflows import send_lead_to_channel
+    
+    with patch('services.agents.scenario_workflows.TELEGRAM_LEADS_CHANNEL_ID', '-1001234567890'):
+        # Выполняем отправку
+        result = await send_lead_to_channel(mock_telegram_bot, mock_lead_info)
+        
+        # Проверяем, что функция вернула True (успешная отправка)
+        assert result is True, "Функция должна вернуть True при успешной отправке"
+        
+        # Проверяем, что send_message был вызван
+        assert mock_telegram_bot.send_message.called, "send_message должен быть вызван"
+        
+        # Проверяем параметры вызова
+        call_args = mock_telegram_bot.send_message.call_args
+        assert call_args is not None, "send_message должен быть вызван с аргументами"
+        
+        # Проверяем chat_id (ID канала)
+        assert call_args.kwargs.get("chat_id") == "-1001234567890", \
+            f"Сообщение должно быть отправлено в канал -1001234567890, получено: {call_args.kwargs.get('chat_id')}"
+        
+        # Проверяем parse_mode
+        assert call_args.kwargs.get("parse_mode") == "Markdown", \
+            "Сообщение должно быть отправлено с parse_mode='Markdown'"
+        
+        # Проверяем содержимое сообщения
+        message_text = call_args.kwargs.get("text", "")
+        assert "🔥 *Новый лид*" in message_text, "Сообщение должно содержать заголовок '🔥 *Новый лид*'"
+        assert "🧪 Тестовый источник" in message_text, "Сообщение должно содержать источник"
+        assert "Тестовый лид для проверки канала" in message_text, "Сообщение должно содержать название"
+        assert "Анастасия Новоселова" in message_text, "Сообщение должно содержать имя клиента"
+        assert "test@example.com" in message_text, "Сообщение должно содержать email"
+        assert "+79001234567" in message_text, "Сообщение должно содержать телефон"
+        assert "Это тестовое сообщение" in message_text, "Сообщение должно содержать текст лида"
+        assert "0.85" in message_text or "85" in message_text, "Сообщение должно содержать оценку"
+        assert "warm" in message_text.lower(), "Сообщение должно содержать статус"
+        assert "подбор персонала" in message_text.lower(), "Сообщение должно содержать категорию"
+        
+        print("\n✅ Mock сообщение успешно отправлено в канал!")
+        print(f"📝 Содержимое сообщения:\n{message_text}\n")
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 

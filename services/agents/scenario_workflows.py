@@ -437,22 +437,42 @@ async def process_lead_email(email_data: Dict, require_approval: bool = True, te
     Returns:
         Словарь с результатами обработки
     """
+    # Извлекаем данные письма (в начале для гарантированной отправки в канал)
+    subject = email_data.get("subject", "")
+    body = email_data.get("body", "")
+    from_addr = email_data.get("from", "")
+    request_text = f"{subject}\n\n{body}"
+    
+    # Отправляем ВСЕ письма в канал сразу (до всех проверок и обработки)
+    # Это гарантирует, что все письма попадут в канал, даже если модуль недоступен или произойдет ошибка
+    if telegram_bot:
+        try:
+            lead_info = {
+                "source": "📧 Email",
+                "title": subject or "Без темы",
+                "client_name": from_addr.split("@")[0] if from_addr else "Неизвестно",
+                "client_email": from_addr or "",
+                "client_phone": "",
+                "message": body or "",
+                "score": 0,
+                "status": "info",  # Будет обновлен после обработки
+                "category": "обработка..."
+            }
+            await send_lead_to_channel(telegram_bot, lead_info)
+            log.info(f"✅ [Сценарий 2] Письмо отправлено в канал лидов (до обработки)")
+        except Exception as e:
+            log.error(f"❌ [Сценарий 2] Ошибка отправки письма в канал: {e}")
+    
+    # Проверка доступности модуля email (после отправки в канал)
     if not EMAIL_AVAILABLE:
-        return {"success": False, "error": "Email модуль недоступен"}
+        return {"success": False, "error": "Email модуль недоступен", "sent_to_channel": True}
     
     try:
         # Шаг 1: Классификация письма
         email_type = await classify_email(email_data)
         log.info(f"📧 [Сценарий 2] Письмо классифицировано как: {email_type}")
         
-        if email_type != "new_lead":
-            return {"success": False, "error": "Письмо не является новым лидом", "type": email_type}
-        
         # Шаг 2: Анализ запроса
-        subject = email_data.get("subject", "")
-        body = email_data.get("body", "")
-        from_addr = email_data.get("from", "")
-        request_text = f"{subject}\n\n{body}"
         
         # RAG анализ
         rag_chain = get_rag_chain()
@@ -559,20 +579,9 @@ async def process_lead_email(email_data: Dict, require_approval: bool = True, te
                     log.warning(f"⚠️ [Сценарий 2] Проект создан, но ID не получен")
                     result["weeek_project_created"] = False
         
-        # Отправка лида в канал HRAI_ANovoselova_Лиды
-        if telegram_bot and result.get("email_sent"):
-            lead_info = {
-                "source": "📧 Email",
-                "title": subject,
-                "client_name": from_addr.split("@")[0],
-                "client_email": from_addr,
-                "client_phone": "",
-                "message": body,
-                "score": 0,
-                "status": "warm" if result.get("email_sent") else "cold",
-                "category": classification.get("category", "")
-            }
-            await send_lead_to_channel(telegram_bot, lead_info)
+        # Если письмо не является новым лидом, возвращаем результат (письмо уже отправлено в канал выше)
+        if email_type != "new_lead":
+            return {"success": False, "error": "Письмо не является новым лидом", "type": email_type, "sent_to_channel": True}
         
         return result
         
