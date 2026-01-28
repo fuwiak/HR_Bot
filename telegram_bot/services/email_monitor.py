@@ -99,7 +99,8 @@ async def email_monitor_task(bot):
             from services.helpers.email_helper import check_new_emails
             
             # Проверяем только самое новое письмо (limit=1 для скорости)
-            emails = await check_new_emails(since_days=1, limit=1)
+            # Увеличиваем период до 7 дней для надежности
+            emails = await check_new_emails(since_days=7, limit=1)
             
             if emails:
                 # Берем только самое новое письмо (первое в списке)
