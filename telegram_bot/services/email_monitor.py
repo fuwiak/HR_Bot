@@ -8,6 +8,14 @@ from typing import Dict
 
 log = logging.getLogger(__name__)
 
+# Импорт функции классификации и отправки в канал
+try:
+    from services.agents.scenario_workflows import classify_email_as_lead, send_lead_to_channel
+    SCENARIO_WORKFLOWS_AVAILABLE = True
+except ImportError as e:
+    log.warning(f"⚠️ Не удалось импортировать scenario_workflows: {e}")
+    SCENARIO_WORKFLOWS_AVAILABLE = False
+
 # Глобальное состояние для отслеживания обработанных писем
 processed_email_ids: set = set()
 
@@ -19,18 +27,51 @@ email_reply_state: Dict[int, Dict] = {}  # {user_id: {'email_id': ..., 'to': ...
 
 
 async def send_email_notification(bot, email_data: Dict):
-    """Отправка уведомления о новом письме подписчикам"""
+    """Отправка уведомления о новом письме подписчикам и в канал лидов"""
     try:
         from telegram_bot.storage.email_subscribers import load_email_subscribers
-        
-        subscribers = load_email_subscribers()
-        if not subscribers:
-            return
         
         subject = email_data.get("subject", "Без темы")
         from_email = email_data.get("from", "Неизвестный отправитель")
         email_id = email_data.get("id", "")
         preview = email_data.get("preview", "")[:200]  # Первые 200 символов
+        body = email_data.get("body", email_data.get("preview", ""))
+        
+        # Отправляем ВСЕ письма в канал лидов с классификацией
+        if SCENARIO_WORKFLOWS_AVAILABLE:
+            try:
+                # Классифицируем email
+                classification = await classify_email_as_lead(subject, body)
+                log.info(f"✅ Email классифицирован как {classification.get('label', 'unknown')}")
+                
+                # Формируем информацию для канала
+                lead_info = {
+                    "source": "📧 Email",
+                    "title": subject or "Без темы",
+                    "client_name": from_email.split("@")[0] if from_email else "Неизвестно",
+                    "client_email": from_email or "",
+                    "client_phone": "",
+                    "message": body or preview or "",
+                    "score": 0,
+                    "status": "info",
+                    "category": "",
+                    "label": classification.get("label", "non_lead"),
+                    "classification_reason": classification.get("reason", ""),
+                    "classification_confidence": classification.get("confidence", 0.5)
+                }
+                
+                # Отправляем в канал
+                await send_lead_to_channel(bot, lead_info)
+                log.info(f"✅ Письмо отправлено в канал лидов с меткой {lead_info['label']}")
+            except Exception as e:
+                log.error(f"❌ Ошибка отправки письма в канал лидов: {e}")
+                import traceback
+                log.error(traceback.format_exc())
+        
+        # Отправляем уведомления подписчикам
+        subscribers = load_email_subscribers()
+        if not subscribers:
+            return
         
         message_text = (
             f"📧 *Новое письмо*\n\n"
