@@ -253,17 +253,27 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
                 
                 if weeek_project:
                     project_id = weeek_project.get("id")
-                    result["weeek_project_id"] = project_id
-                    result["weeek_project_created"] = True
-                    log.info(f"✅ [Сценарий 1] Проект создан в WEEEK: {project_id}")
-                    
-                    # Создаем задачу "Согласовать КП"
-                    await create_task(
-                        project_id=project_id,
-                        title="Согласовать КП",
-                        description="Проверить и согласовать черновик коммерческого предложения"
-                    )
-                    log.info(f"✅ [Сценарий 1] Задача создана в WEEEK")
+                    if project_id:  # Проверяем, что project_id не None
+                        result["weeek_project_id"] = project_id
+                        result["weeek_project_created"] = True
+                        log.info(f"✅ [Сценарий 1] Проект создан в WEEEK: {project_id}")
+                        
+                        # Автоматически устанавливаем статус "new" для нового проекта
+                        from services.helpers.weeek_helper import update_project_status
+                        status_updated = await update_project_status(str(project_id), "new")
+                        if status_updated:
+                            log.info(f"✅ [Сценарий 1] Статус проекта установлен на 'new'")
+                        
+                        # Создаем задачу "Согласовать КП"
+                        await create_task(
+                            project_id=str(project_id),
+                            title="Согласовать КП",
+                            description="Проверить и согласовать черновик коммерческого предложения"
+                        )
+                        log.info(f"✅ [Сценарий 1] Задача создана в WEEEK")
+                    else:
+                        log.warning(f"⚠️ [Сценарий 1] Проект создан, но ID не получен")
+                        result["weeek_project_created"] = False
             
             # 4e. Уведомление консультанта в Telegram
             # Определяем источник данных
@@ -443,9 +453,20 @@ async def process_lead_email(email_data: Dict, require_approval: bool = True, te
             )
             
             if weeek_project:
-                result["weeek_project_id"] = weeek_project.get("id")
-                result["weeek_project_created"] = True
-                log.info(f"✅ [Сценарий 2] Проект создан в WEEEK")
+                project_id = weeek_project.get("id")
+                if project_id:  # Проверяем, что project_id не None
+                    result["weeek_project_id"] = project_id
+                    result["weeek_project_created"] = True
+                    log.info(f"✅ [Сценарий 2] Проект создан в WEEEK: {project_id}")
+                    
+                    # Автоматически устанавливаем статус "new" для нового проекта
+                    from services.helpers.weeek_helper import update_project_status
+                    status_updated = await update_project_status(str(project_id), "new")
+                    if status_updated:
+                        log.info(f"✅ [Сценарий 2] Статус проекта установлен на 'new'")
+                else:
+                    log.warning(f"⚠️ [Сценарий 2] Проект создан, но ID не получен")
+                    result["weeek_project_created"] = False
         
         return result
         
@@ -515,11 +536,30 @@ async def process_telegram_lead(
             "rag_response": rag_response,
             "classification": classification,
             "validation": validation,
-            "weeek_project_created": False
+            "weeek_project_created": False,
+            "auto_reply_sent": False
         }
         
-        # Шаг 2-3: Ответ пользователю (будет отправлен через основной обработчик бота)
-        # Здесь мы только подготавливаем данные
+        # Шаг 2: Немедленный автоматический ответ с подтверждением получения заявки
+        if telegram_bot:
+            auto_reply_text = (
+                f"✅ Спасибо за вашу заявку, {user_name}!\n\n"
+                f"Мы получили ваш запрос и уже обрабатываем его. "
+                f"Наш консультант свяжется с вами в ближайшее время.\n\n"
+                f"Ваш запрос: {user_message[:100]}{'...' if len(user_message) > 100 else ''}"
+            )
+            try:
+                await telegram_bot.send_message(
+                    chat_id=user_id,
+                    text=auto_reply_text
+                )
+                result["auto_reply_sent"] = True
+                log.info(f"✅ [Сценарий 3] Автоматический ответ отправлен пользователю {user_id}")
+            except Exception as e:
+                log.error(f"❌ [Сценарий 3] Ошибка отправки автоответа: {e}")
+        
+        # Шаг 3: Обработка по стандартной цепочке (RAG + классификация + валидация)
+        # Ответ пользователю с деталями будет отправлен через основной обработчик бота
         
         # Шаг 4: При положительной валидации создаем проект в WEEEK
         if (score > 0.6 or status == "warm") and WEEEK_AVAILABLE:
@@ -532,9 +572,20 @@ async def process_telegram_lead(
             )
             
             if weeek_project:
-                result["weeek_project_id"] = weeek_project.get("id")
-                result["weeek_project_created"] = True
-                log.info(f"✅ [Сценарий 3] Проект создан в WEEEK: {weeek_project.get('id')}")
+                project_id = weeek_project.get("id")
+                if project_id:  # Проверяем, что project_id не None
+                    result["weeek_project_id"] = project_id
+                    result["weeek_project_created"] = True
+                    log.info(f"✅ [Сценарий 3] Проект создан в WEEEK: {project_id}")
+                    
+                    # Автоматически устанавливаем статус "new" для нового проекта
+                    from services.helpers.weeek_helper import update_project_status
+                    status_updated = await update_project_status(str(project_id), "new")
+                    if status_updated:
+                        log.info(f"✅ [Сценарий 3] Статус проекта установлен на 'new'")
+                else:
+                    log.warning(f"⚠️ [Сценарий 3] Проект создан, но ID не получен")
+                    result["weeek_project_created"] = False
                 
                 # Уведомление консультанта
                 if telegram_bot and TELEGRAM_CONSULTANT_CHAT_ID:

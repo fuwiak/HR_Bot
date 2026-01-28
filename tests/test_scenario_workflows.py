@@ -36,15 +36,16 @@ async def test_scenario1_warm_lead_workflow():
         }
     }
     
-    with patch('scenario_workflows.get_order_details', new_callable=AsyncMock) as mock_get_order, \
-         patch('scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
-         patch('scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
-         patch('scenario_workflows.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
-         patch('scenario_workflows.send_proposal', new_callable=AsyncMock) as mock_send_proposal, \
-         patch('scenario_workflows.send_email', new_callable=AsyncMock) as mock_send_email, \
-         patch('scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
-         patch('scenario_workflows.create_task', new_callable=AsyncMock) as mock_create_task, \
-         patch('scenario_workflows.get_rag_chain') as mock_rag:
+    with patch('services.helpers.hrtime_helper.get_order_details', new_callable=AsyncMock) as mock_get_order, \
+         patch('services.agents.lead_processor.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.lead_processor.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.lead_processor.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
+         patch('services.helpers.hrtime_helper.send_proposal', new_callable=AsyncMock) as mock_send_proposal, \
+         patch('services.helpers.email_helper.send_email', new_callable=AsyncMock) as mock_send_email, \
+         patch('services.helpers.weeek_helper.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.helpers.weeek_helper.create_task', new_callable=AsyncMock) as mock_create_task, \
+         patch('services.helpers.weeek_helper.update_project_status', new_callable=AsyncMock) as mock_update_status, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag:
         
         # Настройка моков
         mock_get_order.return_value = mock_order_data
@@ -66,8 +67,10 @@ async def test_scenario1_warm_lead_workflow():
         mock_proposal.return_value = "Коммерческое предложение для подбора HR-менеджера..."
         mock_send_proposal.return_value = True
         mock_send_email.return_value = True
-        mock_create_project.return_value = {"id": "project_123"}
-        mock_create_task.return_value = {"id": "task_123"}
+        # Важно: ID должен быть строкой или числом, не None
+        mock_create_project.return_value = {"id": 123, "name": "Тестовый проект"}
+        mock_create_task.return_value = {"id": "task_123", "name": "Согласовать КП"}
+        mock_update_status.return_value = True
         
         # Мок RAG chain
         mock_rag_instance = Mock()
@@ -94,6 +97,11 @@ async def test_scenario1_warm_lead_workflow():
         mock_send_email.assert_called_once()
         mock_create_project.assert_called_once()
         mock_create_task.assert_called_once()
+        
+        # Проверка обновления статуса проекта
+        if result.get("weeek_project_created"):
+            # update_project_status должен быть вызван
+            mock_update_status.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -107,11 +115,11 @@ async def test_scenario1_cold_lead_no_actions():
         "client": {"name": "Тест", "email": "test@example.com"}
     }
     
-    with patch('scenario_workflows.get_order_details', new_callable=AsyncMock) as mock_get_order, \
-         patch('scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
-         patch('scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
-         patch('scenario_workflows.send_proposal', new_callable=AsyncMock) as mock_send_proposal, \
-         patch('scenario_workflows.get_rag_chain') as mock_rag:
+    with patch('services.agents.scenario_workflows.get_order_details', new_callable=AsyncMock) as mock_get_order, \
+         patch('services.agents.scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.scenario_workflows.send_proposal', new_callable=AsyncMock) as mock_send_proposal, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag:
         
         mock_get_order.return_value = mock_order_data
         mock_classify.return_value = {"category": "другое", "confidence": 0.5}
@@ -149,12 +157,12 @@ async def test_scenario2_email_processing_with_approval():
     mock_telegram_bot = AsyncMock()
     mock_telegram_bot.send_message = AsyncMock()
     
-    with patch('scenario_workflows.classify_email', new_callable=AsyncMock) as mock_classify_email, \
-         patch('scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
-         patch('scenario_workflows.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
-         patch('scenario_workflows.send_email', new_callable=AsyncMock) as mock_send_email, \
-         patch('scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
-         patch('scenario_workflows.get_rag_chain') as mock_rag, \
+    with patch('services.agents.scenario_workflows.classify_email', new_callable=AsyncMock) as mock_classify_email, \
+         patch('services.agents.scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.scenario_workflows.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
+         patch('services.agents.scenario_workflows.send_email', new_callable=AsyncMock) as mock_send_email, \
+         patch('services.agents.scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag, \
          patch.dict('os.environ', {'TELEGRAM_CONSULTANT_CHAT_ID': '123456'}):
         
         mock_classify_email.return_value = "new_lead"
@@ -184,12 +192,12 @@ async def test_scenario2_email_processing_without_approval():
         "from": "client@example.com"
     }
     
-    with patch('scenario_workflows.classify_email', new_callable=AsyncMock) as mock_classify_email, \
-         patch('scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
-         patch('scenario_workflows.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
-         patch('scenario_workflows.send_email', new_callable=AsyncMock) as mock_send_email, \
-         patch('scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
-         patch('scenario_workflows.get_rag_chain') as mock_rag:
+    with patch('services.agents.scenario_workflows.classify_email', new_callable=AsyncMock) as mock_classify_email, \
+         patch('services.agents.scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.scenario_workflows.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
+         patch('services.agents.scenario_workflows.send_email', new_callable=AsyncMock) as mock_send_email, \
+         patch('services.agents.scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag:
         
         mock_classify_email.return_value = "new_lead"
         mock_classify.return_value = {"category": "бизнес-анализ", "confidence": 0.8}
@@ -218,10 +226,10 @@ async def test_scenario3_telegram_lead_warm():
     mock_telegram_bot = AsyncMock()
     mock_telegram_bot.send_message = AsyncMock()
     
-    with patch('scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
-         patch('scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
-         patch('scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
-         patch('scenario_workflows.get_rag_chain') as mock_rag, \
+    with patch('services.agents.scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag, \
          patch.dict('os.environ', {'TELEGRAM_CONSULTANT_CHAT_ID': '123456'}):
         
         mock_classify.return_value = {"category": "подбор", "confidence": 0.9}
@@ -248,19 +256,28 @@ async def test_scenario3_telegram_lead_warm():
         assert result["validation"]["score"] > 0.6
         assert result["weeek_project_created"] is True
         assert "weeek_project_id" in result
+        assert result.get("auto_reply_sent", False) is True
+        
+        # Проверка автоматического ответа пользователю
+        send_message_calls = [call for call in mock_telegram_bot.send_message.call_args_list]
+        assert len(send_message_calls) >= 1, "Должен быть отправлен автоматический ответ"
         
         # Проверка уведомления консультанта
-        mock_telegram_bot.send_message.assert_called()
+        assert any("Новый лид через Telegram" in str(call) for call in send_message_calls) or \
+               any("консультант" in str(call).lower() for call in send_message_calls)
 
 
 @pytest.mark.asyncio
 async def test_scenario3_telegram_lead_cold():
     """Тест обработки холодного Telegram лида (без создания проекта)"""
     
-    with patch('scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
-         patch('scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
-         patch('scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
-         patch('scenario_workflows.get_rag_chain') as mock_rag:
+    mock_telegram_bot = AsyncMock()
+    mock_telegram_bot.send_message = AsyncMock()
+    
+    with patch('services.agents.scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag:
         
         mock_classify.return_value = {"category": "другое", "confidence": 0.3}
         mock_validate.return_value = {
@@ -272,15 +289,151 @@ async def test_scenario3_telegram_lead_cold():
         result = await process_telegram_lead(
             user_message="Общий вопрос",
             user_id=67890,
-            user_name="Петр"
+            user_name="Петр",
+            telegram_bot=mock_telegram_bot
         )
         
         assert result["success"] is True
         assert result["validation"]["score"] < 0.6
         assert result.get("weeek_project_created", False) is False
+        assert result.get("auto_reply_sent", False) is True  # Автоответ должен быть отправлен даже для холодного лида
         
         # Проект не должен создаваться
         mock_create_project.assert_not_called()
+        
+        # Автоматический ответ должен быть отправлен
+        mock_telegram_bot.send_message.assert_called()
+        call_args = mock_telegram_bot.send_message.call_args
+        assert call_args.kwargs.get("chat_id") == 67890, "Ответ должен быть отправлен пользователю"
+
+
+@pytest.mark.asyncio
+async def test_scenario3_auto_reply_content():
+    """Тест содержания автоматического ответа на заявку"""
+    
+    mock_telegram_bot = AsyncMock()
+    mock_telegram_bot.send_message = AsyncMock()
+    
+    with patch('services.agents.scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag:
+        
+        mock_classify.return_value = {"category": "подбор", "confidence": 0.9}
+        mock_validate.return_value = {"score": 0.7, "status": "warm"}
+        mock_rag.return_value = None
+        
+        user_message = "Нужна помощь с подбором персонала"
+        user_id = 12345
+        user_name = "Анна"
+        
+        result = await process_telegram_lead(
+            user_message=user_message,
+            user_id=user_id,
+            user_name=user_name,
+            telegram_bot=mock_telegram_bot
+        )
+        
+        # Проверяем, что автоответ был отправлен
+        assert result.get("auto_reply_sent", False) is True
+        
+        # Проверяем содержание автоответа
+        send_message_calls = mock_telegram_bot.send_message.call_args_list
+        auto_reply_call = None
+        for call in send_message_calls:
+            if call.kwargs.get("chat_id") == user_id:
+                auto_reply_call = call
+                break
+        
+        assert auto_reply_call is not None, "Автоответ должен быть отправлен пользователю"
+        reply_text = auto_reply_call.kwargs.get("text", "")
+        assert "Спасибо" in reply_text or "заявку" in reply_text.lower(), "Ответ должен содержать благодарность"
+        assert user_name in reply_text, "Ответ должен содержать имя пользователя"
+
+
+@pytest.mark.asyncio
+async def test_project_status_update_on_creation():
+    """Тест автоматического обновления статуса проекта при создании"""
+    
+    mock_telegram_bot = AsyncMock()
+    mock_telegram_bot.send_message = AsyncMock()
+    
+    with patch('services.agents.lead_processor.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.lead_processor.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.helpers.weeek_helper.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.helpers.weeek_helper.update_project_status', new_callable=AsyncMock) as mock_update_status, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag, \
+         patch.dict('os.environ', {'TELEGRAM_CONSULTANT_CHAT_ID': '123456'}):
+        
+        mock_classify.return_value = {"category": "подбор", "confidence": 0.9}
+        mock_validate.return_value = {"score": 0.8, "status": "warm"}
+        mock_create_project.return_value = {"id": 123, "name": "Тестовый проект"}
+        mock_update_status.return_value = True
+        
+        mock_rag_instance = Mock()
+        mock_rag_instance.query = AsyncMock(return_value={"answer": "..."})
+        mock_rag.return_value = mock_rag_instance
+        
+        result = await process_telegram_lead(
+            user_message="Нужен подбор персонала",
+            user_id=12345,
+            user_name="Иван",
+            telegram_bot=mock_telegram_bot
+        )
+        
+        # Проверяем, что проект создан
+        assert result.get("weeek_project_created") is True
+        project_id = result.get("weeek_project_id")
+        assert project_id == 123
+        
+        # Проверяем, что статус был обновлен
+        mock_update_status.assert_called_once_with(str(project_id), "new")
+
+
+@pytest.mark.asyncio
+async def test_project_status_update_hrtime_scenario():
+    """Тест обновления статуса проекта в сценарии HR Time"""
+    
+    mock_order_data = {
+        "id": "order_789",
+        "title": "Подбор менеджера",
+        "description": "Нужен менеджер",
+        "budget": 50000,
+        "client": {"name": "Тест", "email": "test@test.com"}
+    }
+    
+    with patch('services.helpers.hrtime_helper.get_order_details', new_callable=AsyncMock) as mock_get_order, \
+         patch('services.agents.lead_processor.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.lead_processor.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.lead_processor.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
+         patch('services.helpers.hrtime_helper.send_proposal', new_callable=AsyncMock) as mock_send_proposal, \
+         patch('services.helpers.email_helper.send_email', new_callable=AsyncMock) as mock_send_email, \
+         patch('services.helpers.weeek_helper.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.helpers.weeek_helper.create_task', new_callable=AsyncMock) as mock_create_task, \
+         patch('services.helpers.weeek_helper.update_project_status', new_callable=AsyncMock) as mock_update_status, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag:
+        
+        mock_get_order.return_value = mock_order_data
+        mock_classify.return_value = {"category": "подбор", "confidence": 0.9}
+        mock_validate.return_value = {"score": 0.85, "status": "warm"}
+        mock_proposal.return_value = "КП текст"
+        mock_send_proposal.return_value = True
+        mock_send_email.return_value = True
+        mock_create_project.return_value = {"id": "project_hrtime_123"}
+        mock_create_task.return_value = {"id": "task_123"}
+        mock_update_status.return_value = True
+        
+        mock_rag_instance = Mock()
+        mock_rag_instance.query = AsyncMock(return_value={"answer": "..."})
+        mock_rag.return_value = mock_rag_instance
+        
+        result = await process_hrtime_order("order_789", order_data=mock_order_data)
+        
+        # Проверяем, что проект создан
+        assert result.get("weeek_project_created") is True
+        project_id = result.get("weeek_project_id")
+        
+        # Проверяем, что статус был обновлен
+        mock_update_status.assert_called_once_with(project_id, "new")
 
 
 # ===================== СЦЕНАРИЙ 4: Напоминание и суммаризация =====================
@@ -310,7 +463,7 @@ async def test_scenario4_deadline_check():
         }
     ]
     
-    with patch('scenario_workflows.get_project_deadlines', new_callable=AsyncMock) as mock_get_deadlines, \
+    with patch('services.agents.scenario_workflows.get_project_deadlines', new_callable=AsyncMock) as mock_get_deadlines, \
          patch.dict('os.environ', {'TELEGRAM_CONSULTANT_CHAT_ID': '123456'}):
         
         mock_get_deadlines.return_value = mock_tasks
@@ -330,7 +483,7 @@ async def test_scenario4_no_deadlines():
     
     mock_telegram_bot = AsyncMock()
     
-    with patch('scenario_workflows.get_project_deadlines', new_callable=AsyncMock) as mock_get_deadlines:
+    with patch('services.agents.scenario_workflows.get_project_deadlines', new_callable=AsyncMock) as mock_get_deadlines:
         mock_get_deadlines.return_value = []
         
         result = await check_upcoming_deadlines(telegram_bot=mock_telegram_bot, days_ahead=1)
@@ -362,7 +515,7 @@ async def test_scenario4_project_summary():
         }
     ]
     
-    with patch('scenario_workflows.summarize_project_conversation', new_callable=AsyncMock) as mock_summarize:
+    with patch('services.agents.scenario_workflows.summarize_project_conversation', new_callable=AsyncMock) as mock_summarize:
         mock_summarize.return_value = "Суммаризация: Клиент запросил подбор HR-менеджера для IT компании..."
         
         result = await summarize_project_by_name(
@@ -399,10 +552,10 @@ async def test_full_scenario1_integration():
     }
     
     # Мокируем только внешние API, оставляя внутреннюю логику
-    with patch('scenario_workflows.send_proposal', new_callable=AsyncMock) as mock_send, \
-         patch('scenario_workflows.send_email', new_callable=AsyncMock) as mock_email, \
-         patch('scenario_workflows.create_project', new_callable=AsyncMock) as mock_project, \
-         patch('scenario_workflows.create_task', new_callable=AsyncMock) as mock_task:
+    with patch('services.agents.scenario_workflows.send_proposal', new_callable=AsyncMock) as mock_send, \
+         patch('services.agents.scenario_workflows.send_email', new_callable=AsyncMock) as mock_email, \
+         patch('services.agents.scenario_workflows.create_project', new_callable=AsyncMock) as mock_project, \
+         patch('services.agents.scenario_workflows.create_task', new_callable=AsyncMock) as mock_task:
         
         mock_send.return_value = True
         mock_email.return_value = True
