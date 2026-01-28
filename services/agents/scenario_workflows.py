@@ -36,6 +36,7 @@ except ImportError as e:
 
 # Telegram bot для отправки уведомлений консультанту
 TELEGRAM_CONSULTANT_CHAT_ID = os.getenv("TELEGRAM_CONSULTANT_CHAT_ID")  # ID чата консультанта для уведомлений
+TELEGRAM_LEADS_CHANNEL_ID = os.getenv("TELEGRAM_LEADS_CHANNEL_ID")  # ID канала для лидов (HRAI_ANovoselova_Лиды)
 
 # Глобальный экземпляр RAG для всех сценариев
 _rag_chain = None
@@ -54,9 +55,69 @@ def get_rag_chain():
     return _rag_chain
 
 
+async def send_lead_to_channel(telegram_bot, lead_info: Dict) -> bool:
+    """
+    Отправить информацию о лиде в канал HRAI_ANovoselova_Лиды
+    
+    Args:
+        telegram_bot: Экземпляр Telegram бота
+        lead_info: Словарь с информацией о лиде (source, title, client_name, client_email, client_phone, message, score, status, category)
+    
+    Returns:
+        True если сообщение отправлено успешно, False в противном случае
+    """
+    if not telegram_bot or not TELEGRAM_LEADS_CHANNEL_ID:
+        return False
+    
+    try:
+        source = lead_info.get("source", "неизвестно")
+        title = lead_info.get("title", "Новый лид")
+        client_name = lead_info.get("client_name", "Не указано")
+        client_email = lead_info.get("client_email", "")
+        client_phone = lead_info.get("client_phone", "")
+        message = lead_info.get("message", "")
+        score = lead_info.get("score", 0)
+        status = lead_info.get("status", "unknown")
+        category = lead_info.get("category", "")
+        
+        # Формируем сообщение для канала лидов
+        lead_message_parts = [
+            f"🔥 *Новый лид*\n",
+            f"*Источник:* {source}\n",
+            f"*Название/Тема:* {title}\n",
+            f"*Клиент:* {client_name}\n"
+        ]
+        
+        if client_email:
+            lead_message_parts.append(f"*Email:* {client_email}\n")
+        if client_phone:
+            lead_message_parts.append(f"*Телефон:* {client_phone}\n")
+        
+        if message:
+            lead_message_parts.append(f"\n*Сообщение:*\n{message[:300]}{'...' if len(message) > 300 else ''}\n")
+        
+        if score > 0:
+            lead_message_parts.append(f"\n*Оценка:* {score:.2f} ({status})")
+        if category:
+            lead_message_parts.append(f"*Категория:* {category}")
+        
+        lead_message = "\n".join(lead_message_parts)
+        
+        await telegram_bot.send_message(
+            chat_id=TELEGRAM_LEADS_CHANNEL_ID,
+            text=lead_message,
+            parse_mode="Markdown"
+        )
+        log.info(f"✅ Лид отправлен в канал HRAI_ANovoselova_Лиды")
+        return True
+    except Exception as e:
+        log.error(f"❌ Ошибка отправки лида в канал: {e}")
+        return False
+
+
 # ===================== СЦЕНАРИЙ 1: Новый лид с HR Time =====================
 
-async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None) -> Dict:
+async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None, telegram_bot=None) -> Dict:
     """
     Полный workflow обработки нового заказа с HR Time
     
@@ -206,6 +267,10 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
             "notification_sent": False
         }
         
+        # Определяем источник данных (нужно для всех лидов)
+        source = order_data.get("source", "api")
+        source_text = "📢 Канал: @HRTime_bot" if source == "telegram_channel" else "🌐 Источник: HR Time API"
+        
         # Шаг 4: Действия для теплого лида (score > 0.6 или status == "warm")
         if score > 0.6 or status == "warm":
             log.info(f"🔥 [Сценарий 1] Теплый лид! Выполняем действия...")
@@ -276,9 +341,6 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
                         result["weeek_project_created"] = False
             
             # 4e. Уведомление консультанта в Telegram
-            # Определяем источник данных
-            source = order_data.get("source", "api")
-            source_text = "📢 Канал: @HRTime_bot" if source == "telegram_channel" else "🌐 Источник: HR Time API"
             
             notification_parts = [
                 f"🔥 *Новый теплый лид с HR Time*\n",
@@ -312,8 +374,37 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None)
             result["notification_text"] = notification_text
             result["notification_sent"] = True  # Отправка будет выполнена вызывающим кодом
             log.info(f"✅ [Сценарий 1] Уведомление подготовлено")
+            
+            # Отправка лида в канал HRAI_ANovoselova_Лиды
+            if telegram_bot:
+                lead_info = {
+                    "source": source_text,
+                    "title": title,
+                    "client_name": client_name,
+                    "client_email": client_email,
+                    "client_phone": client_phone,
+                    "message": description,
+                    "score": score,
+                    "status": status,
+                    "category": category
+                }
+                await send_lead_to_channel(telegram_bot, lead_info)
         else:
             log.info(f"❄️ [Сценарий 1] Холодный лид (score={score}). Действия не выполняются.")
+            # Отправляем холодный лид в канал тоже
+            if telegram_bot:
+                lead_info = {
+                    "source": source_text,
+                    "title": title,
+                    "client_name": client_name,
+                    "client_email": client_email,
+                    "client_phone": client_phone,
+                    "message": description,
+                    "score": score,
+                    "status": status,
+                    "category": category
+                }
+                await send_lead_to_channel(telegram_bot, lead_info)
         
         return result
         
@@ -468,6 +559,21 @@ async def process_lead_email(email_data: Dict, require_approval: bool = True, te
                     log.warning(f"⚠️ [Сценарий 2] Проект создан, но ID не получен")
                     result["weeek_project_created"] = False
         
+        # Отправка лида в канал HRAI_ANovoselova_Лиды
+        if telegram_bot and result.get("email_sent"):
+            lead_info = {
+                "source": "📧 Email",
+                "title": subject,
+                "client_name": from_addr.split("@")[0],
+                "client_email": from_addr,
+                "client_phone": "",
+                "message": body,
+                "score": 0,
+                "status": "warm" if result.get("email_sent") else "cold",
+                "category": classification.get("category", "")
+            }
+            await send_lead_to_channel(telegram_bot, lead_info)
+        
         return result
         
     except Exception as e:
@@ -595,7 +701,7 @@ async def process_telegram_lead(
                         f"*Запрос:* {user_message[:200]}...\n"
                         f"*Оценка:* {score:.2f} ({status})\n"
                         f"*Категория:* {category}\n\n"
-                        f"✅ Проект создан в WEEEK"
+                        f"{'✅ Проект создан в WEEEK' if result.get('weeek_project_created') else '❌ Ошибка создания проекта в WEEEK'}"
                     )
                     try:
                         await telegram_bot.send_message(
@@ -606,6 +712,36 @@ async def process_telegram_lead(
                         log.info(f"✅ [Сценарий 3] Консультант уведомлен")
                     except Exception as e:
                         log.error(f"❌ [Сценарий 3] Ошибка уведомления консультанта: {e}")
+            
+            # Отправка лида в канал HRAI_ANovoselova_Лиды (для теплых лидов)
+            if telegram_bot:
+                lead_info = {
+                    "source": "💬 Telegram бот",
+                    "title": f"Запрос от {user_name}",
+                    "client_name": user_name,
+                    "client_email": "",
+                    "client_phone": "",
+                    "message": user_message,
+                    "score": score,
+                    "status": status,
+                    "category": category
+                }
+                await send_lead_to_channel(telegram_bot, lead_info)
+        else:
+            # Отправляем холодный лид в канал тоже
+            if telegram_bot:
+                lead_info = {
+                    "source": "💬 Telegram бот",
+                    "title": f"Запрос от {user_name}",
+                    "client_name": user_name,
+                    "client_email": "",
+                    "client_phone": "",
+                    "message": user_message,
+                    "score": score,
+                    "status": status,
+                    "category": category
+                }
+                await send_lead_to_channel(telegram_bot, lead_info)
         
         return result
         

@@ -575,6 +575,250 @@ async def test_full_scenario1_integration():
             assert result["weeek_project_created"] is True
 
 
+# ===================== Тест отправки лидов в канал =====================
+
+@pytest.mark.asyncio
+async def test_lead_sent_to_channel_hrtime():
+    """Тест отправки лида из HR Time в канал HRAI_ANovoselova_Лиды"""
+    
+    mock_telegram_bot = AsyncMock()
+    mock_telegram_bot.send_message = AsyncMock()
+    
+    mock_order_data = {
+        "id": "order_channel_test",
+        "title": "Подбор HR-менеджера",
+        "description": "Нужен опытный HR-менеджер. Бюджет: 100000 руб.",
+        "budget": 100000,
+        "client": {
+            "name": "Иван Иванов",
+            "email": "ivan@example.com",
+            "phone": "+79001234567"
+        }
+    }
+    
+    with patch('services.helpers.hrtime_helper.get_order_details', new_callable=AsyncMock) as mock_get_order, \
+         patch('services.agents.lead_processor.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.lead_processor.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.lead_processor.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
+         patch('services.helpers.hrtime_helper.send_proposal', new_callable=AsyncMock) as mock_send_proposal, \
+         patch('services.helpers.email_helper.send_email', new_callable=AsyncMock) as mock_send_email, \
+         patch('services.helpers.weeek_helper.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.helpers.weeek_helper.create_task', new_callable=AsyncMock) as mock_create_task, \
+         patch('services.helpers.weeek_helper.update_project_status', new_callable=AsyncMock) as mock_update_status, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag, \
+         patch('services.services.hrtime_order_parser.HRTimeOrderParser.parse_order', new_callable=AsyncMock) as mock_parser, \
+         patch('services.services.hrtime_lead_validator.HRTimeLeadValidator.validate_lead_with_questions', new_callable=AsyncMock) as mock_validator, \
+         patch('services.agents.scenario_workflows.TELEGRAM_LEADS_CHANNEL_ID', '-1001234567890'):
+        
+        mock_get_order.return_value = mock_order_data
+        mock_classify.return_value = {"category": "подбор", "confidence": 0.9}
+        mock_validate.return_value = {
+            "score": 0.85,
+            "status": "warm",
+            "reason": "Четкое ТЗ"
+        }
+        mock_proposal.return_value = "Коммерческое предложение..."
+        mock_send_proposal.return_value = True
+        mock_send_email.return_value = True
+        mock_create_project.return_value = {"id": 123}
+        mock_create_task.return_value = {"id": "task_123"}
+        mock_update_status.return_value = True
+        mock_parser.return_value = {"success": False}  # Отключаем парсер
+        mock_validator.return_value = {"validation": mock_validate.return_value, "needs_clarification": False}
+        
+        mock_rag_instance = Mock()
+        mock_rag_instance.query = AsyncMock(return_value={"answer": "..."})
+        mock_rag.return_value = mock_rag_instance
+        
+        # Выполнение теста
+        result = await process_hrtime_order("order_channel_test", order_data=mock_order_data, telegram_bot=mock_telegram_bot)
+        
+        # Проверки
+        assert result["success"] is True
+        
+        # Проверяем, что сообщение было отправлено в канал лидов
+        send_message_calls = mock_telegram_bot.send_message.call_args_list
+        
+        # Должно быть минимум одно сообщение в канал лидов
+        channel_calls = [
+            call for call in send_message_calls 
+            if call.kwargs.get("chat_id") == "-1001234567890"
+        ]
+        
+        assert len(channel_calls) > 0, "Сообщение должно быть отправлено в канал лидов"
+        
+        # Проверяем содержание сообщения
+        channel_message = channel_calls[0].kwargs.get("text", "")
+        assert "Новый лид" in channel_message
+        assert "Иван Иванов" in channel_message
+        assert "ivan@example.com" in channel_message
+        assert "подбор" in channel_message.lower()
+
+
+@pytest.mark.asyncio
+async def test_lead_sent_to_channel_telegram():
+    """Тест отправки лида из Telegram бота в канал HRAI_ANovoselova_Лиды"""
+    
+    mock_telegram_bot = AsyncMock()
+    mock_telegram_bot.send_message = AsyncMock()
+    
+    with patch('services.agents.scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.helpers.weeek_helper.update_project_status', new_callable=AsyncMock) as mock_update_status, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag, \
+         patch('services.agents.scenario_workflows.TELEGRAM_LEADS_CHANNEL_ID', '-1001234567890'), \
+         patch('services.agents.scenario_workflows.TELEGRAM_CONSULTANT_CHAT_ID', '123456'):
+        
+        mock_classify.return_value = {"category": "подбор", "confidence": 0.9}
+        mock_validate.return_value = {"score": 0.8, "status": "warm"}
+        mock_create_project.return_value = {"id": 456}
+        mock_update_status.return_value = True
+        
+        mock_rag_instance = Mock()
+        mock_rag_instance.query = AsyncMock(return_value={"answer": "..."})
+        mock_rag.return_value = mock_rag_instance
+        
+        # Выполнение теста
+        result = await process_telegram_lead(
+            user_message="Нужен подбор IT-специалиста",
+            user_id=12345,
+            user_name="Петр",
+            telegram_bot=mock_telegram_bot
+        )
+        
+        # Проверки
+        assert result["success"] is True
+        assert result["validation"]["score"] > 0.6
+        
+        # Проверяем, что сообщение было отправлено в канал лидов
+        send_message_calls = mock_telegram_bot.send_message.call_args_list
+        
+        channel_calls = [
+            call for call in send_message_calls 
+            if call.kwargs.get("chat_id") == "-1001234567890"
+        ]
+        
+        assert len(channel_calls) > 0, "Сообщение должно быть отправлено в канал лидов"
+        
+        # Проверяем содержание сообщения
+        channel_message = channel_calls[0].kwargs.get("text", "")
+        assert "Новый лид" in channel_message
+        assert "Петр" in channel_message
+        assert "Telegram бот" in channel_message
+        assert "подбор" in channel_message.lower()
+
+
+@pytest.mark.asyncio
+async def test_lead_sent_to_channel_email():
+    """Тест отправки лида из Email в канал HRAI_ANovoselova_Лиды"""
+    
+    mock_telegram_bot = AsyncMock()
+    mock_telegram_bot.send_message = AsyncMock()
+    
+    mock_email_data = {
+        "subject": "Запрос на консультацию",
+        "body": "Нужна помощь с автоматизацией HR-процессов",
+        "from": "client@example.com"
+    }
+    
+    with patch('services.helpers.email_helper.classify_email', new_callable=AsyncMock) as mock_classify_email, \
+         patch('services.agents.lead_processor.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.lead_processor.generate_proposal', new_callable=AsyncMock) as mock_proposal, \
+         patch('services.helpers.email_helper.send_email', new_callable=AsyncMock) as mock_send_email, \
+         patch('services.helpers.weeek_helper.create_project', new_callable=AsyncMock) as mock_create_project, \
+         patch('services.helpers.weeek_helper.update_project_status', new_callable=AsyncMock) as mock_update_status, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag, \
+         patch('services.agents.scenario_workflows.TELEGRAM_LEADS_CHANNEL_ID', '-1001234567890'):
+        
+        mock_classify_email.return_value = "new_lead"
+        mock_classify.return_value = {"category": "автоматизация", "confidence": 0.9}
+        mock_proposal.return_value = "Предложение по автоматизации..."
+        mock_send_email.return_value = True
+        mock_create_project.return_value = {"id": "project_789"}
+        mock_update_status.return_value = True
+        mock_rag.return_value = None
+        
+        # Выполнение теста
+        result = await process_lead_email(mock_email_data, require_approval=False, telegram_bot=mock_telegram_bot)
+        
+        # Проверки
+        assert result["success"] is True
+        assert result["email_sent"] is True
+        
+        # Проверяем, что сообщение было отправлено в канал лидов
+        send_message_calls = mock_telegram_bot.send_message.call_args_list
+        
+        channel_calls = [
+            call for call in send_message_calls 
+            if call.kwargs.get("chat_id") == "-1001234567890"
+        ]
+        
+        assert len(channel_calls) > 0, "Сообщение должно быть отправлено в канал лидов"
+        
+        # Проверяем содержание сообщения
+        channel_message = channel_calls[0].kwargs.get("text", "")
+        assert "Новый лид" in channel_message
+        assert "client@example.com" in channel_message
+        assert "Email" in channel_message
+
+
+@pytest.mark.asyncio
+async def test_cold_lead_sent_to_channel():
+    """Тест отправки холодного лида в канал HRAI_ANovoselova_Лиды"""
+    
+    mock_telegram_bot = AsyncMock()
+    mock_telegram_bot.send_message = AsyncMock()
+    
+    mock_order_data = {
+        "id": "order_cold_test",
+        "title": "Общий вопрос",
+        "description": "Интересует консалтинг",
+        "client": {"name": "Тест", "email": "test@example.com"}
+    }
+    
+    with patch('services.helpers.hrtime_helper.get_order_details', new_callable=AsyncMock) as mock_get_order, \
+         patch('services.agents.lead_processor.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.lead_processor.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag, \
+         patch('services.services.hrtime_order_parser.HRTimeOrderParser.parse_order', new_callable=AsyncMock) as mock_parser, \
+         patch('services.services.hrtime_lead_validator.HRTimeLeadValidator.validate_lead_with_questions', new_callable=AsyncMock) as mock_validator, \
+         patch('services.agents.scenario_workflows.TELEGRAM_LEADS_CHANNEL_ID', '-1001234567890'):
+        
+        mock_get_order.return_value = mock_order_data
+        mock_classify.return_value = {"category": "другое", "confidence": 0.5}
+        mock_validate.return_value = {
+            "score": 0.3,
+            "status": "cold",
+            "reason": "Недостаточно информации"
+        }
+        mock_rag.return_value = None
+        mock_parser.return_value = {"success": False}  # Отключаем парсер
+        mock_validator.return_value = {"validation": mock_validate.return_value, "needs_clarification": False}
+        
+        # Выполнение теста
+        result = await process_hrtime_order("order_cold_test", order_data=mock_order_data, telegram_bot=mock_telegram_bot)
+        
+        # Проверки
+        assert result["success"] is True
+        assert result["validation"]["score"] < 0.6
+        
+        # Проверяем, что холодный лид тоже был отправлен в канал
+        send_message_calls = mock_telegram_bot.send_message.call_args_list
+        
+        channel_calls = [
+            call for call in send_message_calls 
+            if call.kwargs.get("chat_id") == "-1001234567890"
+        ]
+        
+        assert len(channel_calls) > 0, "Холодный лид тоже должен быть отправлен в канал лидов"
+        
+        # Проверяем содержание сообщения
+        channel_message = channel_calls[0].kwargs.get("text", "")
+        assert "Новый лид" in channel_message
+        assert "cold" in channel_message.lower() or "0.3" in channel_message
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
 

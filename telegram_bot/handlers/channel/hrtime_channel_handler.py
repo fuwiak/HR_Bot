@@ -113,7 +113,7 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
             "message_id": message_id
         }
         
-        result = await process_hrtime_order(order_id, order_data=order_data)
+        result = await process_hrtime_order(order_id, order_data=order_data, telegram_bot=context.bot)
         
         if result.get("success"):
             processed_channel_messages.add(message_id)
