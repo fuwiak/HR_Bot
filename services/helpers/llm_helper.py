@@ -7,16 +7,75 @@ import logging
 import aiohttp
 import asyncio
 from typing import List, Dict, Optional
+from pathlib import Path
+
+# Загружаем переменные окружения из .env файла (для локальной разработки)
+# В Railway переменные окружения доступны автоматически через os.getenv()
+try:
+    from dotenv import load_dotenv
+    project_root = Path(__file__).parent.parent.parent
+    env_file = project_root / ".env"
+    if env_file.exists():
+        load_dotenv(env_file)
+        log = logging.getLogger()
+        log.debug(f"✅ Загружен .env файл из {env_file}")
+except ImportError:
+    # dotenv не установлен, это нормально для Railway
+    pass
 
 log = logging.getLogger()
 
 # ===================== CONFIGURATION =====================
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-OPENROUTER_API_URL = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat")
+# Читаем переменные окружения динамически через функции для надежности
+def get_openrouter_api_key() -> Optional[str]:
+    """Получить OPENROUTER_API_KEY с проверкой"""
+    key = os.getenv("OPENROUTER_API_KEY")
+    if not key:
+        # Пробуем перезагрузить переменные окружения
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(override=False)
+            key = os.getenv("OPENROUTER_API_KEY")
+        except ImportError:
+            pass
+    return key
 
-GIGACHAT_API_KEY = os.getenv("GIGACHAT_API_KEY")
-GIGACHAT_API_URL = os.getenv("GIGACHAT_API_URL", "https://gigachat.devices.sberbank.ru/api/v1/chat/completions")
+def get_openrouter_api_url() -> str:
+    """Получить OPENROUTER_API_URL"""
+    return os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1/chat/completions")
+
+def get_openrouter_model() -> str:
+    """Получить OPENROUTER_MODEL"""
+    return os.getenv("OPENROUTER_MODEL", "deepseek/deepseek-chat")
+
+def get_gigachat_api_key() -> Optional[str]:
+    """Получить GIGACHAT_API_KEY"""
+    return os.getenv("GIGACHAT_API_KEY")
+
+def get_gigachat_api_url() -> str:
+    """Получить GIGACHAT_API_URL"""
+    return os.getenv("GIGACHAT_API_URL", "https://gigachat.devices.sberbank.ru/api/v1/chat/completions")
+
+# Для обратной совместимости оставляем переменные на уровне модуля
+OPENROUTER_API_KEY = get_openrouter_api_key()
+OPENROUTER_API_URL = get_openrouter_api_url()
+OPENROUTER_MODEL = get_openrouter_model()
+GIGACHAT_API_KEY = get_gigachat_api_key()
+GIGACHAT_API_URL = get_gigachat_api_url()
+
+# Логирование статуса переменных окружения при инициализации модуля
+if OPENROUTER_API_KEY:
+    log.info(f"✅ OPENROUTER_API_KEY загружен (длина: {len(OPENROUTER_API_KEY)} символов)")
+else:
+    log.warning("⚠️ OPENROUTER_API_KEY не найден. Проверьте переменные окружения в Railway.")
+    railway_env = os.getenv("RAILWAY_ENVIRONMENT")
+    if railway_env:
+        log.warning(f"⚠️ Railway environment: {railway_env}")
+
+if GIGACHAT_API_KEY:
+    log.info(f"✅ GIGACHAT_API_KEY загружен (длина: {len(GIGACHAT_API_KEY)} символов)")
+else:
+    log.debug("ℹ️ GIGACHAT_API_KEY не установлен (fallback будет недоступен)")
 
 # ===================== DEEPSEEK (PRIMARY) =====================
 
@@ -40,12 +99,21 @@ async def deepseek_chat(
     Returns:
         Ответ от модели или None при ошибке
     """
-    if not OPENROUTER_API_KEY:
-        log.error("❌ OPENROUTER_API_KEY не установлен")
+    # Читаем переменные окружения динамически при каждом вызове
+    api_key = get_openrouter_api_key()
+    api_url = get_openrouter_api_url()
+    model = get_openrouter_model()
+    
+    if not api_key:
+        log.error("❌ OPENROUTER_API_KEY не установлен. Проверьте переменные окружения в Railway.")
+        # Дополнительная диагностика
+        railway_env = os.getenv("RAILWAY_ENVIRONMENT")
+        if railway_env:
+            log.error(f"❌ Railway environment: {railway_env}, но OPENROUTER_API_KEY не найден")
         return None
     
     # Очищаем API ключ от пробелов и переносов строк
-    api_key_clean = OPENROUTER_API_KEY.strip().replace('\n', '').replace('\r', '') if OPENROUTER_API_KEY else None
+    api_key_clean = api_key.strip().replace('\n', '').replace('\r', '') if api_key else None
     
     if not api_key_clean:
         log.error("❌ OPENROUTER_API_KEY пустой или не установлен")
@@ -65,18 +133,18 @@ async def deepseek_chat(
             messages = [{"role": "system", "content": system_content}] + messages
     
     data = {
-        "model": OPENROUTER_MODEL,
+        "model": model,
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature
     }
     
     try:
-        log.info(f"🌐 [DeepSeek] Отправка запроса к OpenRouter: модель {OPENROUTER_MODEL}")
+        log.info(f"🌐 [DeepSeek] Отправка запроса к OpenRouter: модель {model}")
         
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                OPENROUTER_API_URL,
+                api_url,
                 json=data,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=60)
@@ -138,12 +206,16 @@ async def gigachat_chat(
     Returns:
         Ответ от модели или None при ошибке
     """
-    if not GIGACHAT_API_KEY:
+    # Читаем переменные окружения динамически при каждом вызове
+    api_key = get_gigachat_api_key()
+    api_url = get_gigachat_api_url()
+    
+    if not api_key:
         log.error("❌ GIGACHAT_API_KEY не установлен")
         return None
     
     headers = {
-        "Authorization": f"Bearer {GIGACHAT_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
@@ -171,7 +243,7 @@ async def gigachat_chat(
         
         async with aiohttp.ClientSession(connector=connector) as session:
             async with session.post(
-                GIGACHAT_API_URL,
+                api_url,
                 json=data,
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=60)
@@ -260,8 +332,10 @@ async def generate_with_fallback(
         )
         
         if result is not None:
-            log.info("✅ Использован GigaChat (fallback)")
+            log.info("✅ Успешно переключился на GigaChat (fallback) - бот продолжает работать")
             return result
+        else:
+            log.error("❌ GigaChat также недоступен после переключения с DeepSeek")
     
     # Если оба провайдера недоступны
     log.error("❌ Оба LLM провайдера недоступны (DeepSeek и GigaChat)")
