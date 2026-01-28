@@ -27,10 +27,12 @@ email_reply_state: Dict[int, Dict] = {}  # {user_id: {'email_id': ..., 'to': ...
 
 
 async def send_email_notification(bot, email_data: Dict):
-    """Отправка уведомления о новом письме подписчикам и в канал лидов"""
+    """Отправка нового письма в канал лидов с классификацией lead/non_lead
+    
+    Все новые письма автоматически отправляются в канал https://t.me/HRAI_ANovoselova_Leads
+    с метками LEAD или NON_LEAD на основе классификации через LLM.
+    """
     try:
-        from telegram_bot.storage.email_subscribers import load_email_subscribers
-        
         subject = email_data.get("subject", "Без темы")
         from_email = email_data.get("from", "Неизвестный отправитель")
         email_id = email_data.get("id", "")
@@ -40,77 +42,43 @@ async def send_email_notification(bot, email_data: Dict):
         # Отправляем ВСЕ письма в канал лидов с классификацией
         if SCENARIO_WORKFLOWS_AVAILABLE:
             try:
-                # Классифицируем email
+                # Классифицируем email через LLM
+                log.info(f"🤖 Классификация письма: {subject[:50]}...")
                 classification = await classify_email_as_lead(subject, body)
-                log.info(f"✅ Email классифицирован как {classification.get('label', 'unknown')}")
+                label = classification.get("label", "non_lead")
+                confidence = classification.get("confidence", 0.5)
+                reason = classification.get("reason", "")
+                
+                log.info(f"✅ Email классифицирован как {label.upper()} (уверенность: {confidence:.2f})")
                 
                 # Формируем информацию для канала
                 lead_info = {
                     "source": "📧 Email",
                     "title": subject or "Без темы",
-                    "client_name": from_email.split("@")[0] if from_email else "Неизвестно",
-                    "client_email": from_email or "",
+                    "client_name": from_email.split("@")[0] if "@" in from_email else from_email,
+                    "client_email": from_email if "@" in from_email else "",
                     "client_phone": "",
                     "message": body or preview or "",
                     "score": 0,
-                    "status": "info",
+                    "status": "new",
                     "category": "",
-                    "label": classification.get("label", "non_lead"),
-                    "classification_reason": classification.get("reason", ""),
-                    "classification_confidence": classification.get("confidence", 0.5)
+                    "label": label,
+                    "classification_reason": reason,
+                    "classification_confidence": confidence
                 }
                 
-                # Отправляем в канал
+                # Отправляем в канал (ТОЛЬКО в канал, без отправки подписчикам бота)
                 await send_lead_to_channel(bot, lead_info)
-                log.info(f"✅ Письмо отправлено в канал лидов с меткой {lead_info['label']}")
+                log.info(f"✅ Письмо отправлено в канал лидов с меткой {label.upper()}")
             except Exception as e:
                 log.error(f"❌ Ошибка отправки письма в канал лидов: {e}")
                 import traceback
                 log.error(traceback.format_exc())
-        
-        # Отправляем уведомления подписчикам
-        subscribers = load_email_subscribers()
-        if not subscribers:
-            return
-        
-        message_text = (
-            f"📧 *Новое письмо*\n\n"
-            f"*От:* {from_email}\n"
-            f"*Тема:* {subject}\n\n"
-        )
-        
-        if preview:
-            message_text += f"*Превью:* {preview}...\n\n"
-        
-        message_text += (
-            f"Используйте команду `/email_check` для просмотра полного письма\n"
-            f"или нажмите кнопку ниже для ответа."
-        )
-        
-        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-        
-        keyboard = [
-            [InlineKeyboardButton("📧 Ответить", callback_data=f"email_reply_{email_id}")],
-            [InlineKeyboardButton("📋 Полный текст", callback_data=f"email_full_{email_id}")],
-            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Отправляем уведомление всем подписчикам
-        for user_id in subscribers:
-            try:
-                await bot.send_message(
-                    chat_id=user_id,
-                    text=message_text,
-                    parse_mode='Markdown',
-                    reply_markup=reply_markup
-                )
-                log.info(f"✅ Уведомление о письме отправлено пользователю {user_id}")
-            except Exception as e:
-                log.warning(f"⚠️ Не удалось отправить уведомление пользователю {user_id}: {e}")
+        else:
+            log.warning("⚠️ SCENARIO_WORKFLOWS недоступен, письмо не отправлено в канал")
                 
     except Exception as e:
-        log.error(f"❌ Ошибка отправки уведомления о письме: {e}")
+        log.error(f"❌ Ошибка обработки письма: {e}")
         import traceback
         log.error(traceback.format_exc())
 
