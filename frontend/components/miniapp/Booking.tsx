@@ -277,17 +277,10 @@ export default function Booking({ onBack, userId }: BookingProps) {
                   <div className={styles.optionsList}>
                     <button
                       className={styles.optionCard}
-                      onClick={() => handleMasterSelect({ id: 'roman', name: 'Роман' })}
+                      onClick={() => handleMasterSelect({ id: 'anastasia', name: 'Анастасия Новосёлова' })}
                     >
-                      <span className={styles.optionName}>Роман</span>
-                      <span className={styles.optionSub}>HR-специалист</span>
-                    </button>
-                    <button
-                      className={styles.optionCard}
-                      onClick={() => handleMasterSelect({ id: 'angela', name: 'Анжела' })}
-                    >
-                      <span className={styles.optionName}>Анжела</span>
-                      <span className={styles.optionSub}>HR-специалист</span>
+                      <span className={styles.optionName}>Анастасия Новосёлова</span>
+                      <span className={styles.optionSub}>HR-консультант</span>
                     </button>
                   </div>
                 )}

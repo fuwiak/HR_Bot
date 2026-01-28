@@ -130,7 +130,7 @@ add_memory(user_id, "user", "Привет!")
 history = get_history(user_id)
 
 # Записи пользователей
-add_user_record(user_id, {"service": "Консультация", "master": "Роман"})
+add_user_record(user_id, {"service": "Консультация", "master": "Анастасия Новосёлова"})
 records = get_user_records(user_id)
 
 # Данные пользователей

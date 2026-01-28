@@ -50,7 +50,7 @@ def test_write_booking():
         test_data = {
             "date": "09.12.2025",
             "time": "08:00",
-            "master": "Роман",
+            "master": "Анастасия Новосёлова",
             "service": "Бритье головы",
             "client_name": "Тестовый Клиент",
             "client_phone": "+79999999999",

@@ -146,7 +146,7 @@ def parse_booking_message(message: str, history: str) -> Dict:
         log.info(f"🔍 Поиск мастера среди: {master_names}")
     except Exception as e:
         log.error(f"❌ Ошибка получения мастеров для парсинга: {e}")
-        master_names = ["Роман", "Анжела"]  # Fallback
+        master_names = ["Анастасия Новосёлова"]  # Fallback
     
     # Ищем услугу в реальных данных
     if service_titles:
@@ -189,10 +189,8 @@ def parse_booking_message(message: str, history: str) -> Dict:
     
     # Fallback для мастеров (если не нашли в реальных данных)
     if not result["master"]:
-        if "роман" in message_lower:
-            result["master"] = "Роман"
-        elif "анжела" in message_lower or "анжел" in message_lower:
-            result["master"] = "Анжела"
+        if "анастасия" in message_lower or "новосёлова" in message_lower:
+            result["master"] = "Анастасия Новосёлова"
     
     # Ищем дату и время
     # Паттерны для поиска времени
