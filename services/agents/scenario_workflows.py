@@ -705,21 +705,12 @@ async def process_lead_email(email_data: Dict, require_approval: bool = True, te
             # Без подтверждения - сразу отправляем
             result["approved"] = True
         
-        # Шаг 5: Отправка (если одобрено или не требуется подтверждение)
-        if result.get("approved"):
-            try:
-                email_sent = await send_email(
-                    to_email=from_addr,
-                    subject=f"Re: {subject}",
-                    body=proposal,
-                    is_html=False
-                )
-                result["email_sent"] = email_sent
-                if email_sent:
-                    log.info(f"✅ [Сценарий 2] Письмо отправлено: {from_addr}")
-            except Exception as e:
-                log.error(f"❌ [Сценарий 2] Ошибка отправки письма: {e}")
-                result["error"] = str(e)
+        # Шаг 5: Отправка ОТКЛЮЧЕНА - письма не должны отправляться автоматически
+        # Письма только отправляются в канал для ручной обработки
+        log.info(f"⚠️ [Сценарий 2] Автоматическая отправка ответа ОТКЛЮЧЕНА")
+        log.info(f"⚠️ [Сценарий 2] Письмо отправлено только в канал, ответ не отправлен")
+        result["email_sent"] = False
+        result["auto_reply_disabled"] = True
         
         # Шаг 6: Создание проекта в WEEEK
         if WEEEK_AVAILABLE and result.get("email_sent"):
