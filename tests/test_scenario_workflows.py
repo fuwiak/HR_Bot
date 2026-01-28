@@ -3,7 +3,7 @@
 """
 import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from unittest.mock import Mock, AsyncMock, patch, MagicMock, call
 from datetime import datetime, timedelta
 
 # Импорты модулей для тестирования
@@ -662,9 +662,9 @@ async def test_lead_sent_to_channel_telegram():
     mock_telegram_bot = AsyncMock()
     mock_telegram_bot.send_message = AsyncMock()
     
-    with patch('services.agents.scenario_workflows.classify_request', new_callable=AsyncMock) as mock_classify, \
-         patch('services.agents.scenario_workflows.validate_lead', new_callable=AsyncMock) as mock_validate, \
-         patch('services.agents.scenario_workflows.create_project', new_callable=AsyncMock) as mock_create_project, \
+    with patch('services.agents.lead_processor.classify_request', new_callable=AsyncMock) as mock_classify, \
+         patch('services.agents.lead_processor.validate_lead', new_callable=AsyncMock) as mock_validate, \
+         patch('services.helpers.weeek_helper.create_project', new_callable=AsyncMock) as mock_create_project, \
          patch('services.helpers.weeek_helper.update_project_status', new_callable=AsyncMock) as mock_update_status, \
          patch('services.agents.scenario_workflows.get_rag_chain') as mock_rag, \
          patch('services.agents.scenario_workflows.TELEGRAM_LEADS_CHANNEL_ID', '-1001234567890'), \
