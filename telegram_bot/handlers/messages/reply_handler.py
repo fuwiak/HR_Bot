@@ -55,6 +55,7 @@ from telegram_bot.integrations.openrouter import openrouter_chat
 from telegram_bot.services.booking_service import create_real_booking, create_booking_from_parsed_data
 from telegram_bot.nlp.intent_classifier import is_booking
 from telegram_bot.nlp.booking_parser import parse_booking_message
+from telegram_bot.nlp.text_utils import remove_markdown
 from telegram_bot.integrations.google_sheets import (
     get_services, get_masters, get_api_data_for_ai, get_master_services_text,
     get_services_with_prices
@@ -800,8 +801,11 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 import traceback
                 log.debug(traceback.format_exc())
         
+        # Убираем Markdown форматирование из ответа (звездочки, решетки и т.д.)
+        response_clean = remove_markdown(response)
+        
         # Сохраняем ответ в память
-        add_memory(user_id, "assistant", response)
+        add_memory(user_id, "assistant", response_clean)
         
         # Сохраняем ответ бота в БД
         try:
@@ -810,13 +814,13 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id,
                 message_id=None,
                 role="assistant",
-                content=response
+                content=response_clean
             )
         except Exception:
             pass
         
-        # Отправляем ответ
-        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
+        # Отправляем ответ без Markdown форматирования
+        await update.message.reply_text(response_clean)
         
     except Exception as e:
         log.error(f"❌ Ошибка обработки сообщения: {e}")

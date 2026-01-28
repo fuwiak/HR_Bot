@@ -203,11 +203,94 @@ class QdrantLoader:
         # Флаг необходимости перестроения BM25 индекса
         self._bm25_needs_rebuild = True
         
+        # Загружаем приоритеты документов из конфига
+        self._load_document_priorities()
+        
         # Создаем коллекцию если не существует
         self._ensure_collection()
         
         # Помечаем как инициализированный (для singleton)
         self._initialized = True
+    
+    def _load_document_priorities(self) -> None:
+        """Загружает приоритеты документов из config.yaml"""
+        try:
+            import yaml
+            config_path = Path(__file__).parent.parent.parent / "config.yaml"
+            if config_path.exists():
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = yaml.safe_load(f)
+                    rag_config = config.get("rag", {})
+                    priorities_config = rag_config.get("document_priorities", {})
+                    self.document_priorities_enabled = priorities_config.get("enabled", False)
+                    self.document_weights = priorities_config.get("weights", {})
+                    self.document_patterns = priorities_config.get("patterns", [])
+                    logger.info(f"Загружены приоритеты документов: enabled={self.document_priorities_enabled}, weights={len(self.document_weights)}, patterns={len(self.document_patterns)}")
+            else:
+                self.document_priorities_enabled = False
+                self.document_weights = {}
+                self.document_patterns = []
+        except Exception as e:
+            logger.warning(f"Не удалось загрузить приоритеты документов: {e}")
+            self.document_priorities_enabled = False
+            self.document_weights = {}
+            self.document_patterns = []
+    
+    def _apply_document_priorities(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Применяет приоритеты документов к результатам поиска.
+        Увеличивает score документов, соответствующих паттернам.
+        
+        Args:
+            results: Список результатов поиска с полями score, file_name, source_url, title и т.д.
+        
+        Returns:
+            Список результатов с обновленными score
+        """
+        if not self.document_priorities_enabled or not results:
+            return results
+        
+        for doc in results:
+            # Получаем текстовые поля для проверки паттернов
+            file_name = doc.get("file_name", "").lower()
+            source_url = doc.get("source_url", "").lower()
+            title = doc.get("title", "").lower()
+            text = doc.get("text", "").lower()
+            
+            # Объединяем все текстовые поля для поиска
+            combined_text = f"{file_name} {source_url} {title} {text[:200]}"
+            
+            # Применяем веса из словаря weights
+            for key, weight in self.document_weights.items():
+                if key.lower() in combined_text:
+                    doc["score"] = doc.get("score", 0) * weight
+                    doc["priority_applied"] = key
+                    logger.debug(f"Применен приоритет '{key}' (вес {weight}) к документу: {file_name}")
+                    break
+            
+            # Применяем паттерны из patterns
+            for pattern_config in self.document_patterns:
+                pattern = pattern_config.get("pattern", "")
+                weight = pattern_config.get("weight", 1.0)
+                case_sensitive = pattern_config.get("case_sensitive", False)
+                
+                if not pattern:
+                    continue
+                
+                search_text = combined_text if not case_sensitive else f"{file_name} {source_url} {title}"
+                try:
+                    import re
+                    if re.search(pattern, search_text, re.IGNORECASE if not case_sensitive else 0):
+                        doc["score"] = doc.get("score", 0) * weight
+                        doc["priority_applied"] = pattern
+                        logger.debug(f"Применен паттерн '{pattern}' (вес {weight}) к документу: {file_name}")
+                        break
+                except Exception as e:
+                    logger.warning(f"Ошибка при применении паттерна '{pattern}': {e}")
+        
+        # Сортируем результаты по обновленному score
+        results.sort(key=lambda x: x.get("score", 0), reverse=True)
+        return results
     
     def _ensure_collection(self) -> None:
         """Создает коллекцию если она не существует"""
@@ -617,11 +700,16 @@ class QdrantLoader:
         if filter_by_whitelist:
             dense_results = self.whitelist.filter_sources(dense_results)
         
+        # Применяем приоритеты документов
+        dense_results = self._apply_document_priorities(dense_results)
+        
         if search_strategy == "dense":
             return dense_results[:top_k]
         
         if search_strategy == "hybrid":
-            return self._hybrid_search(query, dense_results, top_k, score_threshold, filter_by_whitelist, dense_weight, bm25_weight)
+            hybrid_results = self._hybrid_search(query, dense_results, top_k, score_threshold, filter_by_whitelist, dense_weight, bm25_weight)
+            # Применяем приоритеты к результатам hybrid search
+            return self._apply_document_priorities(hybrid_results)
         
         return dense_results[:top_k]
     
@@ -669,6 +757,7 @@ class QdrantLoader:
             doc["score"] = doc["hybrid_score"]
             doc["search_method"] = "hybrid"
         
+        # Приоритеты уже применены в search(), но применяем еще раз для надежности
         return filtered[:top_k]
     
     def delete_collection(self) -> None:

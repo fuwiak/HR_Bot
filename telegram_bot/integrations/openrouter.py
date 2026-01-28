@@ -17,7 +17,7 @@ async def openrouter_chat(messages, use_system_message=False, system_content="")
             messages=messages,
             use_system_message=use_system_message,
             system_content=system_content,
-            max_tokens=2000,
+            max_tokens=3000,  # Увеличено до ~10 КБт контекста
             temperature=0.7
         )
     except ImportError:
