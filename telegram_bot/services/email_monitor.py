@@ -50,10 +50,16 @@ if not log.handlers:
 # Импорт функции классификации и отправки в канал
 try:
     from services.agents.scenario_workflows import classify_email_as_lead, send_lead_to_channel
+    import services.agents.scenario_workflows as sw_module
     SCENARIO_WORKFLOWS_AVAILABLE = True
 except ImportError as e:
     log.warning(f"⚠️ Не удалось импортировать scenario_workflows: {e}")
     SCENARIO_WORKFLOWS_AVAILABLE = False
+    sw_module = None
+
+# Канал для отправки писем
+LEADS_CHANNEL_USERNAME = "@HRAI_ANovoselova_Leads"
+LEADS_CHANNEL_URL = "https://t.me/HRAI_ANovoselova_Leads"
 
 # Глобальное состояние для отслеживания обработанных писем
 processed_email_ids: set = set()
@@ -65,6 +71,33 @@ email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "10"))  # 10 сек
 email_reply_state: Dict[int, Dict] = {}  # {user_id: {'email_id': ..., 'to': ..., 'subject': ...}}
 
 
+async def ensure_channel_id_set(bot):
+    """Убедиться, что ID канала установлен, если нет - получить автоматически"""
+    if not SCENARIO_WORKFLOWS_AVAILABLE or not sw_module:
+        return False
+    
+    # Проверяем, установлен ли ID канала
+    if not sw_module.TELEGRAM_LEADS_CHANNEL_ID:
+        log.warning(f"⚠️ TELEGRAM_LEADS_CHANNEL_ID не установлен, пытаюсь получить автоматически...")
+        try:
+            from telegram.error import TelegramError
+            try:
+                chat = await bot.get_chat(LEADS_CHANNEL_USERNAME)
+                channel_id = str(chat.id)
+                log.info(f"✅ ID канала получен автоматически: {channel_id}")
+                os.environ["TELEGRAM_LEADS_CHANNEL_ID"] = channel_id
+                sw_module.TELEGRAM_LEADS_CHANNEL_ID = channel_id
+                return True
+            except TelegramError as e:
+                log.error(f"❌ Не удалось получить ID канала автоматически: {e}")
+                log.error(f"   Убедитесь, что бот добавлен в канал {LEADS_CHANNEL_USERNAME} как администратор")
+                return False
+        except Exception as e:
+            log.error(f"❌ Ошибка при получении ID канала: {e}")
+            return False
+    return True
+
+
 async def send_email_notification(bot, email_data: Dict):
     """Отправка нового письма в канал лидов с классификацией lead/non_lead
     
@@ -74,6 +107,7 @@ async def send_email_notification(bot, email_data: Dict):
     try:
         log.info("=" * 80)
         log.info("📨 НАЧАЛО ОБРАБОТКИ ПИСЬМА")
+        log.info(f"📤 Канал назначения: {LEADS_CHANNEL_URL}")
         log.info("=" * 80)
         
         subject = email_data.get("subject", "Без темы")
@@ -86,6 +120,11 @@ async def send_email_notification(bot, email_data: Dict):
         log.info(f"📝 Тема: {subject}")
         log.info(f"🆔 ID: {email_id}")
         log.info(f"📄 Длина текста: {len(body)} символов")
+        
+        # Убеждаемся, что ID канала установлен
+        if not await ensure_channel_id_set(bot):
+            log.error("❌ Не удалось установить ID канала, письмо не будет отправлено")
+            return
         
         # Отправляем ВСЕ письма в канал лидов с классификацией
         if SCENARIO_WORKFLOWS_AVAILABLE:
@@ -120,11 +159,18 @@ async def send_email_notification(bot, email_data: Dict):
                 }
                 
                 # Отправляем в канал (ТОЛЬКО в канал, без отправки подписчикам бота)
-                log.info("📤 Отправка в канал...")
-                await send_lead_to_channel(bot, lead_info)
-                log.info("=" * 80)
-                log.info(f"✅ ПИСЬМО УСПЕШНО ОТПРАВЛЕНО В КАНАЛ С МЕТКОЙ {label.upper()}")
-                log.info("=" * 80)
+                log.info(f"📤 Отправка в канал {LEADS_CHANNEL_URL}...")
+                result = await send_lead_to_channel(bot, lead_info)
+                if result:
+                    log.info("=" * 80)
+                    log.info(f"✅ ПИСЬМО УСПЕШНО ОТПРАВЛЕНО В КАНАЛ {LEADS_CHANNEL_URL}")
+                    log.info(f"   🏷️  Метка: {label.upper()}")
+                    log.info(f"   📊 Уверенность: {confidence:.2f}")
+                    log.info("=" * 80)
+                else:
+                    log.error("=" * 80)
+                    log.error(f"❌ НЕ УДАЛОСЬ ОТПРАВИТЬ ПИСЬМО В КАНАЛ")
+                    log.error("=" * 80)
             except Exception as e:
                 log.error("=" * 80)
                 log.error(f"❌ ОШИБКА ОТПРАВКИ ПИСЬМА В КАНАЛ:")
@@ -162,6 +208,16 @@ async def email_monitor_task(bot):
     log.info(f"📧 Интервал проверки: {email_check_interval} секунд")
     log.info(f"📅 Период проверки: 7 дней")
     log.info(f"📊 Обработано писем: {len(processed_email_ids)}")
+    log.info(f"📤 Канал для отправки: {LEADS_CHANNEL_URL}")
+    
+    # Проверяем и устанавливаем ID канала при запуске
+    if bot:
+        await ensure_channel_id_set(bot)
+        if sw_module and sw_module.TELEGRAM_LEADS_CHANNEL_ID:
+            log.info(f"✅ ID канала установлен: {sw_module.TELEGRAM_LEADS_CHANNEL_ID}")
+        else:
+            log.warning(f"⚠️ ID канала не установлен, будет попытка получить автоматически при первом письме")
+    
     log.info("=" * 80)
     
     iteration = 0
