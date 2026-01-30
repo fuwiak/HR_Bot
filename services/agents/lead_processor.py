@@ -1,6 +1,6 @@
 """
-Lead Processor Module
-Обработка лидов: валидация, классификация, генерация КП и гипотез
+Proposal Generator Module
+Генерация коммерческих предложений, классификация запросов и гипотез
 """
 import logging
 from typing import Dict, List, Optional
@@ -18,29 +18,6 @@ except ImportError:
     log.warning("⚠️ LLM или RAG модули недоступны")
 
 # ===================== PROMPTS =====================
-
-LEAD_VALIDATION_PROMPT = """
-Ты AI-ассистент для консалтинговой практики. Твоя задача - оценить перспективность лида (запроса клиента).
-
-Критерии оценки (каждый 0-1, итоговый score 0-1):
-1. Четкость ТЗ (0.3) - есть ли конкретная задача, проблема, требования
-2. Наличие бюджета/сроков (0.3) - указан ли бюджет или примерные сроки
-3. Релевантность экспертизе (0.4) - подходит ли запрос под наши услуги (HR-консалтинг, автоматизация, бизнес-анализ)
-
-Ответь ТОЛЬКО в формате JSON:
-{
-    "score": 0.0-1.0,
-    "status": "warm" | "cold" | "rejected",
-    "reason": "краткое обоснование",
-    "criteria": {
-        "clarity": 0.0-1.0,
-        "budget": 0.0-1.0,
-        "relevance": 0.0-1.0
-    }
-}
-
-Запрос лида: {{request}}
-"""
 
 CLASSIFICATION_PROMPT = """
 Ты AI-ассистент для консалтинговой практики. Классифицируй запрос клиента по категориям.
@@ -73,6 +50,7 @@ PROPOSAL_GENERATION_PROMPT = """
 КРИТИЧЕСКИ ВАЖНО - ОБРАЩЕНИЕ К КЛИЕНТУ:
 - ВСЕГДА используй "вы" при обращении к клиенту (вас, вам, ваш, ваша и т.д.)
 - НИКОГДА не используй "ты" или "тебе" - только "вы" и соответствующие формы
+- НИКОГДА не используй неформальное приветствие "Привет" - всегда используй профессиональное "Здравствуйте" или "Добрый день"
 
 ОБЩИЕ ПРАВИЛА СТИЛЯ:
 - Пиши от первого лица единственного числа («я предлагаю», «я сделаю») - так как работает один консультант Анастасия Новосёлова
@@ -139,59 +117,28 @@ HYPOTHESIS_GENERATION_PROMPT = """
 
 async def validate_lead(lead_request: str) -> Dict:
     """
-    Валидация лида с оценкой перспективности
+    Упрощенная валидация - все пользователи бота автоматически считаются валидными
     
     Args:
         lead_request: Текст запроса от лида
     
     Returns:
-        Словарь с результатами валидации
+        Словарь с результатами валидации (всегда "теплый" лид)
     """
-    if not LLM_AVAILABLE:
-        return {
-            "score": 0.5,
-            "status": "unknown",
-            "reason": "LLM недоступен"
+    # Упрощенная логика: все пользователи бота автоматически считаются "теплыми" лидами
+    result = {
+        "score": 1.0,
+        "status": "warm",
+        "reason": "Все пользователи бота автоматически считаются лидами",
+        "criteria": {
+            "clarity": 1.0,
+            "budget": 0.5,
+            "relevance": 1.0
         }
+    }
     
-    try:
-        prompt = LEAD_VALIDATION_PROMPT.replace("{{request}}", lead_request)
-        
-        messages = [{"role": "user", "content": prompt}]
-        response = await generate_with_fallback(messages, use_system_message=True, system_content="Ты помощник для оценки лидов. Отвечай только в формате JSON.")
-        
-        # Парсинг JSON ответа
-        import json
-        # Попытка извлечь JSON из ответа
-        if "{" in response and "}" in response:
-            json_start = response.find("{")
-            json_end = response.rfind("}") + 1
-            json_str = response[json_start:json_end]
-            result = json.loads(json_str)
-        else:
-            # Fallback при ошибке парсинга
-            result = {
-                "score": 0.5,
-                "status": "warm",
-                "reason": "Ошибка парсинга ответа LLM",
-                "criteria": {
-                    "clarity": 0.5,
-                    "budget": 0.5,
-                    "relevance": 0.5
-                }
-            }
-        
-        log.info(f"✅ Лид валидирован: score={result.get('score')}, status={result.get('status')}")
-        return result
-    except Exception as e:
-        log.error(f"❌ Ошибка валидации лида: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
-        return {
-            "score": 0.5,
-            "status": "unknown",
-            "reason": f"Ошибка: {str(e)}"
-        }
+    log.info(f"✅ Лид валидирован: score={result.get('score')}, status={result.get('status')}")
+    return result
 
 async def classify_request(request: str) -> Dict:
     """
@@ -308,7 +255,7 @@ async def generate_proposal(lead_request: str, lead_contact: Dict, rag_results: 
         proposal = await generate_with_fallback(
             messages,
             use_system_message=True,
-            system_content="Ты помощник консультанта для генерации коммерческих предложений. Пиши деловым, но дружелюбным стилем. КРИТИЧЕСКИ ВАЖНО: Работает ОДИН консультант - Анастасия Новосёлова. Используй единственное число (я, мне, я проведу), НИКОГДА не используй множественное число (мы, наша команда, наши специалисты). ВСЕГДА используй 'вы' при обращении к клиенту (вас, вам, ваш, ваша), НИКОГДА не используй 'ты' или 'тебе'. НИКОГДА не используй Markdown форматирование (звездочки *, заголовки #, ### и т.д.) - пиши обычным текстом без форматирования.",
+            system_content="Ты помощник консультанта для генерации коммерческих предложений. Пиши деловым, но дружелюбным стилем. КРИТИЧЕСКИ ВАЖНО: Работает ОДИН консультант - Анастасия Новосёлова. Используй единственное число (я, мне, я проведу), НИКОГДА не используй множественное число (мы, наша команда, наши специалисты). ВСЕГДА используй 'вы' при обращении к клиенту (вас, вам, ваш, ваша), НИКОГДА не используй 'ты' или 'тебе'. НИКОГДА не используй неформальное приветствие 'Привет' - всегда используй профессиональное 'Здравствуйте' или 'Добрый день'. НИКОГДА не используй Markdown форматирование (звездочки *, заголовки #, ### и т.д.) - пиши обычным текстом без форматирования.",
             max_tokens=3000,
             temperature=0.7
         )
@@ -373,116 +320,28 @@ async def generate_hypothesis(lead_request: str, rag_results: Optional[List[Dict
 
 # ===================== LEAD DETECTION =====================
 
-LEAD_DETECTION_PROMPT = """
-Ты AI-ассистент для консалтинговой практики. Определи, является ли сообщение пользователя потенциальным лидом (запросом на услуги консалтинга) или нет.
-
-Лидом считается сообщение, которое:
-- Содержит запрос на консультацию, помощь, услуги
-- Упоминает бизнес-задачи, проблемы, которые требуют решения
-- Интересуется услугами HR-консалтинга, организационного проектирования, автоматизации, бизнес-анализа
-- Просит информацию об услугах, ценах, предложениях
-- Содержит описание проекта или задачи для компании
-
-НЕ является лидом:
-- Приветствия, благодарности без запроса
-- Общие вопросы без конкретной задачи
-- Личная переписка не связанная с бизнесом
-- Простые ответы ("спасибо", "ок", "понял")
-
-Ответь ТОЛЬКО в формате JSON:
-{
-    "is_lead": true/false,
-    "confidence": 0.0-1.0 (уверенность в классификации),
-    "reason": "краткое объяснение причины классификации на русском языке"
-}
-
-Сообщение пользователя: {{message}}
-"""
-
 async def detect_lead(message: str) -> Dict:
     """
-    Определяет, является ли сообщение потенциальным лидом
+    Упрощенное определение лида - все пользователи бота считаются лидами
     
     Args:
         message: Текст сообщения пользователя
     
     Returns:
-        Словарь с результатами:
-        - is_lead: bool - является ли сообщение лидом
-        - confidence: float - уверенность (0.0-1.0)
+        Словарь с результатами (всегда is_lead=True):
+        - is_lead: bool - всегда True
+        - confidence: float - всегда 1.0
         - reason: str - причина классификации
     """
-    if not LLM_AVAILABLE:
-        # Простая эвристика если LLM недоступен
-        message_lower = message.lower()
-        lead_keywords = ["консультация", "помощь", "нужна", "интерес", "проект", "задача", "компания", "организация", "диагностика", "проектирование"]
-        is_lead = any(keyword in message_lower for keyword in lead_keywords)
-        return {
-            "is_lead": is_lead,
-            "confidence": 0.6 if is_lead else 0.4,
-            "reason": "Классификация по ключевым словам (LLM недоступен)"
-        }
+    # Упрощенная логика: все пользователи бота автоматически считаются лидами
+    result = {
+        "is_lead": True,
+        "confidence": 1.0,
+        "reason": "Все пользователи бота автоматически считаются лидами"
+    }
     
-    try:
-        import json
-        import re
-        
-        prompt = LEAD_DETECTION_PROMPT.replace("{{message}}", message)
-        messages = [{"role": "user", "content": prompt}]
-        
-        response = await generate_with_fallback(
-            messages,
-            use_system_message=True,
-            system_content="Ты помощник для определения лидов. Отвечай только в формате JSON.",
-            max_tokens=200,
-            temperature=0.3
-        )
-        
-        # Парсинг JSON ответа
-        if "{" in response and "}" in response:
-            json_start = response.find("{")
-            json_end = response.rfind("}") + 1
-            json_str = response[json_start:json_end]
-            result = json.loads(json_str)
-        else:
-            # Fallback при ошибке парсинга
-            message_lower = message.lower()
-            lead_keywords = ["консультация", "помощь", "нужна", "интерес", "проект", "задача"]
-            is_lead = any(keyword in message_lower for keyword in lead_keywords)
-            result = {
-                "is_lead": is_lead,
-                "confidence": 0.6 if is_lead else 0.4,
-                "reason": "Ошибка парсинга JSON, использована эвристика"
-            }
-        
-        # Валидация результата
-        is_lead = bool(result.get("is_lead", False))
-        confidence = float(result.get("confidence", 0.5))
-        reason = result.get("reason", "Классификация выполнена")
-        
-        # Ограничиваем confidence от 0 до 1
-        confidence = max(0.0, min(1.0, confidence))
-        
-        log.info(f"✅ Сообщение классифицировано как {'лид' if is_lead else 'не лид'} (confidence: {confidence:.2f}, reason: {reason})")
-        
-        return {
-            "is_lead": is_lead,
-            "confidence": confidence,
-            "reason": reason
-        }
-    except Exception as e:
-        log.error(f"❌ Ошибка определения лида: {e}")
-        import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
-        # Fallback на простую эвристику
-        message_lower = message.lower()
-        lead_keywords = ["консультация", "помощь", "нужна", "интерес", "проект", "задача"]
-        is_lead = any(keyword in message_lower for keyword in lead_keywords)
-        return {
-            "is_lead": is_lead,
-            "confidence": 0.5,
-            "reason": f"Ошибка: {str(e)}, использована эвристика"
-        }
+    log.info(f"✅ Сообщение классифицировано как лид (confidence: {result.get('confidence'):.2f})")
+    return result
 
 
 
