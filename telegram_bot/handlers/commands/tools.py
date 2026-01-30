@@ -213,7 +213,7 @@ async def demo_proposal_command(update: Update, context: ContextTypes.DEFAULT_TY
     if not request_text:
         await update.message.reply_text(
             "❌ Укажите запрос клиента.\n"
-            "Использование: `/demo_proposal нужна помощь с подбором персонала`",
+            "Использование: `/demo_proposal нужна помощь с автоматизацией HR-процессов`",
             parse_mode='Markdown'
         )
         return

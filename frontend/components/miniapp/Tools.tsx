@@ -142,7 +142,7 @@ export default function Tools({ onBack }: ToolsProps) {
               <textarea
                 value={proposalRequest}
                 onChange={(e) => setProposalRequest(e.target.value)}
-                placeholder="Например: нужна помощь с подбором HR-менеджера"
+                placeholder="Например: нужна помощь с автоматизацией HR-процессов"
                 className={styles.textarea}
                 rows={4}
               />

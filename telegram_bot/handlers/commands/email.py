@@ -71,7 +71,7 @@ async def email_draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(
             "❌ Укажите тему письма или запрос клиента.\n"
             "Использование: `/email_draft [текст запроса]`\n\n"
-            "Пример: `/email_draft нужна помощь с подбором персонала`",
+            "Пример: `/email_draft нужна помощь с автоматизацией HR-процессов`",
             parse_mode='Markdown'
         )
         return

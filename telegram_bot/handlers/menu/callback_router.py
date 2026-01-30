@@ -458,10 +458,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "💡 *Примеры использования*\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "🔍 *Поиск:*\n"
-            "`/rag_search подбор персонала`\n"
-            "`/rag_search автоматизация HR`\n\n"
+            "`/rag_search автоматизация HR`\n"
+            "`/rag_search бизнес-анализ`\n\n"
             "📝 *Генерация КП:*\n"
-            "`/demo_proposal нужна помощь с подбором HR-менеджера`\n\n"
+            "`/demo_proposal нужна помощь с автоматизацией HR-процессов`\n\n"
             "📋 *Проекты:*\n"
             "`/status` — список проектов\n"
             "`/summary Проект X` — сводка",
@@ -613,8 +613,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Используйте команду:\n"
             "`/rag_search [ваш запрос]`\n\n"
             "💡 *Примеры:*\n"
-            "• `/rag_search подбор персонала`\n"
-            "• `/rag_search автоматизация HR`",
+            "• `/rag_search автоматизация HR`\n"
+            "• `/rag_search бизнес-анализ`",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -629,7 +629,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Используйте команду:\n"
             "`/demo_proposal [запрос клиента]`\n\n"
             "💡 *Пример:*\n"
-            "`/demo_proposal нужна помощь с подбором HR-менеджера`",
+            "`/demo_proposal нужна помощь с автоматизацией HR-процессов`",
             parse_mode='Markdown',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -734,8 +734,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "для поиска информации в\n"
             "загруженных документах.\n\n"
             "*Примеры:*\n"
-            "• `/rag_search подбор персонала`\n"
-            "• `/rag_search автоматизация HR`"
+            "• `/rag_search автоматизация HR`\n"
+            "• `/rag_search бизнес-анализ`"
         )
         await query.edit_message_text(
             text,

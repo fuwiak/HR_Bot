@@ -114,7 +114,7 @@ export default function Email({ onBack }: EmailProps) {
               <textarea
                 value={draftRequest}
                 onChange={(e) => setDraftRequest(e.target.value)}
-                placeholder="Например: нужна помощь с подбором персонала"
+                placeholder="Например: нужна помощь с автоматизацией HR-процессов"
                 className={styles.textarea}
                 rows={4}
               />

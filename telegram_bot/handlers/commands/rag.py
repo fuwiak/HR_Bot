@@ -372,8 +372,8 @@ async def rag_upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 Используйте `/rag_search [ваш запрос]` для поиска информации в загруженных документах.
 
 *Примеры:*
-• `/rag_search подбор персонала`
 • `/rag_search автоматизация HR`
+• `/rag_search бизнес-анализ`
 
 *Другие команды RAG:*
 • `/rag_stats` — статистика базы знаний
