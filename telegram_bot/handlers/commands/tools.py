@@ -84,9 +84,6 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         source_info = f" (источник: {message_source})" if message_source else ""
         await update.message.reply_text(f"⏳ Суммаризирую проект '{project_name}'{source_info}...")
-    
-    try:
-        await update.message.reply_text(f"⏳ Суммаризирую проект '{project_name}'...")
 
         # 1. Получаем данные из WEEEK
         weeek_data = ""
