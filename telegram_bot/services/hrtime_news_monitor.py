@@ -334,6 +334,28 @@ async def send_news_notification(bot, news_data: Dict):
             # Fallback форматирование
             formatted_message = f"📰 {parsed_news.get('title', 'Новость из HR Time')}\n\n{parsed_news.get('content', '')}"
         
+        # Проверяем на дубликаты перед отправкой
+        try:
+            from services.helpers.channel_deduplicator import is_duplicate, mark_as_sent
+            # Формируем lead_info для проверки дубликатов
+            check_lead_info = {
+                "source": "📢 HR Time: Вся лента",
+                "title": parsed_news.get("title", ""),
+                "client_email": "",
+                "client_phone": "",
+                "message": parsed_news.get("content", text)
+            }
+            is_dup, reason = is_duplicate(check_lead_info, check_content=True)
+            if is_dup:
+                log.info("=" * 80)
+                log.info(f"⏭️  ПРОПУСК ДУБЛИКАТА: {reason}")
+                log.info("=" * 80)
+                return
+        except ImportError:
+            log.warning("⚠️ Модуль channel_deduplicator недоступен, проверка дубликатов отключена")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка проверки дубликатов: {e}, продолжаем отправку")
+        
         # Отправляем в канал
         if sw_module and sw_module.TELEGRAM_LEADS_CHANNEL_ID:
             try:
@@ -349,6 +371,13 @@ async def send_news_notification(bot, news_data: Dict):
                 log.info(f"   🏷️  Категория: {news_category}")
                 log.info(f"   📊 Уверенность: {confidence:.2f}")
                 log.info("=" * 80)
+                
+                # Помечаем как отправленное
+                try:
+                    from services.helpers.channel_deduplicator import mark_as_sent
+                    mark_as_sent(check_lead_info)
+                except Exception as e:
+                    log.warning(f"⚠️ Ошибка пометки новости как отправленной: {e}")
             except Exception as e:
                 log.error("=" * 80)
                 log.error(f"❌ ОШИБКА ОТПРАВКИ НОВОСТИ В КАНАЛ:")

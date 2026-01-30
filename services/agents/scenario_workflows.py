@@ -327,6 +327,18 @@ async def send_lead_to_channel(telegram_bot, lead_info: Dict) -> bool:
     if not telegram_bot or not TELEGRAM_LEADS_CHANNEL_ID:
         return False
     
+    # Проверяем на дубликаты
+    try:
+        from services.helpers.channel_deduplicator import is_duplicate, mark_as_sent
+        is_dup, reason = is_duplicate(lead_info, check_content=True)
+        if is_dup:
+            log.info(f"⏭️  Пропуск дубликата: {reason}")
+            return False
+    except ImportError:
+        log.warning("⚠️ Модуль channel_deduplicator недоступен, проверка дубликатов отключена")
+    except Exception as e:
+        log.warning(f"⚠️ Ошибка проверки дубликатов: {e}, продолжаем отправку")
+    
     try:
         source = lead_info.get("source", "неизвестно")
         title = lead_info.get("title", "Новый лид")
@@ -411,6 +423,14 @@ async def send_lead_to_channel(telegram_bot, lead_info: Dict) -> bool:
             parse_mode="Markdown"
         )
         log.info(f"✅ {category_text} отправлен в канал HRAI_ANovoselova_Лиды")
+        
+        # Помечаем как отправленное
+        try:
+            from services.helpers.channel_deduplicator import mark_as_sent
+            mark_as_sent(lead_info)
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка пометки сообщения как отправленного: {e}")
+        
         return True
     except Exception as e:
         log.error(f"❌ Ошибка отправки лида в канал: {e}")
