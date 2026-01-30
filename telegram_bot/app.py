@@ -116,6 +116,13 @@ from telegram_bot.services.email_monitor import (
     email_monitor_task
 )
 
+# HR Time news monitoring state
+from telegram_bot.services.hrtime_news_monitor import (
+    processed_news_ids,
+    news_check_interval,
+    hrtime_news_monitor_task
+)
+
 # ===================== RUN BOT ========================
 def main():
     # Убеждаемся, что filters доступен (импортирован глобально в строке 21)
@@ -306,6 +313,16 @@ def main():
                 import traceback
                 log.error(traceback.format_exc())
             
+            try:
+                # Запускаем мониторинг новостей HR Time
+                news_task = asyncio.create_task(hrtime_news_monitor_task(app.bot))
+                app.hrtime_news_monitor_task = news_task
+                log.info("✅ Фоновая задача мониторинга новостей HR Time запущена")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось запустить мониторинг новостей HR Time: {e}")
+                import traceback
+                log.error(traceback.format_exc())
+            
             await app.updater.start_webhook(
                 listen="0.0.0.0",
                 port=PORT,
@@ -354,6 +371,16 @@ def main():
                 log.info("✅ Фоновая задача мониторинга почты запущена")
             except Exception as e:
                 log.warning(f"⚠️ Не удалось запустить мониторинг почты: {e}")
+                import traceback
+                log.error(traceback.format_exc())
+            
+            try:
+                # Запускаем мониторинг новостей HR Time
+                news_task = asyncio.create_task(hrtime_news_monitor_task(app.bot))
+                app.hrtime_news_monitor_task = news_task
+                log.info("✅ Фоновая задача мониторинга новостей HR Time запущена")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось запустить мониторинг новостей HR Time: {e}")
                 import traceback
                 log.error(traceback.format_exc())
             

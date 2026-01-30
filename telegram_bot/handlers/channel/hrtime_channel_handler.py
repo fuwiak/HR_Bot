@@ -85,6 +85,14 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
             "raw": post.to_dict() if hasattr(post, 'to_dict') else {}
         }
         
+        # Отправляем все новости в канал лидов с классификацией
+        try:
+            from telegram_bot.services.hrtime_news_monitor import send_news_notification
+            await send_news_notification(context.bot, message_data)
+            log.info(f"✅ [Channel Handler] Новость отправлена в канал лидов")
+        except Exception as e:
+            log.warning(f"⚠️ [Channel Handler] Ошибка отправки новости в канал лидов: {e}")
+        
         # Парсим сообщение
         parsed_order = await channel_parser.parse_channel_message(message_data)
         
