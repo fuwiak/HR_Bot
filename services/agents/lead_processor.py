@@ -255,15 +255,24 @@ async def generate_proposal(lead_request: str, lead_contact: Dict, rag_results: 
     Returns:
         Текст коммерческого предложения
     """
+    log.info(f"🚀 [КП] Начало генерации КП. Запрос: {lead_request[:100]}...")
+    
     if not LLM_AVAILABLE:
+        log.error("❌ [КП] LLM недоступен")
         return "Извините, сервис временно недоступен."
     
     try:
-        # Если RAG результаты не предоставлены, ищем их
+        # Шаг 1: Поиск в RAG базе
+        log.info("📚 [КП] Шаг 1: Поиск релевантной информации в RAG базе")
         if rag_results is None:
+            log.info(f"📚 [КП] Выполняю поиск по запросу: {lead_request[:100]}...")
             rag_results = search_service(lead_request, limit=5)
+            log.info(f"📚 [КП] Найдено {len(rag_results) if rag_results else 0} релевантных документов")
+        else:
+            log.info(f"📚 [КП] Используются предоставленные RAG результаты ({len(rag_results)} документов)")
         
-        # Формируем контекст из RAG результатов
+        # Шаг 2: Формирование контекста из RAG результатов
+        log.info("📝 [КП] Шаг 2: Формирование контекста из RAG результатов")
         rag_context = ""
         if rag_results:
             rag_context = "Релевантная информация из базы знаний:\n\n"
@@ -272,18 +281,29 @@ async def generate_proposal(lead_request: str, lead_contact: Dict, rag_results: 
                 text = result.get("text", result.get("content", ""))[:500]  # Первые 500 символов
                 score = result.get("score", 0)
                 rag_context += f"{i}. {title} (релевантность: {score:.2f})\n{text}\n\n"
+                log.info(f"📝 [КП] Добавлен документ {i}: {title} (score: {score:.2f})")
+            log.info(f"📝 [КП] Контекст RAG сформирован ({len(rag_context)} символов)")
         else:
             rag_context = "В базе знаний не найдено релевантной информации для данного запроса."
+            log.warning("⚠️ [КП] В базе знаний не найдено релевантной информации")
         
-        # Формируем контекст истории беседы
+        # Шаг 3: Формирование контекста истории беседы
+        log.info("💬 [КП] Шаг 3: Формирование контекста истории беседы")
         history_context = ""
         if conversation_history and conversation_history.strip():
             history_context = f"История беседы с клиентом:\n{conversation_history}\n\n"
+            log.info(f"💬 [КП] История беседы добавлена ({len(conversation_history)} символов)")
         else:
             history_context = ""
+            log.info("💬 [КП] История беседы отсутствует или пуста")
         
+        # Шаг 4: Формирование промпта
+        log.info("📋 [КП] Шаг 4: Формирование промпта для LLM")
         prompt = PROPOSAL_GENERATION_PROMPT.replace("{{conversation_history}}", history_context).replace("{{request}}", lead_request).replace("{{rag_context}}", rag_context)
+        log.info(f"📋 [КП] Промпт сформирован ({len(prompt)} символов)")
         
+        # Шаг 5: Генерация через LLM
+        log.info("🤖 [КП] Шаг 5: Отправка запроса в LLM для генерации КП")
         messages = [{"role": "user", "content": prompt}]
         proposal = await generate_with_fallback(
             messages,
@@ -293,12 +313,13 @@ async def generate_proposal(lead_request: str, lead_contact: Dict, rag_results: 
             temperature=0.7
         )
         
-        log.info(f"✅ КП сгенерировано (длина: {len(proposal)} символов)")
+        log.info(f"✅ [КП] Шаг 6: КП успешно сгенерировано (длина: {len(proposal)} символов)")
+        log.info(f"✅ [КП] Процесс генерации КП завершен успешно")
         return proposal
     except Exception as e:
-        log.error(f"❌ Ошибка генерации КП: {e}")
+        log.error(f"❌ [КП] Ошибка генерации КП на этапе: {e}")
         import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        log.error(f"❌ [КП] Traceback: {traceback.format_exc()}")
         return f"Извините, произошла ошибка при генерации коммерческого предложения. Ошибка: {str(e)}"
 
 async def generate_hypothesis(lead_request: str, rag_results: Optional[List[Dict]] = None) -> str:

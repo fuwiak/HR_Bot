@@ -1122,16 +1122,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif query.data.startswith("lead_proposal_"):
         # Обработка кнопки "Создать КП"
+        log.info("🔘 [Telegram КП] Получен запрос на создание КП через кнопку")
         message_id = query.data.replace("lead_proposal_", "")
+        log.info(f"🔘 [Telegram КП] Message ID: {message_id}")
         message_data = context.user_data.get(f"lead_message_{message_id}")
         
         if not message_data:
+            log.error(f"❌ [Telegram КП] Данные сообщения {message_id} не найдены в user_data")
             await query.answer("❌ Данные сообщения не найдены", show_alert=True)
             return
         
         try:
+            log.info("📱 [Telegram КП] Шаг 1: Инициализация процесса создания КП")
             # Показываем typing индикатор
             chat_id = query.message.chat.id
+            log.info(f"📱 [Telegram КП] Chat ID: {chat_id}")
             await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
             
             await query.answer("⏳ Генерирую коммерческое предложение...")
@@ -1140,21 +1145,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = query.from_user
             user_id = user.id
             user_name = user.first_name or user.username or "Клиент"
+            log.info(f"👤 [Telegram КП] Пользователь: {user_name} (ID: {user_id})")
+            log.info(f"💬 [Telegram КП] Запрос пользователя: {user_message[:100]}...")
             
             # Получаем историю беседы для контекста
+            log.info("💬 [Telegram КП] Шаг 2: Получение истории беседы")
             conversation_history = None
             try:
                 from telegram_bot.services.memory_service import get_recent_history
                 conversation_history = get_recent_history(user_id, limit=20)
                 if conversation_history:
-                    log.info(f"📝 Использую историю беседы ({len(conversation_history)} символов) для генерации КП")
+                    log.info(f"💬 [Telegram КП] История беседы получена ({len(conversation_history)} символов)")
                 else:
-                    log.info("📝 История беседы пуста, используем только текущий запрос")
+                    log.info("💬 [Telegram КП] История беседы пуста, используем только текущий запрос")
             except Exception as e:
-                log.warning(f"⚠️ Не удалось получить историю беседы: {e}")
+                log.warning(f"⚠️ [Telegram КП] Не удалось получить историю беседы: {e}")
             
             # Импортируем функцию генерации КП
             try:
+                log.info("📦 [Telegram КП] Шаг 3: Импорт модуля генерации КП")
                 from services.agents.lead_processor import generate_proposal
                 
                 # Продолжаем показывать typing во время генерации
@@ -1170,19 +1179,23 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 typing_task = asyncio.create_task(keep_typing())
                 
                 # Генерируем КП
+                log.info("📝 [Telegram КП] Шаг 4: Подготовка данных для генерации КП")
                 lead_contact = {
                     "name": user_name,
                     "email": "",
                     "phone": ""
                 }
+                log.info(f"📝 [Telegram КП] Контактные данные: {lead_contact}")
                 
                 try:
+                    log.info("🚀 [Telegram КП] Шаг 5: Вызов функции generate_proposal")
                     proposal = await generate_proposal(
                         lead_request=user_message,
                         lead_contact=lead_contact,
                         rag_results=None,
                         conversation_history=conversation_history
                     )
+                    log.info(f"✅ [Telegram КП] КП получено от generate_proposal (длина: {len(proposal) if proposal else 0} символов)")
                 finally:
                     # Останавливаем typing индикатор
                     typing_task.cancel()
@@ -1192,6 +1205,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         pass
                 
                 if proposal:
+                    log.info("📤 [Telegram КП] Шаг 6: Подготовка к отправке КП пользователю")
                     # Отправляем КП пользователю
                     proposal_text = (
                         f"📝 *Коммерческое предложение*\n\n"
@@ -1206,6 +1220,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Убираем кнопки из исходного сообщения
                     try:
                         await query.edit_message_reply_markup(reply_markup=None)
+                        log.info("🔘 [Telegram КП] Кнопки из исходного сообщения удалены")
                     except Exception:
                         pass  # Игнорируем ошибку, если сообщение уже было изменено
                     
@@ -1216,6 +1231,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ]
                     reply_markup = InlineKeyboardMarkup(keyboard)
                     
+                    log.info("📤 [Telegram КП] Шаг 7: Отправка КП пользователю в Telegram")
                     await query.message.reply_text(
                         proposal_text,
                         parse_mode='Markdown',
@@ -1225,23 +1241,25 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Сохраняем сгенерированное КП в context
                     context.user_data[f"lead_proposal_{message_id}"] = proposal
                     
-                    log.info(f"✅ КП сгенерировано для сообщения {message_id}")
+                    log.info(f"✅ [Telegram КП] Шаг 8: КП успешно отправлено пользователю. Message ID: {message_id}")
+                    log.info(f"✅ [Telegram КП] Процесс создания КП завершен успешно")
                 else:
+                    log.error("❌ [Telegram КП] generate_proposal вернул пустой результат")
                     await query.answer("❌ Не удалось сгенерировать КП", show_alert=True)
                     
             except ImportError:
+                log.error("❌ [Telegram КП] Модуль lead_processor недоступен")
                 await query.answer("❌ Модуль генерации КП недоступен", show_alert=True)
-                log.error("❌ Модуль lead_processor недоступен")
             except Exception as e:
-                log.error(f"❌ Ошибка генерации КП: {e}")
+                log.error(f"❌ [Telegram КП] Ошибка генерации КП: {e}")
                 import traceback
-                log.error(traceback.format_exc())
+                log.error(f"❌ [Telegram КП] Traceback: {traceback.format_exc()}")
                 await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
                 
         except Exception as e:
-            log.error(f"❌ Ошибка обработки создания КП: {e}")
+            log.error(f"❌ [Telegram КП] Ошибка обработки создания КП: {e}")
             import traceback
-            log.error(traceback.format_exc())
+            log.error(f"❌ [Telegram КП] Traceback: {traceback.format_exc()}")
             await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
     
     elif query.data.startswith("lead_proposal_done_"):

@@ -337,43 +337,63 @@ async def demo_proposal_command(update: Update, context: ContextTypes.DEFAULT_TY
         return
     
     try:
+        log.info("🔘 [Telegram /demo_proposal] Начало генерации КП через команду")
+        log.info(f"💬 [Telegram /demo_proposal] Запрос: {request_text[:100]}...")
+        log.info(f"📎 [Telegram /demo_proposal] Источник: {message_source}")
+        
         from services.agents.lead_processor import generate_proposal
         
         # Получаем историю беседы для контекста
+        log.info("💬 [Telegram /demo_proposal] Шаг 1: Получение истории беседы")
         conversation_history = None
         user_id = update.message.from_user.id if update.message and update.message.from_user else None
         if user_id:
+            log.info(f"👤 [Telegram /demo_proposal] User ID: {user_id}")
             try:
                 from telegram_bot.services.memory_service import get_recent_history
                 conversation_history = get_recent_history(user_id, limit=20)
                 if conversation_history:
-                    log.info(f"📝 Использую историю беседы ({len(conversation_history)} символов) для генерации КП")
+                    log.info(f"💬 [Telegram /demo_proposal] История беседы получена ({len(conversation_history)} символов)")
+                else:
+                    log.info("💬 [Telegram /demo_proposal] История беседы пуста")
             except Exception as e:
-                log.warning(f"⚠️ Не удалось получить историю беседы: {e}")
+                log.warning(f"⚠️ [Telegram /demo_proposal] Не удалось получить историю беседы: {e}")
+        else:
+            log.warning("⚠️ [Telegram /demo_proposal] User ID не найден")
         
         source_info = f" (источник: {message_source})" if message_source else ""
+        log.info("📤 [Telegram /demo_proposal] Шаг 2: Отправка уведомления пользователю")
         await update.message.reply_text(f"⏳ Генерирую коммерческое предложение{source_info}...")
         
+        log.info("🚀 [Telegram /demo_proposal] Шаг 3: Вызов функции generate_proposal")
         proposal = await generate_proposal(request_text, lead_contact={}, conversation_history=conversation_history)
+        log.info(f"✅ [Telegram /demo_proposal] КП получено (длина: {len(proposal) if proposal else 0} символов)")
         
         # Добавляем информацию об источнике
         header = f"*Черновик КП*{source_info}:\n\n"
         
         # Разбиваем длинное сообщение на части если нужно
+        log.info("📤 [Telegram /demo_proposal] Шаг 4: Подготовка к отправке КП пользователю")
         full_text = header + proposal
         if len(full_text) > 4000:
+            log.info(f"📤 [Telegram /demo_proposal] КП длинное ({len(full_text)} символов), разбиваю на части")
             # Отправляем по частям
             parts = [proposal[i:i+4000] for i in range(0, len(proposal), 4000)]
             await update.message.reply_text(header, parse_mode='Markdown')
-            for part in parts:
+            for i, part in enumerate(parts, 1):
+                log.info(f"📤 [Telegram /demo_proposal] Отправка части {i}/{len(parts)}")
                 await update.message.reply_text(part, parse_mode='Markdown')
         else:
+            log.info("📤 [Telegram /demo_proposal] Отправка КП одним сообщением")
             await update.message.reply_text(full_text, parse_mode='Markdown')
         
+        log.info("✅ [Telegram /demo_proposal] КП успешно отправлено пользователю")
+        log.info("✅ [Telegram /demo_proposal] Процесс генерации КП через команду завершен успешно")
+        
     except Exception as e:
-        log.error(f"❌ Ошибка генерации КП: {e}")
+        log.error(f"❌ [Telegram /demo_proposal] Ошибка генерации КП: {e}")
         import traceback
-        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        log.error(f"❌ [Telegram /demo_proposal] Traceback: {traceback.format_exc()}")
         await update.message.reply_text(f"❌ Ошибка генерации КП: {str(e)}")
 
 async def hypothesis_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
