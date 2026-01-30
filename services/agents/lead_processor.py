@@ -309,6 +309,120 @@ async def generate_hypothesis(lead_request: str, rag_results: Optional[List[Dict
         return f"Извините, произошла ошибка при генерации гипотез. Ошибка: {str(e)}"
 
 
+# ===================== LEAD DETECTION =====================
+
+LEAD_DETECTION_PROMPT = """
+Ты AI-ассистент для консалтинговой практики. Определи, является ли сообщение пользователя потенциальным лидом (запросом на услуги консалтинга) или нет.
+
+Лидом считается сообщение, которое:
+- Содержит запрос на консультацию, помощь, услуги
+- Упоминает бизнес-задачи, проблемы, которые требуют решения
+- Интересуется услугами HR-консалтинга, организационного проектирования, автоматизации, бизнес-анализа
+- Просит информацию об услугах, ценах, предложениях
+- Содержит описание проекта или задачи для компании
+
+НЕ является лидом:
+- Приветствия, благодарности без запроса
+- Общие вопросы без конкретной задачи
+- Личная переписка не связанная с бизнесом
+- Простые ответы ("спасибо", "ок", "понял")
+
+Ответь ТОЛЬКО в формате JSON:
+{
+    "is_lead": true/false,
+    "confidence": 0.0-1.0 (уверенность в классификации),
+    "reason": "краткое объяснение причины классификации на русском языке"
+}
+
+Сообщение пользователя: {{message}}
+"""
+
+async def detect_lead(message: str) -> Dict:
+    """
+    Определяет, является ли сообщение потенциальным лидом
+    
+    Args:
+        message: Текст сообщения пользователя
+    
+    Returns:
+        Словарь с результатами:
+        - is_lead: bool - является ли сообщение лидом
+        - confidence: float - уверенность (0.0-1.0)
+        - reason: str - причина классификации
+    """
+    if not LLM_AVAILABLE:
+        # Простая эвристика если LLM недоступен
+        message_lower = message.lower()
+        lead_keywords = ["консультация", "помощь", "нужна", "интерес", "проект", "задача", "компания", "организация", "диагностика", "проектирование"]
+        is_lead = any(keyword in message_lower for keyword in lead_keywords)
+        return {
+            "is_lead": is_lead,
+            "confidence": 0.6 if is_lead else 0.4,
+            "reason": "Классификация по ключевым словам (LLM недоступен)"
+        }
+    
+    try:
+        import json
+        import re
+        
+        prompt = LEAD_DETECTION_PROMPT.replace("{{message}}", message)
+        messages = [{"role": "user", "content": prompt}]
+        
+        response = await generate_with_fallback(
+            messages,
+            use_system_message=True,
+            system_content="Ты помощник для определения лидов. Отвечай только в формате JSON.",
+            max_tokens=200,
+            temperature=0.3
+        )
+        
+        # Парсинг JSON ответа
+        if "{" in response and "}" in response:
+            json_start = response.find("{")
+            json_end = response.rfind("}") + 1
+            json_str = response[json_start:json_end]
+            result = json.loads(json_str)
+        else:
+            # Fallback при ошибке парсинга
+            message_lower = message.lower()
+            lead_keywords = ["консультация", "помощь", "нужна", "интерес", "проект", "задача"]
+            is_lead = any(keyword in message_lower for keyword in lead_keywords)
+            result = {
+                "is_lead": is_lead,
+                "confidence": 0.6 if is_lead else 0.4,
+                "reason": "Ошибка парсинга JSON, использована эвристика"
+            }
+        
+        # Валидация результата
+        is_lead = bool(result.get("is_lead", False))
+        confidence = float(result.get("confidence", 0.5))
+        reason = result.get("reason", "Классификация выполнена")
+        
+        # Ограничиваем confidence от 0 до 1
+        confidence = max(0.0, min(1.0, confidence))
+        
+        log.info(f"✅ Сообщение классифицировано как {'лид' if is_lead else 'не лид'} (confidence: {confidence:.2f}, reason: {reason})")
+        
+        return {
+            "is_lead": is_lead,
+            "confidence": confidence,
+            "reason": reason
+        }
+    except Exception as e:
+        log.error(f"❌ Ошибка определения лида: {e}")
+        import traceback
+        log.error(f"❌ Traceback: {traceback.format_exc()}")
+        # Fallback на простую эвристику
+        message_lower = message.lower()
+        lead_keywords = ["консультация", "помощь", "нужна", "интерес", "проект", "задача"]
+        is_lead = any(keyword in message_lower for keyword in lead_keywords)
+        return {
+            "is_lead": is_lead,
+            "confidence": 0.5,
+            "reason": f"Ошибка: {str(e)}, использована эвристика"
+        }
+
+
 
 
 

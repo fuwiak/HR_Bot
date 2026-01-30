@@ -906,3 +906,109 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data.startswith("email_cancel_"):
         email_id = query.data.replace("email_cancel_", "")
         await handle_email_cancel(query, email_id)
+    
+    # Обработчики для лидов
+    elif query.data.startswith("lead_confirm_"):
+        # Обработка кнопки "Подтвердить ответ"
+        message_id = query.data.replace("lead_confirm_", "")
+        lead_data = context.user_data.get(f"lead_message_{message_id}")
+        
+        if lead_data:
+            await query.answer("✅ Ответ подтвержден", show_alert=False)
+            await query.edit_message_reply_markup(reply_markup=None)  # Убираем кнопки
+            log.info(f"✅ Лид подтвержден для сообщения {message_id}")
+        else:
+            await query.answer("❌ Данные лида не найдены", show_alert=True)
+    
+    elif query.data.startswith("lead_proposal_"):
+        # Обработка кнопки "Создать КП"
+        message_id = query.data.replace("lead_proposal_", "")
+        lead_data = context.user_data.get(f"lead_message_{message_id}")
+        
+        if not lead_data:
+            await query.answer("❌ Данные лида не найдены", show_alert=True)
+            return
+        
+        try:
+            await query.answer("⏳ Генерирую коммерческое предложение...")
+            
+            user_message = lead_data.get("user_message", "")
+            user = query.from_user
+            user_name = user.first_name or user.username or "Клиент"
+            
+            # Импортируем функцию генерации КП
+            try:
+                from services.agents.lead_processor import generate_proposal
+                
+                # Генерируем КП
+                lead_contact = {
+                    "name": user_name,
+                    "email": "",
+                    "phone": ""
+                }
+                
+                proposal = await generate_proposal(
+                    lead_request=user_message,
+                    lead_contact=lead_contact,
+                    rag_results=None
+                )
+                
+                if proposal:
+                    # Отправляем КП пользователю
+                    proposal_text = (
+                        f"📝 *Коммерческое предложение*\n\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        f"{proposal}\n\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        f"💡 *Следующие шаги:*\n"
+                        f"• Проверьте и при необходимости отредактируйте КП\n"
+                        f"• Отправьте клиенту по email или через другой канал связи"
+                    )
+                    
+                    # Убираем кнопки из исходного сообщения
+                    try:
+                        await query.edit_message_reply_markup(reply_markup=None)
+                    except Exception:
+                        pass  # Игнорируем ошибку, если сообщение уже было изменено
+                    
+                    # Отправляем КП
+                    keyboard = [
+                        [InlineKeyboardButton("✅ КП готово", callback_data=f"lead_proposal_done_{message_id}")],
+                        [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.message.reply_text(
+                        proposal_text,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
+                    
+                    # Сохраняем сгенерированное КП в context
+                    context.user_data[f"lead_proposal_{message_id}"] = proposal
+                    
+                    log.info(f"✅ КП сгенерировано для лида (message_id: {message_id})")
+                else:
+                    await query.answer("❌ Не удалось сгенерировать КП", show_alert=True)
+                    
+            except ImportError:
+                await query.answer("❌ Модуль генерации КП недоступен", show_alert=True)
+                log.error("❌ Модуль lead_processor недоступен")
+            except Exception as e:
+                log.error(f"❌ Ошибка генерации КП: {e}")
+                import traceback
+                log.error(traceback.format_exc())
+                await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+                
+        except Exception as e:
+            log.error(f"❌ Ошибка обработки создания КП: {e}")
+            import traceback
+            log.error(traceback.format_exc())
+            await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+    
+    elif query.data.startswith("lead_proposal_done_"):
+        # Обработка кнопки "КП готово"
+        message_id = query.data.replace("lead_proposal_done_", "")
+        await query.answer("✅ КП сохранено", show_alert=False)
+        await query.edit_message_reply_markup(reply_markup=None)
+        log.info(f"✅ КП помечено как готовое (message_id: {message_id})")

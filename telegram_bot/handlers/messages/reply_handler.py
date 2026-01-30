@@ -902,8 +902,40 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         
-        # Отправляем ответ без Markdown форматирования
-        await update.message.reply_text(response_clean)
+        # Проверяем, является ли сообщение лидом
+        is_lead = False
+        lead_detection_result = None
+        try:
+            from services.agents.lead_processor import detect_lead
+            lead_detection_result = await detect_lead(text)
+            is_lead = lead_detection_result.get("is_lead", False)
+            log.info(f"🔍 [Lead Detection] Сообщение классифицировано как {'лид' if is_lead else 'не лид'} (confidence: {lead_detection_result.get('confidence', 0):.2f})")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка определения лида: {e}")
+        
+        # Если это лид, добавляем кнопки
+        if is_lead:
+            # Сохраняем информацию о лиде в context для использования в callback
+            context.user_data[f"lead_message_{message_id}"] = {
+                "user_message": text,
+                "bot_response": response_clean,
+                "detection": lead_detection_result
+            }
+            
+            # Создаем кнопки
+            keyboard = [
+                [
+                    InlineKeyboardButton("✅ Подтвердить ответ", callback_data=f"lead_confirm_{message_id}"),
+                    InlineKeyboardButton("📝 Создать КП", callback_data=f"lead_proposal_{message_id}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # Отправляем ответ с кнопками
+            await update.message.reply_text(response_clean, reply_markup=reply_markup)
+        else:
+            # Отправляем ответ без кнопок
+            await update.message.reply_text(response_clean)
         
     except Exception as e:
         log.error(f"❌ Ошибка обработки сообщения: {e}")
