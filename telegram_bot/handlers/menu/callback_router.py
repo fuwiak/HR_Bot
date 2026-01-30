@@ -2,9 +2,11 @@
 Роутер для callback кнопок
 """
 import sys
+import asyncio
 from pathlib import Path
 from telegram import Update, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.constants import ChatAction
 import logging
 
 # Добавляем корневую директорию проекта в sys.path
@@ -914,6 +916,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message_data = context.user_data.get(f"lead_message_{message_id}")
         
         if message_data:
+            # Показываем typing индикатор
+            chat_id = query.message.chat.id
+            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            
             await query.answer("✅ Ответ подтвержден", show_alert=False)
             await query.edit_message_reply_markup(reply_markup=None)  # Убираем кнопки
             log.info(f"✅ Ответ подтвержден для сообщения {message_id}")
@@ -930,6 +936,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         try:
+            # Показываем typing индикатор
+            chat_id = query.message.chat.id
+            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            
             await query.answer("⏳ Генерирую коммерческое предложение...")
             
             user_message = message_data.get("user_message", "")
@@ -940,6 +950,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 from services.agents.lead_processor import generate_proposal
                 
+                # Продолжаем показывать typing во время генерации
+                import asyncio
+                async def keep_typing():
+                    while True:
+                        await asyncio.sleep(3)
+                        try:
+                            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+                        except Exception:
+                            break
+                
+                typing_task = asyncio.create_task(keep_typing())
+                
                 # Генерируем КП
                 lead_contact = {
                     "name": user_name,
@@ -947,11 +969,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "phone": ""
                 }
                 
-                proposal = await generate_proposal(
-                    lead_request=user_message,
-                    lead_contact=lead_contact,
-                    rag_results=None
-                )
+                try:
+                    proposal = await generate_proposal(
+                        lead_request=user_message,
+                        lead_contact=lead_contact,
+                        rag_results=None
+                    )
+                finally:
+                    # Останавливаем typing индикатор
+                    typing_task.cancel()
+                    try:
+                        await typing_task
+                    except asyncio.CancelledError:
+                        pass
                 
                 if proposal:
                     # Отправляем КП пользователю
@@ -1023,6 +1053,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         try:
+            # Показываем typing индикатор
+            chat_id = query.message.chat.id
+            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            
             from services.helpers.weeek_helper import get_projects
             
             await query.answer("⏳ Загружаю проекты...")
@@ -1090,6 +1124,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
         try:
+            # Показываем typing индикатор
+            chat_id = query.message.chat.id
+            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            
             from services.helpers.weeek_helper import create_task, get_project
             
             await query.answer("⏳ Создаю задачу...")
