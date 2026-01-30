@@ -9,8 +9,81 @@ import logging
 log = logging.getLogger(__name__)
 
 async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /summary - суммаризация проекта с использованием WEEEK и RAG"""
-    project_name = " ".join(context.args) if context.args else "текущий"
+    """Команда /summary - суммаризация проекта с использованием WEEEK и RAG
+    
+    Поддерживает:
+    - Название проекта: /summary Название проекта
+    - Ответ на сообщение: ответьте на сообщение командой /summary
+    - Ссылку на сообщение: /summary https://t.me/HRAI_ANovoselova_Leads/123
+    - ID сообщения: /summary 123
+    """
+    project_name = ""
+    message_source = ""
+    use_message_text = False
+    
+    # Проверяем, есть ли ответ на сообщение
+    if update.message and update.message.reply_to_message:
+        from services.helpers.channel_message_helper import extract_message_from_reply
+        reply_text = await extract_message_from_reply(update)
+        if reply_text:
+            project_name = reply_text[:100]  # Используем первые 100 символов как название
+            use_message_text = True
+            message_source = "из ответа на сообщение"
+            log.info(f"📎 Используется текст из reply_to_message для суммаризации: {len(reply_text)} символов")
+    
+    # Если нет reply, проверяем аргументы команды
+    if not project_name and context.args:
+        args_text = " ".join(context.args)
+        
+        # Проверяем, не ссылка ли это или ID
+        from services.helpers.channel_message_helper import parse_message_reference, get_channel_message_text
+        ref = parse_message_reference(args_text)
+        
+        if ref:
+            # Это ссылка или ID сообщения из канала
+            # Telegram Bot API не позволяет напрямую получить текст сообщения из канала
+            # Предлагаем пользователю ответить на сообщение
+            await update.message.reply_text(
+                f"📎 Для суммаризации сообщения из канала:\n\n"
+                f"1. Перейдите в канал: https://t.me/HRAI_ANovoselova_Leads\n"
+                f"2. Найдите сообщение {ref.get('message_id', 'N/A')}\n"
+                f"3. Ответьте на это сообщение командой `/summary`\n\n"
+                f"Или используйте название проекта:\n"
+                f"`/summary [название проекта]`",
+                parse_mode='Markdown'
+            )
+            return
+        else:
+            # Обычное название проекта
+            project_name = args_text
+            message_source = "из аргументов команды"
+    
+    if not project_name:
+        project_name = "текущий"
+    
+    # Если используем текст сообщения, создаем суммаризацию текста
+    if use_message_text and update.message and update.message.reply_to_message:
+        try:
+            from services.helpers.channel_message_helper import extract_message_from_reply
+            from services.helpers.summary_helper import summarize_long_text
+            
+            message_text = await extract_message_from_reply(update)
+            if message_text:
+                source_info = f" (источник: {message_source})" if message_source else ""
+                await update.message.reply_text(f"⏳ Суммаризирую сообщение{source_info}...")
+                
+                summary = await summarize_long_text(message_text, max_length=1000)
+                
+                result_text = f"📄 *Суммаризация сообщения*{source_info}:\n\n{summary}"
+                await update.message.reply_text(result_text, parse_mode='Markdown')
+                return
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка суммаризации сообщения: {e}, переходим к обычной суммаризации проекта")
+    
+    # Обычная суммаризация проекта
+    try:
+        source_info = f" (источник: {message_source})" if message_source else ""
+        await update.message.reply_text(f"⏳ Суммаризирую проект '{project_name}'{source_info}...")
     
     try:
         await update.message.reply_text(f"⏳ Суммаризирую проект '{project_name}'...")
@@ -207,32 +280,86 @@ async def summary_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Ошибка: {str(e)}")
 
 async def demo_proposal_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /demo_proposal - генерация КП для демонстрации"""
-    request_text = " ".join(context.args) if context.args else ""
+    """Команда /demo_proposal - генерация КП для демонстрации
+    
+    Поддерживает:
+    - Обычный текст: /demo_proposal нужна помощь с автоматизацией
+    - Ответ на сообщение: ответьте на сообщение командой /demo_proposal
+    - Ссылку на сообщение: /demo_proposal https://t.me/HRAI_ANovoselova_Leads/123
+    - ID сообщения: /demo_proposal 123
+    """
+    request_text = ""
+    message_source = ""
+    
+    # Проверяем, есть ли ответ на сообщение
+    if update.message and update.message.reply_to_message:
+        from services.helpers.channel_message_helper import extract_message_from_reply
+        reply_text = await extract_message_from_reply(update)
+        if reply_text:
+            request_text = reply_text
+            message_source = "из ответа на сообщение"
+            log.info(f"📎 Используется текст из reply_to_message: {len(request_text)} символов")
+    
+    # Если нет reply, проверяем аргументы команды
+    if not request_text and context.args:
+        args_text = " ".join(context.args)
+        
+        # Проверяем, не ссылка ли это или ID
+        from services.helpers.channel_message_helper import parse_message_reference, get_channel_message_text
+        ref = parse_message_reference(args_text)
+        
+        if ref:
+            # Это ссылка или ID сообщения из канала
+            # Telegram Bot API не позволяет напрямую получить текст сообщения из канала
+            # Предлагаем пользователю ответить на сообщение
+            await update.message.reply_text(
+                f"📎 Для работы с сообщением из канала:\n\n"
+                f"1. Перейдите в канал: https://t.me/HRAI_ANovoselova_Leads\n"
+                f"2. Найдите сообщение {ref.get('message_id', 'N/A')}\n"
+                f"3. Ответьте на это сообщение командой `/demo_proposal`\n\n"
+                f"Или используйте текст напрямую:\n"
+                f"`/demo_proposal [текст запроса]`",
+                parse_mode='Markdown'
+            )
+            return
+        else:
+            # Обычный текст
+            request_text = args_text
+            message_source = "из аргументов команды"
     
     if not request_text:
         await update.message.reply_text(
-            "❌ Укажите запрос клиента.\n"
-            "Использование: `/demo_proposal нужна помощь с автоматизацией HR-процессов`",
+            "❌ Укажите запрос клиента или ответьте на сообщение из канала.\n\n"
+            "**Способы использования:**\n"
+            "1. Текст: `/demo_proposal нужна помощь с автоматизацией HR-процессов`\n"
+            "2. Ответ на сообщение: ответьте на сообщение командой `/demo_proposal`\n"
+            "3. Ссылка: `/demo_proposal https://t.me/HRAI_ANovoselova_Leads/123`\n"
+            "4. ID сообщения: `/demo_proposal 123`",
             parse_mode='Markdown'
         )
         return
     
     try:
-        from lead_processor import generate_proposal
+        from services.agents.lead_processor import generate_proposal
         
-        await update.message.reply_text("⏳ Генерирую коммерческое предложение...")
+        source_info = f" (источник: {message_source})" if message_source else ""
+        await update.message.reply_text(f"⏳ Генерирую коммерческое предложение{source_info}...")
         
         proposal = await generate_proposal(request_text, lead_contact={})
         
+        # Добавляем информацию об источнике
+        header = f"*Черновик КП*{source_info}:\n\n"
+        
         # Разбиваем длинное сообщение на части если нужно
-        if len(proposal) > 4000:
+        full_text = header + proposal
+        if len(full_text) > 4000:
             # Отправляем по частям
             parts = [proposal[i:i+4000] for i in range(0, len(proposal), 4000)]
+            await update.message.reply_text(header, parse_mode='Markdown')
             for part in parts:
-                await update.message.reply_text(f"*Черновик КП:*\n\n{part}", parse_mode='Markdown')
+                await update.message.reply_text(part, parse_mode='Markdown')
         else:
-            await update.message.reply_text(f"*Черновик КП:*\n\n{proposal}", parse_mode='Markdown')
+            await update.message.reply_text(full_text, parse_mode='Markdown')
         
     except Exception as e:
         log.error(f"❌ Ошибка генерации КП: {e}")
