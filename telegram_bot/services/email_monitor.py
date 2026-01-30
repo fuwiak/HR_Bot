@@ -5,7 +5,8 @@ import os
 import asyncio
 import logging
 from typing import Dict
-from datetime import datetime
+from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 
 # Цветное логирование для Railway (поддерживает ANSI цвета)
 class ColoredFormatter(logging.Formatter):
@@ -66,6 +67,10 @@ processed_email_ids: set = set()
 
 # Интервал проверки почты (в секундах)
 email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "10"))  # 10 секунд по умолчанию
+
+# Максимальный возраст письма для отправки в канал (в часах)
+# Письма старше этого возраста не будут отправляться
+EMAIL_MAX_AGE_HOURS = int(os.getenv("EMAIL_MAX_AGE_HOURS", "1"))  # 1 час по умолчанию
 
 # Хранилище состояния ответа на email для каждого пользователя
 email_reply_state: Dict[int, Dict] = {}  # {user_id: {'email_id': ..., 'to': ..., 'subject': ...}}
@@ -232,7 +237,8 @@ async def email_monitor_task(bot):
     log.info("=" * 80)
     log.info(f"🚀 ЗАПУСК ФОНОВОЙ ЗАДАЧИ МОНИТОРИНГА ПОЧТЫ")
     log.info(f"📧 Интервал проверки: {email_check_interval} секунд")
-    log.info(f"📅 Период проверки: 7 дней")
+    log.info(f"📅 Период проверки: 7 дней (для поиска)")
+    log.info(f"⏰ Максимальный возраст письма для отправки: {EMAIL_MAX_AGE_HOURS} часов")
     log.info(f"📊 Обработано писем: {len(processed_email_ids)}")
     log.info(f"📤 Канал для отправки: {LEADS_CHANNEL_URL}")
     
@@ -267,9 +273,42 @@ async def email_monitor_task(bot):
                 email_id = email_data.get("id", "")
                 subject = email_data.get("subject", "Без темы")
                 from_addr = email_data.get("from", "Неизвестно")
+                date_str = email_data.get("date", "")
                 
                 log.info(f"📧 Найдено письмо: ID={email_id}, От={from_addr}, Тема={subject[:50]}")
                 log.info(f"📋 Обработано писем в памяти: {len(processed_email_ids)}")
+                
+                # Парсим дату письма и проверяем, что оно новое
+                email_date = None
+                if date_str:
+                    try:
+                        email_date = parsedate_to_datetime(date_str)
+                        # Приводим к локальному времени без часового пояса для сравнения
+                        if email_date.tzinfo:
+                            # Если есть часовой пояс, приводим к локальному времени
+                            email_date = email_date.astimezone().replace(tzinfo=None)
+                        # Если нет часового пояса, считаем локальным временем
+                    except Exception as e:
+                        log.warning(f"⚠️ Не удалось распарсить дату письма '{date_str}': {e}")
+                
+                # Проверяем возраст письма - отправляем только новые письма
+                if email_date:
+                    now = datetime.now()
+                    age = now - email_date
+                    age_hours = age.total_seconds() / 3600
+                    
+                    log.info(f"📅 Дата письма: {email_date.strftime('%Y-%m-%d %H:%M:%S')}")
+                    log.info(f"⏰ Возраст письма: {age_hours:.2f} часов")
+                    
+                    if age_hours > EMAIL_MAX_AGE_HOURS:
+                        log.info(f"⏭️  Письмо слишком старое ({age_hours:.2f} часов > {EMAIL_MAX_AGE_HOURS} часов), пропускаю")
+                        # Помечаем как обработанное, чтобы не проверять его снова
+                        if email_id:
+                            processed_email_ids.add(email_id)
+                        continue
+                else:
+                    # Если дату не удалось распарсить, все равно проверяем по ID
+                    log.warning(f"⚠️ Не удалось определить дату письма, проверяю только по ID")
                 
                 # Проверяем, не обрабатывали ли уже это письмо по email_id
                 # Но также проверяем дедупликацию в send_email_notification
