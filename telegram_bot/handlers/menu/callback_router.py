@@ -102,9 +102,200 @@ async def show_masters(query, *args, **kwargs):
 async def show_user_records(query, *args, **kwargs):
     await query.edit_message_text("📋 Список записей временно недоступен")
 
+async def save_response_rating(user_id: int, bot_message_id: int, rating: int, user_message: str, bot_response: str):
+    """Сохранить оценку ответа бота"""
+    try:
+        import json
+        import os
+        from datetime import datetime
+        
+        # Создаем директорию для оценок, если её нет
+        ratings_dir = "data/ratings"
+        os.makedirs(ratings_dir, exist_ok=True)
+        
+        # Сохраняем в JSON файл
+        rating_data = {
+            "user_id": user_id,
+            "bot_message_id": bot_message_id,
+            "rating": rating,
+            "user_message": user_message,
+            "bot_response": bot_response,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        ratings_file = os.path.join(ratings_dir, "ratings.json")
+        
+        # Читаем существующие оценки
+        ratings = []
+        if os.path.exists(ratings_file):
+            try:
+                with open(ratings_file, 'r', encoding='utf-8') as f:
+                    ratings = json.load(f)
+            except:
+                ratings = []
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка чтения файла оценок: {e}")
+            ratings = []
+        
+        # Добавляем новую оценку
+        ratings.append(rating_data)
+        
+        # Сохраняем обратно
+        with open(ratings_file, 'w', encoding='utf-8') as f:
+            json.dump(ratings, f, ensure_ascii=False, indent=2)
+        
+        log.info(f"✅ Оценка сохранена: пользователь {user_id}, сообщение {bot_message_id}, оценка {rating}")
+        
+        # Также пробуем сохранить в БД, если доступна
+        try:
+            from backend.database import get_connection, return_connection
+            conn = get_connection()
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS response_ratings (
+                        id SERIAL PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        bot_message_id BIGINT NOT NULL,
+                        rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+                        user_message TEXT,
+                        bot_response TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cursor.execute("""
+                    INSERT INTO response_ratings (user_id, bot_message_id, rating, user_message, bot_response)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (user_id, bot_message_id, rating, user_message, bot_response))
+                conn.commit()
+                return_connection(conn)
+                log.info(f"✅ Оценка сохранена в БД")
+        except Exception as e:
+            log.warning(f"⚠️ Не удалось сохранить оценку в БД: {e}")
+        
+        return True
+    except Exception as e:
+        log.error(f"❌ Ошибка сохранения оценки: {e}")
+        return False
+
+
+async def handle_response_rating(query: CallbackQuery, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка оценки ответа бота"""
+    try:
+        # Парсим callback_data: rate_response_{bot_message_id}_{rating} или rate_response_temp_{user_message_id}_{rating}
+        parts = query.data.split("_")
+        if len(parts) < 4:
+            await query.answer("❌ Ошибка формата оценки", show_alert=True)
+            return
+        
+        is_temp = parts[2] == "temp"
+        
+        if is_temp:
+            # Временный формат - используем user_message_id для поиска bot_message_id
+            user_message_id = int(parts[3])
+            rating = int(parts[4])
+            
+            # Используем message_id текущего сообщения как bot_message_id
+            bot_message_id = query.message.message_id
+            
+            # Сохраняем связь для будущих оценок
+            if f"bot_response_{bot_message_id}" not in context.user_data:
+                lead_data = context.user_data.get(f"lead_message_{user_message_id}")
+                if lead_data:
+                    context.user_data[f"bot_response_{bot_message_id}"] = {
+                        "user_message": lead_data.get("user_message", ""),
+                        "bot_response": lead_data.get("bot_response", ""),
+                        "user_message_id": user_message_id,
+                        "timestamp": datetime.now().isoformat()
+                    }
+        else:
+            bot_message_id = int(parts[2])
+            rating = int(parts[3])
+        
+        if rating < 1 or rating > 5:
+            await query.answer("❌ Неверная оценка", show_alert=True)
+            return
+        
+        user_id = query.from_user.id
+        
+        # Получаем данные о сообщении из context
+        response_data = context.user_data.get(f"bot_response_{bot_message_id}")
+        if not response_data:
+            # Пробуем найти через все bot_response_ ключи
+            found_data = None
+            for key, value in context.user_data.items():
+                if key.startswith("bot_response_") and isinstance(value, dict):
+                    if value.get("user_message_id"):
+                        found_data = value
+                        break
+            
+            if found_data:
+                user_message = found_data.get("user_message", "")
+                bot_response = found_data.get("bot_response", "")
+            else:
+                # Пробуем получить из lead_message через user_message_id (если был temp формат)
+                if is_temp:
+                    lead_data = context.user_data.get(f"lead_message_{user_message_id}")
+                    if lead_data:
+                        user_message = lead_data.get("user_message", "")
+                        bot_response = lead_data.get("bot_response", "")
+                    else:
+                        user_message = ""
+                        bot_response = query.message.text if query.message else ""
+                else:
+                    user_message = ""
+                    bot_response = query.message.text if query.message else ""
+        else:
+            user_message = response_data.get("user_message", "")
+            bot_response = response_data.get("bot_response", "")
+        
+        # Сохраняем оценку
+        saved = await save_response_rating(user_id, bot_message_id, rating, user_message, bot_response)
+        
+        if saved:
+            # Показываем подтверждение
+            stars = "⭐" * rating
+            await query.answer(f"✅ Спасибо! Оценка {rating} {stars} сохранена", show_alert=False)
+            
+            # Обновляем кнопки - убираем оценку, показываем что оценено
+            try:
+                # Получаем текущую клавиатуру
+                current_markup = query.message.reply_markup
+                if current_markup:
+                    # Создаем новую клавиатуру без кнопок оценки
+                    keyboard = []
+                    for row in current_markup.inline_keyboard:
+                        # Пропускаем строку с оценками
+                        if not any(btn.callback_data and btn.callback_data.startswith("rate_response_") for btn in row):
+                            keyboard.append(row)
+                    
+                    # Добавляем строку с подтверждением оценки
+                    keyboard.insert(0, [
+                        InlineKeyboardButton(f"✅ Оценено: {stars}", callback_data="rating_saved")
+                    ])
+                    
+                    new_markup = InlineKeyboardMarkup(keyboard)
+                    await query.message.edit_reply_markup(reply_markup=new_markup)
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось обновить кнопки после оценки: {e}")
+        else:
+            await query.answer("❌ Не удалось сохранить оценку", show_alert=True)
+            
+    except Exception as e:
+        log.error(f"❌ Ошибка обработки оценки: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        await query.answer("❌ Произошла ошибка при сохранении оценки", show_alert=True)
+
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    
+    # Обработка оценки ответа (поддерживаем оба формата: с bot_message_id и временный)
+    if query.data.startswith("rate_response_"):
+        await handle_response_rating(query, context)
+        return
     
     # Главное меню и подменю
     if query.data == "back_to_menu" or query.data == "menu_main":

@@ -42,8 +42,16 @@ async def send_reply_with_buttons(update: Update, context: ContextTypes.DEFAULT_
         "is_lead": False
     }
     
-    # Создаем кнопки
+    # Создаем кнопки (включая оценку) - сначала без bot_message_id
+    # Отправляем сообщение с временными кнопками, потом обновим
     keyboard = [
+        [
+            InlineKeyboardButton("⭐ 1", callback_data=f"rate_response_temp_{message_id}_1"),
+            InlineKeyboardButton("⭐ 2", callback_data=f"rate_response_temp_{message_id}_2"),
+            InlineKeyboardButton("⭐ 3", callback_data=f"rate_response_temp_{message_id}_3"),
+            InlineKeyboardButton("⭐ 4", callback_data=f"rate_response_temp_{message_id}_4"),
+            InlineKeyboardButton("⭐ 5", callback_data=f"rate_response_temp_{message_id}_5")
+        ],
         [
             InlineKeyboardButton("✅ Подтвердить ответ", callback_data=f"lead_confirm_{message_id}"),
             InlineKeyboardButton("📝 Создать КП", callback_data=f"lead_proposal_{message_id}")
@@ -55,7 +63,41 @@ async def send_reply_with_buttons(update: Update, context: ContextTypes.DEFAULT_
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Отправляем ответ с кнопками
-    await update.message.reply_text(text, reply_markup=reply_markup)
+    sent_message = await update.message.reply_text(text, reply_markup=reply_markup)
+    bot_message_id = sent_message.message_id
+    
+    # Сохраняем информацию о сообщении бота для оценки
+    context.user_data[f"bot_response_{bot_message_id}"] = {
+        "user_message": user_message,
+        "bot_response": text,
+        "user_message_id": message_id,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    # Обновляем callback_data с правильным bot_message_id
+    keyboard_updated = [
+        [
+            InlineKeyboardButton("⭐ 1", callback_data=f"rate_response_{bot_message_id}_1"),
+            InlineKeyboardButton("⭐ 2", callback_data=f"rate_response_{bot_message_id}_2"),
+            InlineKeyboardButton("⭐ 3", callback_data=f"rate_response_{bot_message_id}_3"),
+            InlineKeyboardButton("⭐ 4", callback_data=f"rate_response_{bot_message_id}_4"),
+            InlineKeyboardButton("⭐ 5", callback_data=f"rate_response_{bot_message_id}_5")
+        ],
+        [
+            InlineKeyboardButton("✅ Подтвердить ответ", callback_data=f"lead_confirm_{message_id}"),
+            InlineKeyboardButton("📝 Создать КП", callback_data=f"lead_proposal_{message_id}")
+        ],
+        [
+            InlineKeyboardButton("📋 Создать задачу week", callback_data=f"lead_task_week_{message_id}")
+        ]
+    ]
+    reply_markup_updated = InlineKeyboardMarkup(keyboard_updated)
+    
+    # Обновляем кнопки с правильными callback_data
+    try:
+        await sent_message.edit_reply_markup(reply_markup=reply_markup_updated)
+    except Exception as e:
+        log.warning(f"⚠️ Не удалось обновить кнопки оценки: {e}")
 
 
 async def should_use_rag_async(text: str, context: Optional[Dict] = None) -> Dict[str, any]:
