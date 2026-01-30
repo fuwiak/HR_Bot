@@ -131,11 +131,9 @@ async def save_response_rating(user_id: int, bot_message_id: int, rating: int, u
             try:
                 with open(ratings_file, 'r', encoding='utf-8') as f:
                     ratings = json.load(f)
-            except:
+            except Exception as e:
+                log.warning(f"⚠️ Ошибка чтения файла оценок: {e}")
                 ratings = []
-        except Exception as e:
-            log.warning(f"⚠️ Ошибка чтения файла оценок: {e}")
-            ratings = []
         
         # Добавляем новую оценку
         ratings.append(rating_data)
