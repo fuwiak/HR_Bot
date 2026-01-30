@@ -617,18 +617,16 @@ async def process_hrtime_order(order_id: str, order_data: Optional[Dict] = None,
             if proposal_sent:
                 log.info(f"✅ [Сценарий 1] Отклик отправлен на HR Time")
             
-            # 4c. Отправка КП по email (если есть email)
+            # 4c. Отправка КП по email ОТКЛЮЧЕНА - требуется подтверждение
+            # Email не отправляются автоматически, только в канал для ручной обработки
             if client_email:
-                try:
-                    await send_email(
-                        to_email=client_email,
-                        subject=f"Коммерческое предложение: {title}",
-                        body=proposal,
-                        is_html=False
-                    )
-                    log.info(f"✅ [Сценарий 1] КП отправлено на email: {client_email}")
-                except Exception as e:
-                    log.error(f"❌ [Сценарий 1] Ошибка отправки email: {e}")
+                log.info(f"⚠️ [Сценарий 1] Автоматическая отправка КП на email ОТКЛЮЧЕНА")
+                log.info(f"⚠️ [Сценарий 1] КП подготовлено, но не отправлено на {client_email}")
+                log.info(f"⚠️ [Сценарий 1] Требуется ручное подтверждение для отправки email")
+                # Сохраняем информацию о подготовленном КП для ручной отправки
+                result["draft_proposal"] = proposal
+                result["proposal_email"] = client_email
+                result["proposal_subject"] = f"Коммерческое предложение: {title}"
             
             # 4d. Создание проекта в WEEEK
             if WEEEK_AVAILABLE:
