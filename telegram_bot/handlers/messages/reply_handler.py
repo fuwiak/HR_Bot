@@ -902,7 +902,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         
-        # Проверяем, является ли сообщение лидом
+        # Проверяем, является ли сообщение лидом (для информации, но кнопки добавляем всегда)
         is_lead = False
         lead_detection_result = None
         try:
@@ -913,29 +913,25 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             log.warning(f"⚠️ Ошибка определения лида: {e}")
         
-        # Если это лид, добавляем кнопки
-        if is_lead:
-            # Сохраняем информацию о лиде в context для использования в callback
-            context.user_data[f"lead_message_{message_id}"] = {
-                "user_message": text,
-                "bot_response": response_clean,
-                "detection": lead_detection_result
-            }
-            
-            # Создаем кнопки
-            keyboard = [
-                [
-                    InlineKeyboardButton("✅ Подтвердить ответ", callback_data=f"lead_confirm_{message_id}"),
-                    InlineKeyboardButton("📝 Создать КП", callback_data=f"lead_proposal_{message_id}")
-                ]
+        # Сохраняем информацию о сообщении в context для использования в callback
+        context.user_data[f"lead_message_{message_id}"] = {
+            "user_message": text,
+            "bot_response": response_clean,
+            "detection": lead_detection_result,
+            "is_lead": is_lead
+        }
+        
+        # Создаем кнопки для КАЖДОГО ответа
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Подтвердить ответ", callback_data=f"lead_confirm_{message_id}"),
+                InlineKeyboardButton("📝 Создать КП", callback_data=f"lead_proposal_{message_id}")
             ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            # Отправляем ответ с кнопками
-            await update.message.reply_text(response_clean, reply_markup=reply_markup)
-        else:
-            # Отправляем ответ без кнопок
-            await update.message.reply_text(response_clean)
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        # Отправляем ответ с кнопками
+        await update.message.reply_text(response_clean, reply_markup=reply_markup)
         
     except Exception as e:
         log.error(f"❌ Ошибка обработки сообщения: {e}")

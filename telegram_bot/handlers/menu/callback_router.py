@@ -907,32 +907,32 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         email_id = query.data.replace("email_cancel_", "")
         await handle_email_cancel(query, email_id)
     
-    # Обработчики для лидов
+    # Обработчики кнопок для сообщений
     elif query.data.startswith("lead_confirm_"):
         # Обработка кнопки "Подтвердить ответ"
         message_id = query.data.replace("lead_confirm_", "")
-        lead_data = context.user_data.get(f"lead_message_{message_id}")
+        message_data = context.user_data.get(f"lead_message_{message_id}")
         
-        if lead_data:
+        if message_data:
             await query.answer("✅ Ответ подтвержден", show_alert=False)
             await query.edit_message_reply_markup(reply_markup=None)  # Убираем кнопки
-            log.info(f"✅ Лид подтвержден для сообщения {message_id}")
+            log.info(f"✅ Ответ подтвержден для сообщения {message_id}")
         else:
-            await query.answer("❌ Данные лида не найдены", show_alert=True)
+            await query.answer("❌ Данные сообщения не найдены", show_alert=True)
     
     elif query.data.startswith("lead_proposal_"):
         # Обработка кнопки "Создать КП"
         message_id = query.data.replace("lead_proposal_", "")
-        lead_data = context.user_data.get(f"lead_message_{message_id}")
+        message_data = context.user_data.get(f"lead_message_{message_id}")
         
-        if not lead_data:
-            await query.answer("❌ Данные лида не найдены", show_alert=True)
+        if not message_data:
+            await query.answer("❌ Данные сообщения не найдены", show_alert=True)
             return
         
         try:
             await query.answer("⏳ Генерирую коммерческое предложение...")
             
-            user_message = lead_data.get("user_message", "")
+            user_message = message_data.get("user_message", "")
             user = query.from_user
             user_name = user.first_name or user.username or "Клиент"
             
@@ -987,7 +987,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Сохраняем сгенерированное КП в context
                     context.user_data[f"lead_proposal_{message_id}"] = proposal
                     
-                    log.info(f"✅ КП сгенерировано для лида (message_id: {message_id})")
+                    log.info(f"✅ КП сгенерировано для сообщения {message_id}")
                 else:
                     await query.answer("❌ Не удалось сгенерировать КП", show_alert=True)
                     
