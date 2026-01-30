@@ -339,10 +339,22 @@ async def demo_proposal_command(update: Update, context: ContextTypes.DEFAULT_TY
     try:
         from services.agents.lead_processor import generate_proposal
         
+        # Получаем историю беседы для контекста
+        conversation_history = None
+        user_id = update.message.from_user.id if update.message and update.message.from_user else None
+        if user_id:
+            try:
+                from telegram_bot.services.memory_service import get_recent_history
+                conversation_history = get_recent_history(user_id, limit=20)
+                if conversation_history:
+                    log.info(f"📝 Использую историю беседы ({len(conversation_history)} символов) для генерации КП")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось получить историю беседы: {e}")
+        
         source_info = f" (источник: {message_source})" if message_source else ""
         await update.message.reply_text(f"⏳ Генерирую коммерческое предложение{source_info}...")
         
-        proposal = await generate_proposal(request_text, lead_contact={})
+        proposal = await generate_proposal(request_text, lead_contact={}, conversation_history=conversation_history)
         
         # Добавляем информацию об источнике
         header = f"*Черновик КП*{source_info}:\n\n"

@@ -81,6 +81,8 @@ PROPOSAL_GENERATION_PROMPT = """
 
 ВАЖНО: Используй ТОЛЬКО информацию из базы знаний. Не выдумывай кейсы или методики.
 
+{{conversation_history}}
+
 Запрос клиента: {{request}}
 
 Релевантная информация из базы знаний:
@@ -209,7 +211,7 @@ async def classify_request(request: str) -> Dict:
 
 # ===================== PROPOSAL GENERATION =====================
 
-async def generate_proposal(lead_request: str, lead_contact: Dict, rag_results: Optional[List[Dict]] = None) -> str:
+async def generate_proposal(lead_request: str, lead_contact: Dict, rag_results: Optional[List[Dict]] = None, conversation_history: Optional[str] = None) -> str:
     """
     Генерация коммерческого предложения с использованием RAG
     
@@ -217,6 +219,7 @@ async def generate_proposal(lead_request: str, lead_contact: Dict, rag_results: 
         lead_request: Текст запроса от лида
         lead_contact: Контактная информация лида
         rag_results: Результаты поиска в RAG базе (опционально)
+        conversation_history: История беседы с клиентом (опционально)
     
     Returns:
         Текст коммерческого предложения
@@ -241,7 +244,14 @@ async def generate_proposal(lead_request: str, lead_contact: Dict, rag_results: 
         else:
             rag_context = "В базе знаний не найдено релевантной информации для данного запроса."
         
-        prompt = PROPOSAL_GENERATION_PROMPT.replace("{{request}}", lead_request).replace("{{rag_context}}", rag_context)
+        # Формируем контекст истории беседы
+        history_context = ""
+        if conversation_history and conversation_history.strip():
+            history_context = f"История беседы с клиентом:\n{conversation_history}\n\n"
+        else:
+            history_context = ""
+        
+        prompt = PROPOSAL_GENERATION_PROMPT.replace("{{conversation_history}}", history_context).replace("{{request}}", lead_request).replace("{{rag_context}}", rag_context)
         
         messages = [{"role": "user", "content": prompt}]
         proposal = await generate_with_fallback(

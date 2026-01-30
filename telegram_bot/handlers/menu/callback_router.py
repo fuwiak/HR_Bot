@@ -944,7 +944,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             user_message = message_data.get("user_message", "")
             user = query.from_user
+            user_id = user.id
             user_name = user.first_name or user.username or "Клиент"
+            
+            # Получаем историю беседы для контекста
+            conversation_history = None
+            try:
+                from telegram_bot.services.memory_service import get_recent_history
+                conversation_history = get_recent_history(user_id, limit=20)
+                if conversation_history:
+                    log.info(f"📝 Использую историю беседы ({len(conversation_history)} символов) для генерации КП")
+                else:
+                    log.info("📝 История беседы пуста, используем только текущий запрос")
+            except Exception as e:
+                log.warning(f"⚠️ Не удалось получить историю беседы: {e}")
             
             # Импортируем функцию генерации КП
             try:
@@ -973,7 +986,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     proposal = await generate_proposal(
                         lead_request=user_message,
                         lead_contact=lead_contact,
-                        rag_results=None
+                        rag_results=None,
+                        conversation_history=conversation_history
                     )
                 finally:
                     # Останавливаем typing индикатор
