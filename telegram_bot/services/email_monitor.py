@@ -126,6 +126,30 @@ async def send_email_notification(bot, email_data: Dict):
             log.error("❌ Не удалось установить ID канала, письмо не будет отправлено")
             return
         
+        # Формируем lead_info для проверки дедупликации
+        lead_info = {
+            "source": "📧 Email",
+            "title": subject or "Без темы",
+            "client_name": from_email.split("@")[0] if "@" in from_email else from_email,
+            "client_email": from_email if "@" in from_email else "",
+            "client_phone": "",
+            "message": body or preview or ""
+        }
+        
+        # Проверяем на дубликаты ПЕРЕД отправкой в канал
+        try:
+            from services.helpers.channel_deduplicator import is_duplicate
+            is_dup, reason = is_duplicate(lead_info, check_content=True)
+            if is_dup:
+                log.info("=" * 80)
+                log.info(f"⏭️  ПРОПУСК ДУБЛИКАТА: {reason}")
+                log.info("=" * 80)
+                return  # Не отправляем дубликат
+        except ImportError:
+            log.warning("⚠️ Модуль channel_deduplicator недоступен, проверка дубликатов отключена")
+        except Exception as e:
+            log.warning(f"⚠️ Ошибка проверки дубликатов: {e}, продолжаем отправку")
+        
         # Отправляем ВСЕ письма в канал лидов с классификацией
         if SCENARIO_WORKFLOWS_AVAILABLE:
             try:
@@ -149,24 +173,18 @@ async def send_email_notification(bot, email_data: Dict):
                 log.info(f"   📊 Уверенность: {confidence:.2f}")
                 log.info(f"   💭 Причина: {reason}")
                 
-                # Формируем информацию для канала
-                log.info("📋 Формирование данных для канала...")
-                lead_info = {
-                    "source": "📧 Email",
-                    "title": subject or "Без темы",
-                    "client_name": from_email.split("@")[0] if "@" in from_email else from_email,
-                    "client_email": from_email if "@" in from_email else "",
-                    "client_phone": "",
-                    "message": body or preview or "",
+                # Обновляем lead_info с классификацией
+                lead_info.update({
                     "score": 0,
                     "status": "new",
                     "category": "",
                     "email_category": email_category,
                     "classification_reason": reason,
                     "classification_confidence": confidence
-                }
+                })
                 
                 # Отправляем в канал (ТОЛЬКО в канал, без отправки подписчикам бота)
+                # send_lead_to_channel уже имеет встроенную проверку дедупликации
                 log.info(f"📤 Отправка в канал {LEADS_CHANNEL_URL}...")
                 result = await send_lead_to_channel(bot, lead_info)
                 if result:
@@ -253,11 +271,15 @@ async def email_monitor_task(bot):
                 log.info(f"📧 Найдено письмо: ID={email_id}, От={from_addr}, Тема={subject[:50]}")
                 log.info(f"📋 Обработано писем в памяти: {len(processed_email_ids)}")
                 
-                # Проверяем, не обрабатывали ли уже это письмо
+                # Проверяем, не обрабатывали ли уже это письмо по email_id
+                # Но также проверяем дедупликацию в send_email_notification
                 if email_id and email_id not in processed_email_ids:
                     log.info(f"✅ НОВОЕ ПИСЬМО! Начинаю обработку...")
                     # Отправляем уведомление только о самом новом письме
+                    # send_email_notification проверит дедупликацию через channel_deduplicator
                     await send_email_notification(bot, email_data)
+                    # Помечаем как обработанное только если оно действительно было отправлено
+                    # (если это был дубликат, send_email_notification вернется раньше)
                     processed_email_ids.add(email_id)
                     log.info(f"✅ Письмо обработано и добавлено в список обработанных")
                     log.info(f"📊 Всего обработано: {len(processed_email_ids)}")
