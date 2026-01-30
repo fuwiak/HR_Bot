@@ -49,7 +49,7 @@ if not log.handlers:
 
 # Импорт функции классификации и отправки в канал
 try:
-    from services.agents.scenario_workflows import classify_email_as_lead, send_lead_to_channel
+    from services.agents.scenario_workflows import classify_email_type, send_lead_to_channel
     import services.agents.scenario_workflows as sw_module
     SCENARIO_WORKFLOWS_AVAILABLE = True
 except ImportError as e:
@@ -129,15 +129,23 @@ async def send_email_notification(bot, email_data: Dict):
         # Отправляем ВСЕ письма в канал лидов с классификацией
         if SCENARIO_WORKFLOWS_AVAILABLE:
             try:
-                # Классифицируем email через LLM
+                # Классифицируем email через LLM на три категории
                 log.info("🤖 Запуск классификации через LLM...")
-                classification = await classify_email_as_lead(subject, body)
-                label = classification.get("label", "non_lead")
+                classification = await classify_email_type(subject, body)
+                email_category = classification.get("category", "service")
                 confidence = classification.get("confidence", 0.5)
                 reason = classification.get("reason", "")
                 
+                # Маппинг категорий для логирования
+                category_names = {
+                    "new_lead": "НОВЫЙ ЛИД",
+                    "followup": "ПРОДОЛЖЕНИЕ ДИАЛОГА",
+                    "service": "СЛУЖЕБНАЯ ИНФОРМАЦИЯ"
+                }
+                category_name = category_names.get(email_category, email_category.upper())
+                
                 log.info(f"✅ Классификация завершена:")
-                log.info(f"   🏷️  Метка: {label.upper()}")
+                log.info(f"   🏷️  Категория: {category_name}")
                 log.info(f"   📊 Уверенность: {confidence:.2f}")
                 log.info(f"   💭 Причина: {reason}")
                 
@@ -153,7 +161,7 @@ async def send_email_notification(bot, email_data: Dict):
                     "score": 0,
                     "status": "new",
                     "category": "",
-                    "label": label,
+                    "email_category": email_category,
                     "classification_reason": reason,
                     "classification_confidence": confidence
                 }
@@ -164,7 +172,7 @@ async def send_email_notification(bot, email_data: Dict):
                 if result:
                     log.info("=" * 80)
                     log.info(f"✅ ПИСЬМО УСПЕШНО ОТПРАВЛЕНО В КАНАЛ {LEADS_CHANNEL_URL}")
-                    log.info(f"   🏷️  Метка: {label.upper()}")
+                    log.info(f"   🏷️  Категория: {category_name}")
                     log.info(f"   📊 Уверенность: {confidence:.2f}")
                     log.info("=" * 80)
                 else:

@@ -180,14 +180,146 @@ async def classify_email_as_lead(email_subject: str, email_body: str) -> Dict[st
         }
 
 
+async def classify_email_type(email_subject: str, email_body: str) -> Dict[str, str]:
+    """
+    Классифицировать email на три категории используя Open Router LLM:
+    - новый лид
+    - продолжение диалога
+    - служебная информация
+    
+    Args:
+        email_subject: Тема письма
+        email_body: Тело письма
+    
+    Returns:
+        Словарь с ключами:
+        - category: "new_lead", "followup", "service"
+        - confidence: уверенность (0.0-1.0)
+        - reason: причина классификации на русском языке
+    """
+    if not LLM_AVAILABLE:
+        log.warning("⚠️ LLM недоступен, используем дефолтную классификацию как service")
+        return {
+            "category": "service",
+            "confidence": 0.5,
+            "reason": "LLM недоступен, использована дефолтная классификация"
+        }
+    
+    try:
+        # Формируем промпт для классификации на три категории
+        classification_prompt = f"""Проанализируй следующее email сообщение и определи его тип.
+
+Тема письма: "{email_subject}"
+
+Текст письма:
+{email_body[:2000]}
+
+Определи тип письма (выбери ОДНУ категорию):
+- **new_lead** - новый потенциальный клиент, который впервые обращается за услугами HR-консалтинга, запрашивает консультацию, хочет получить предложение, интересуется ценами, просит информацию об услугах, новый запрос на сотрудничество
+- **followup** - продолжение диалога, ответ на предыдущее письмо, переписка по существующему проекту, уточняющие вопросы по текущему запросу, ответы на вопросы клиента, обсуждение деталей проекта
+- **service** - служебная информация: счета, договоры, технические уведомления, автоматические сообщения, рассылки, спам, реклама, уведомления от систем, отчеты, документы без запроса
+
+Ответь ТОЛЬКО в формате JSON:
+{{
+    "category": "new_lead", "followup" или "service",
+    "confidence": число от 0.0 до 1.0 (уверенность в классификации),
+    "reason": "краткое объяснение причины классификации на русском языке"
+}}
+
+Важно: Отвечай ТОЛЬКО валидным JSON, без дополнительного текста."""
+
+        # Используем LLMClient для классификации
+        llm_client = LLMClient()
+        response = await llm_client.generate(
+            prompt=classification_prompt,
+            system_prompt="Ты помощник для классификации email сообщений на три категории. Отвечай только в формате JSON.",
+            temperature=0.3,  # Низкая температура для более детерминированных ответов
+            max_tokens=200
+        )
+        
+        if response.error:
+            log.error(f"❌ Ошибка LLM при классификации email: {response.error}")
+            return {
+                "category": "service",
+                "confidence": 0.5,
+                "reason": f"Ошибка LLM: {response.error}"
+            }
+        
+        # Парсим JSON ответ
+        content = response.content.strip()
+        
+        # Извлекаем JSON из ответа (может быть обернут в markdown код блоки)
+        json_match = re.search(r'\{[^{}]*"category"[^{}]*\}', content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0)
+        else:
+            # Пробуем найти JSON между фигурными скобками
+            json_start = content.find('{')
+            json_end = content.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                json_str = content[json_start:json_end]
+            else:
+                json_str = content
+        
+        try:
+            result = json.loads(json_str)
+            category = result.get("category", "service").lower()
+            confidence = float(result.get("confidence", 0.5))
+            reason = result.get("reason", "Классификация выполнена")
+            
+            # Валидация category
+            valid_categories = ["new_lead", "followup", "service"]
+            if category not in valid_categories:
+                log.warning(f"⚠️ Неожиданная категория от LLM: {category}, используем service")
+                category = "service"
+            
+            log.info(f"✅ Email классифицирован как {category} (confidence: {confidence:.2f}, reason: {reason})")
+            return {
+                "category": category,
+                "confidence": max(0.0, min(1.0, confidence)),  # Ограничиваем от 0 до 1
+                "reason": reason
+            }
+        except json.JSONDecodeError as e:
+            log.error(f"❌ Ошибка парсинга JSON от LLM: {e}, ответ: {content[:200]}")
+            # Пробуем извлечь category из текста напрямую
+            content_lower = content.lower()
+            if "new_lead" in content_lower or ("новый" in content_lower and "лид" in content_lower):
+                return {
+                    "category": "new_lead",
+                    "confidence": 0.6,
+                    "reason": "Классификация по ключевым словам (JSON не распарсился)"
+                }
+            elif "followup" in content_lower or "продолжение" in content_lower:
+                return {
+                    "category": "followup",
+                    "confidence": 0.6,
+                    "reason": "Классификация по ключевым словам (JSON не распарсился)"
+                }
+            return {
+                "category": "service",
+                "confidence": 0.5,
+                "reason": f"Ошибка парсинга JSON: {str(e)}"
+            }
+            
+    except Exception as e:
+        log.error(f"❌ Исключение при классификации email: {e}")
+        import traceback
+        log.error(traceback.format_exc())
+        return {
+            "category": "service",
+            "confidence": 0.5,
+            "reason": f"Исключение: {str(e)}"
+        }
+
+
 async def send_lead_to_channel(telegram_bot, lead_info: Dict) -> bool:
     """
     Отправить информацию о лиде в канал HRAI_ANovoselova_Лиды
     
     Args:
         telegram_bot: Экземпляр Telegram бота
-        lead_info: Словарь с информацией о лиде (source, title, client_name, client_email, client_phone, message, score, status, category, label)
-                   label: "lead" или "non_lead" (опционально, если не указан, будет определён через LLM)
+        lead_info: Словарь с информацией о лиде (source, title, client_name, client_email, client_phone, message, score, status, category, email_category)
+                   email_category: "new_lead", "followup", "service" (опционально, если не указан, будет определён через LLM для email)
     
     Returns:
         True если сообщение отправлено успешно, False в противном случае
@@ -205,32 +337,33 @@ async def send_lead_to_channel(telegram_bot, lead_info: Dict) -> bool:
         score = lead_info.get("score", 0)
         status = lead_info.get("status", "unknown")
         category = lead_info.get("category", "")
-        label = lead_info.get("label")  # "lead" или "non_lead"
+        email_category = lead_info.get("email_category")  # "new_lead", "followup", "service"
         
-        # Если label не указан и это email, классифицируем через LLM
-        if not label and source == "📧 Email":
-            classification = await classify_email_as_lead(title, message)
-            label = classification.get("label", "non_lead")
+        # Если email_category не указан и это email, классифицируем через LLM
+        if not email_category and source == "📧 Email":
+            classification = await classify_email_type(title, message)
+            email_category = classification.get("category", "service")
             if "classification_reason" not in lead_info:
                 lead_info["classification_reason"] = classification.get("reason", "")
             if "classification_confidence" not in lead_info:
                 lead_info["classification_confidence"] = classification.get("confidence", 0.5)
         
-        # Если label всё ещё не определён, используем дефолт
-        if not label:
-            label = "lead"  # По умолчанию считаем лидом для других источников
+        # Если email_category всё ещё не определён, используем дефолт
+        if not email_category:
+            email_category = "new_lead"  # По умолчанию считаем новым лидом для других источников
         
-        # Определяем эмодзи и текст для метки
-        if label == "lead":
-            label_emoji = "🔥"
-            label_text = "LEAD"
-        else:
-            label_emoji = "📧"
-            label_text = "NON_LEAD"
+        # Определяем эмодзи и текст для категории
+        category_map = {
+            "new_lead": ("🔥", "НОВЫЙ ЛИД"),
+            "followup": ("💬", "ПРОДОЛЖЕНИЕ ДИАЛОГА"),
+            "service": ("📋", "СЛУЖЕБНАЯ ИНФОРМАЦИЯ")
+        }
+        
+        category_emoji, category_text = category_map.get(email_category, ("📧", "НЕИЗВЕСТНО"))
         
         # Формируем сообщение для канала лидов
         lead_message_parts = [
-            f"{label_emoji} *{label_text}*\n",
+            f"{category_emoji} *{category_text}*\n",
             f"*Источник:* {source}\n",
             f"*Название/Тема:* {title}\n",
             f"*Клиент:* {client_name}\n"
@@ -261,7 +394,7 @@ async def send_lead_to_channel(telegram_bot, lead_info: Dict) -> bool:
             text=lead_message,
             parse_mode="Markdown"
         )
-        log.info(f"✅ {label_text} отправлен в канал HRAI_ANovoselova_Лиды")
+        log.info(f"✅ {category_text} отправлен в канал HRAI_ANovoselova_Лиды")
         return True
     except Exception as e:
         log.error(f"❌ Ошибка отправки лида в канал: {e}")
@@ -598,15 +731,15 @@ async def process_lead_email(email_data: Dict, require_approval: bool = True, te
     from_addr = email_data.get("from", "")
     request_text = f"{subject}\n\n{body}"
     
-    # Классифицируем email через LLM перед отправкой в канал
+    # Классифицируем email через LLM перед отправкой в канал (три категории)
     classification = None
     if LLM_AVAILABLE:
         try:
-            classification = await classify_email_as_lead(subject, body)
-            log.info(f"✅ [Сценарий 2] Email классифицирован как {classification.get('label', 'unknown')}")
+            classification = await classify_email_type(subject, body)
+            log.info(f"✅ [Сценарий 2] Email классифицирован как {classification.get('category', 'unknown')}")
         except Exception as e:
             log.error(f"❌ [Сценарий 2] Ошибка классификации email: {e}")
-            classification = {"label": "non_lead", "confidence": 0.5, "reason": "Ошибка классификации"}
+            classification = {"category": "service", "confidence": 0.5, "reason": "Ошибка классификации"}
     
     # Отправляем ВСЕ письма в канал сразу (до всех проверок и обработки)
     # Это гарантирует, что все письма попадут в канал, даже если модуль недоступен или произойдет ошибка
@@ -622,12 +755,12 @@ async def process_lead_email(email_data: Dict, require_approval: bool = True, te
                 "score": 0,
                 "status": "info",  # Будет обновлен после обработки
                 "category": "обработка...",
-                "label": classification.get("label", "non_lead") if classification else "non_lead",
+                "email_category": classification.get("category", "service") if classification else "service",
                 "classification_reason": classification.get("reason", "") if classification else "",
                 "classification_confidence": classification.get("confidence", 0.5) if classification else 0.5
             }
             await send_lead_to_channel(telegram_bot, lead_info)
-            log.info(f"✅ [Сценарий 2] Письмо отправлено в канал лидов с меткой {lead_info['label']}")
+            log.info(f"✅ [Сценарий 2] Письмо отправлено в канал лидов с категорией {lead_info['email_category']}")
         except Exception as e:
             log.error(f"❌ [Сценарий 2] Ошибка отправки письма в канал: {e}")
     
