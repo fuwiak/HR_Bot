@@ -20,6 +20,41 @@ if str(project_root) not in sys.path:
 log = logging.getLogger(__name__)
 
 
+async def send_reply_with_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, message_id: int, user_message: str = None):
+    """
+    Вспомогательная функция для отправки ответа с кнопками
+    
+    Args:
+        update: Update объект
+        context: Context объект
+        text: Текст ответа
+        message_id: ID исходного сообщения пользователя
+        user_message: Текст сообщения пользователя (опционально)
+    """
+    # Сохраняем информацию о сообщении в context
+    if user_message is None:
+        user_message = update.message.text if update.message and update.message.text else ""
+    
+    context.user_data[f"lead_message_{message_id}"] = {
+        "user_message": user_message,
+        "bot_response": text,
+        "detection": None,
+        "is_lead": False
+    }
+    
+    # Создаем кнопки
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Подтвердить ответ", callback_data=f"lead_confirm_{message_id}"),
+            InlineKeyboardButton("📝 Создать КП", callback_data=f"lead_proposal_{message_id}")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Отправляем ответ с кнопками
+    await update.message.reply_text(text, reply_markup=reply_markup)
+
+
 async def should_use_rag_async(text: str, context: Optional[Dict] = None) -> Dict[str, any]:
     """
     Определяет, нужно ли использовать RAG поиск для данного сообщения.
@@ -548,9 +583,9 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                     if success:
                         response = f"✅ Q&A пара добавлена в базу знаний!\n\n" \
-                                 f"❓ **Вопрос:** {question}\n" \
-                                 f"💡 **Ответ:** {answer}"
-                        await update.message.reply_text(response, parse_mode=ParseMode.MARKDOWN)
+                                 f"❓ Вопрос: {question}\n" \
+                                 f"💡 Ответ: {answer}"
+                        response_clean = remove_markdown(response)
                         
                         # Сохраняем ответ бота
                         try:
@@ -559,19 +594,24 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                 chat_id=chat_id,
                                 message_id=None,
                                 role="assistant",
-                                content=response
+                                content=response_clean
                             )
                         except Exception:
                             pass
+                        
+                        # Отправляем с кнопками
+                        await send_reply_with_buttons(update, context, response_clean, message_id, text)
                         return
                     else:
-                        await update.message.reply_text("❌ Ошибка при добавлении Q&A пары в базу знаний")
+                        error_text = "❌ Ошибка при добавлении Q&A пары в базу знаний"
+                        await send_reply_with_buttons(update, context, error_text, message_id, text)
                         return
                 except Exception as e:
                     log.error(f"❌ Ошибка добавления Q&A пары: {e}")
                     import traceback
                     log.error(traceback.format_exc())
-                    await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+                    error_text = f"❌ Ошибка: {str(e)}"
+                    await send_reply_with_buttons(update, context, error_text, message_id, text)
                 return
         
         # Проверяем, является ли это запросом на запись
@@ -627,8 +667,8 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ]
                     error_response = await openrouter_chat(error_messages, use_system_message=False)
                     
-                    # Отправляем ответ пользователю
-                    await update.message.reply_text(error_response, parse_mode=ParseMode.MARKDOWN)
+                    # Убираем Markdown из ответа
+                    error_response_clean = remove_markdown(error_response)
                     
                     # Сохраняем ответ бота
                     try:
@@ -637,10 +677,13 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=chat_id,
                             message_id=None,
                             role="assistant",
-                            content=error_response
+                            content=error_response_clean
                         )
                     except Exception:
                         pass
+                    
+                    # Отправляем с кнопками
+                    await send_reply_with_buttons(update, context, error_response_clean, message_id, text)
                     return
         
         # Обновляем индикатор перед RAG поиском
@@ -902,7 +945,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         
-        # Проверяем, является ли сообщение лидом (для информации, но кнопки добавляем всегда)
+        # Проверяем, является ли сообщение лидом (для информации)
         is_lead = False
         lead_detection_result = None
         try:
@@ -921,17 +964,8 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "is_lead": is_lead
         }
         
-        # Создаем кнопки для КАЖДОГО ответа
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Подтвердить ответ", callback_data=f"lead_confirm_{message_id}"),
-                InlineKeyboardButton("📝 Создать КП", callback_data=f"lead_proposal_{message_id}")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        # Отправляем ответ с кнопками
-        await update.message.reply_text(response_clean, reply_markup=reply_markup)
+        # Отправляем ответ с кнопками (используем вспомогательную функцию)
+        await send_reply_with_buttons(update, context, response_clean, message_id, text)
         
     except Exception as e:
         log.error(f"❌ Ошибка обработки сообщения: {e}")
@@ -961,13 +995,17 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ]
             error_response = await openrouter_chat(error_messages, use_system_message=False)
             
-            # Отправляем ответ пользователю
-            await update.message.reply_text(error_response, parse_mode=ParseMode.MARKDOWN)
+            # Убираем Markdown из ответа
+            error_response_clean = remove_markdown(error_response)
+            
+            # Отправляем с кнопками
+            user_text = update.message.text if update.message and update.message.text else "неизвестное сообщение"
+            await send_reply_with_buttons(update, context, error_response_clean, message_id, user_text)
         except Exception as llm_error:
             # Если LLM тоже не работает, отправляем базовое сообщение с реальной ошибкой
             log.error(f"❌ Ошибка при обращении к LLM для обработки ошибки: {llm_error}")
-        await update.message.reply_text(
-                f"❌ Произошла ошибка: {str(e)}\n\nПопробуйте еще раз или обратитесь в поддержку."
-        )
+            error_text = f"❌ Произошла ошибка: {str(e)}\n\nПопробуйте еще раз или обратитесь в поддержку."
+            user_text = update.message.text if update.message and update.message.text else "неизвестное сообщение"
+            await send_reply_with_buttons(update, context, error_text, message_id, user_text)
 
 __all__ = ['reply']
