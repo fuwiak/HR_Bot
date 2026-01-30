@@ -297,6 +297,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_response_rating(query, context)
         return
     
+    # Обработка уже сохраненной оценки (просто подтверждаем)
+    if query.data == "rating_saved":
+        await query.answer("Оценка уже сохранена", show_alert=False)
+        return
+    
     # Главное меню и подменю
     if query.data == "back_to_menu" or query.data == "menu_main":
         await show_main_menu(query)
