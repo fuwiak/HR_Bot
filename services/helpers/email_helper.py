@@ -303,7 +303,7 @@ async def send_email(
     if mailgun_api_key and MAILGUN_DOMAIN:
         try:
             log.info("🔄 Пробую отправить через Mailgun API...")
-            result = await _send_email_mailgun_api(to_email, subject, body, is_html, mailgun_api_key)
+            result = await _send_email_mailgun_api(to_email, subject, body, is_html, mailgun_api_key, attachments)
             if result:
                 return True
             log.warning("⚠️ Mailgun API не смог отправить, пробуем Resend...")
@@ -448,7 +448,7 @@ async def _send_email_resend(to_email: str, subject: str, body: str, is_html: bo
         log.error(f"❌ Ошибка отправки через Resend API: {e}")
         return False
 
-async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_html: bool = False, api_key: str = None) -> bool:
+async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_html: bool = False, api_key: str = None, attachments: Optional[List[str]] = None) -> bool:
     """Отправка email через Mailgun API (работает на Railway, позволяет любой from адрес)"""
     try:
         import aiohttp
@@ -481,6 +481,21 @@ async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_htm
         clean_subject = " ".join(clean_subject.split())
         
         # Mailgun API использует form-data, а не JSON
+        # Для вложений нужно открывать файлы заранее
+        attachment_files = []
+        if attachments:
+            for attachment_path in attachments:
+                if os.path.exists(attachment_path):
+                    try:
+                        # Читаем файл в память
+                        with open(attachment_path, 'rb') as f:
+                            file_content = f.read()
+                            filename = os.path.basename(attachment_path)
+                            attachment_files.append((filename, file_content))
+                            log.info(f"📎 Подготовлено вложение: {filename}")
+                    except Exception as e:
+                        log.warning(f"⚠️ Не удалось прочитать вложение {attachment_path}: {e}")
+        
         data = aiohttp.FormData()
         data.add_field("from", f"HR Bot <{from_email}>")
         data.add_field("to", to_email)
@@ -491,6 +506,10 @@ async def _send_email_mailgun_api(to_email: str, subject: str, body: str, is_htm
             data.add_field("html", body)
         else:
             data.add_field("text", body)
+        
+        # Добавляем вложения
+        for filename, file_content in attachment_files:
+            data.add_field('attachment', file_content, filename=filename)
         
         async with aiohttp.ClientSession() as session:
             async with session.post(url, auth=auth, data=data) as response:
@@ -554,6 +573,24 @@ async def _send_email_async(to_email: str, subject: str, body: str, is_html: boo
         message["Subject"] = subject
         
         message.attach(MIMEText(body, "html" if is_html else "plain"))
+        
+        # Добавляем вложения, если они есть
+        if attachments:
+            from email.mime.base import MIMEBase
+            from email import encoders
+            for attachment_path in attachments:
+                if os.path.exists(attachment_path):
+                    try:
+                        with open(attachment_path, "rb") as f:
+                            part = MIMEBase('application', 'octet-stream')
+                            part.set_payload(f.read())
+                            encoders.encode_base64(part)
+                            filename = os.path.basename(attachment_path)
+                            part.add_header('Content-Disposition', f'attachment; filename= {filename}')
+                            message.attach(part)
+                            log.info(f"📎 Добавлено вложение: {filename}")
+                    except Exception as e:
+                        log.warning(f"⚠️ Не удалось добавить вложение {attachment_path}: {e}")
         
         # Создаем SSL контекст
         ssl_context = ssl.create_default_context()

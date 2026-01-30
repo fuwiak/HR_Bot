@@ -121,6 +121,70 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     
     try:
+        # Обработка ответа на email
+        from telegram_bot.services.email_monitor import email_reply_state
+        if user_id in email_reply_state:
+            try:
+                email_reply_data = email_reply_state.get(user_id)
+                if not email_reply_data:
+                    await update.message.reply_text("❌ Ошибка: данные письма не найдены")
+                    email_reply_state.pop(user_id, None)
+                    return
+                
+                to_email = email_reply_data.get("to")
+                subject = email_reply_data.get("subject")
+                email_id = email_reply_data.get("email_id")
+                reply_type = email_reply_data.get("reply_type", "primary")
+                
+                if not to_email:
+                    await update.message.reply_text("❌ Ошибка: адрес получателя не найден")
+                    email_reply_state.pop(user_id, None)
+                    return
+                
+                # Проверяем команду отмены
+                if text.lower() in ["/cancel", "отмена", "cancel"]:
+                    await update.message.reply_text("❌ Отправка ответа отменена")
+                    email_reply_state.pop(user_id, None)
+                    return
+                
+                await update.message.reply_text("⏳ Отправляю ответ на email...")
+                
+                # Используем новый сервис для отправки ответа
+                from telegram_bot.services.email_reply_service import send_email_reply
+                
+                success = await send_email_reply(
+                    to_email=to_email,
+                    subject=subject,
+                    content=text,
+                    reply_type=reply_type,
+                    original_email_id=email_id
+                )
+                
+                if success:
+                    await update.message.reply_text(
+                        f"✅ *Ответ успешно отправлен!*\n\n"
+                        f"*Кому:* {to_email}\n"
+                        f"*Тема:* {subject}",
+                        parse_mode='Markdown'
+                    )
+                    log.info(f"✅ Ответ на письмо {email_id} отправлен на {to_email}")
+                else:
+                    await update.message.reply_text(
+                        "❌ *Не удалось отправить ответ*\n\n"
+                        "Попробуйте позже или отправьте вручную."
+                    )
+                
+                email_reply_state.pop(user_id, None)
+                return
+                
+            except Exception as e:
+                log.error(f"❌ Ошибка отправки ответа на email: {e}")
+                import traceback
+                log.error(traceback.format_exc())
+                await update.message.reply_text(f"❌ Ошибка отправки: {str(e)}")
+                email_reply_state.pop(user_id, None)
+                return
+        
         # Обработка редактирования задачи
         if context.user_data.get("waiting_for_task_edit"):
             task_id = context.user_data.get("editing_task_id")

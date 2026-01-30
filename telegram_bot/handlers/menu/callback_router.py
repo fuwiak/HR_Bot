@@ -52,6 +52,9 @@ try:
     from telegram_bot.handlers.commands.email import (
         handle_email_reply_last,
         handle_email_reply,
+        handle_email_reply_primary,
+        handle_email_reply_followup,
+        handle_email_reply_report,
         handle_email_proposal,
         handle_email_task,
         handle_email_done,
@@ -64,6 +67,9 @@ except ImportError:
     log.warning("⚠️ Email handlers не доступны")
     async def handle_email_reply_last(*args, **kwargs): pass
     async def handle_email_reply(*args, **kwargs): pass
+    async def handle_email_reply_primary(*args, **kwargs): pass
+    async def handle_email_reply_followup(*args, **kwargs): pass
+    async def handle_email_reply_report(*args, **kwargs): pass
     async def handle_email_proposal(*args, **kwargs): pass
     async def handle_email_task(*args, **kwargs): pass
     async def handle_email_done(*args, **kwargs): pass
@@ -850,6 +856,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "email_reply_last":
         # Обработка кнопки "Ответить на последний мейл"
         await handle_email_reply_last(query)
+    elif query.data.startswith("email_reply_primary_"):
+        email_id = query.data.replace("email_reply_primary_", "")
+        await handle_email_reply_primary(query, email_id)
+    elif query.data.startswith("email_reply_followup_"):
+        email_id = query.data.replace("email_reply_followup_", "")
+        await handle_email_reply_followup(query, email_id)
+    elif query.data.startswith("email_reply_proposal_"):
+        email_id = query.data.replace("email_reply_proposal_", "")
+        await handle_email_proposal(query, email_id)
+    elif query.data.startswith("email_reply_report_"):
+        email_id = query.data.replace("email_reply_report_", "")
+        await handle_email_reply_report(query, email_id)
     elif query.data.startswith("email_reply_"):
         email_id = query.data.replace("email_reply_", "")
         await handle_email_reply(query, email_id)
