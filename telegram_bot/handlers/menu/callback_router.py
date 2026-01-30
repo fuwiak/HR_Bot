@@ -1012,3 +1012,143 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("✅ КП сохранено", show_alert=False)
         await query.edit_message_reply_markup(reply_markup=None)
         log.info(f"✅ КП помечено как готовое (message_id: {message_id})")
+    
+    elif query.data.startswith("lead_task_week_"):
+        # Обработка кнопки "Создать задачу week"
+        message_id = query.data.replace("lead_task_week_", "")
+        message_data = context.user_data.get(f"lead_message_{message_id}")
+        
+        if not message_data:
+            await query.answer("❌ Данные сообщения не найдены", show_alert=True)
+            return
+        
+        try:
+            from services.helpers.weeek_helper import get_projects
+            
+            await query.answer("⏳ Загружаю проекты...")
+            
+            # Получаем список проектов
+            projects = await get_projects()
+            
+            if not projects:
+                await query.answer("❌ Проекты не найдены. Создайте проект сначала.", show_alert=True)
+                return
+            
+            # Формируем клавиатуру с проектами
+            keyboard = []
+            # Группируем кнопки по 2 в ряд
+            for i in range(0, min(len(projects), 10), 2):
+                row = []
+                row.append(InlineKeyboardButton(
+                    f"📁 {projects[i].get('title', 'Без названия')[:20]}",
+                    callback_data=f"lead_task_week_select_{message_id}_{projects[i].get('id')}"
+                ))
+                if i + 1 < len(projects) and i + 1 < 10:
+                    row.append(InlineKeyboardButton(
+                        f"📁 {projects[i+1].get('title', 'Без названия')[:20]}",
+                        callback_data=f"lead_task_week_select_{message_id}_{projects[i+1].get('id')}"
+                    ))
+                keyboard.append(row)
+            
+            keyboard.append([InlineKeyboardButton("🔙 Отмена", callback_data="back_to_menu")])
+            
+            user_message = message_data.get("user_message", "")
+            text = (
+                f"📋 *Создание задачи в WEEEK*\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"*Сообщение:* {user_message[:100]}{'...' if len(user_message) > 100 else ''}\n\n"
+                f"*Выберите проект для создания задачи:*"
+            )
+            
+            await query.edit_message_text(
+                text,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
+        except Exception as e:
+            log.error(f"❌ Ошибка получения проектов: {e}")
+            import traceback
+            log.error(traceback.format_exc())
+            await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+    
+    elif query.data.startswith("lead_task_week_select_"):
+        # Обработка выбора проекта для создания задачи
+        # Формат: lead_task_week_select_{message_id}_{project_id}
+        parts = query.data.replace("lead_task_week_select_", "").split("_", 1)
+        if len(parts) != 2:
+            await query.answer("❌ Ошибка формата данных", show_alert=True)
+            return
+        
+        message_id = parts[0]
+        project_id = parts[1]
+        
+        message_data = context.user_data.get(f"lead_message_{message_id}")
+        
+        if not message_data:
+            await query.answer("❌ Данные сообщения не найдены", show_alert=True)
+            return
+        
+        try:
+            from services.helpers.weeek_helper import create_task, get_project
+            
+            await query.answer("⏳ Создаю задачу...")
+            
+            # Получаем информацию о проекте
+            project = await get_project(project_id)
+            project_title = project.get("title", f"Проект {project_id}") if project else f"Проект {project_id}"
+            
+            # Используем сообщение пользователя как название задачи
+            user_message = message_data.get("user_message", "Задача из бота")
+            task_title = user_message[:100]  # Ограничиваем длину
+            
+            # Создаем задачу
+            task = await create_task(
+                project_id=project_id,
+                title=task_title,
+                description=f"Создано из сообщения в Telegram боте\n\nСообщение: {user_message}"
+            )
+            
+            if task:
+                task_id = task.get("id", "")
+                
+                # Убираем кнопки из исходного сообщения
+                try:
+                    await query.edit_message_reply_markup(reply_markup=None)
+                except Exception:
+                    pass
+                
+                success_text = (
+                    f"✅ *Задача создана в WEEEK!*\n\n"
+                    f"📁 *Проект:* {project_title}\n"
+                    f"📝 *Задача:* {task_title}\n"
+                    f"🆔 *ID задачи:* `{task_id}`"
+                )
+                
+                keyboard = [
+                    [InlineKeyboardButton("✅ Готово", callback_data=f"lead_task_week_done_{message_id}")],
+                    [InlineKeyboardButton("🔙 Назад", callback_data="back_to_menu")]
+                ]
+                
+                await query.message.reply_text(
+                    success_text,
+                    parse_mode='Markdown',
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                
+                log.info(f"✅ Задача создана в WEEEK: {task_title} в проекте {project_id}")
+            else:
+                await query.answer("❌ Не удалось создать задачу", show_alert=True)
+                
+        except Exception as e:
+            log.error(f"❌ Ошибка создания задачи: {e}")
+            import traceback
+            log.error(traceback.format_exc())
+            await query.answer(f"❌ Ошибка: {str(e)}", show_alert=True)
+    
+    elif query.data.startswith("lead_task_week_done_"):
+        # Обработка кнопки "Готово" после создания задачи
+        message_id = query.data.replace("lead_task_week_done_", "")
+        await query.answer("✅ Задача создана", show_alert=False)
+        await query.edit_message_reply_markup(reply_markup=None)
+        log.info(f"✅ Задача помечена как созданная (message_id: {message_id})")

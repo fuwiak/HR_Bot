@@ -47,6 +47,9 @@ async def send_reply_with_buttons(update: Update, context: ContextTypes.DEFAULT_
         [
             InlineKeyboardButton("✅ Подтвердить ответ", callback_data=f"lead_confirm_{message_id}"),
             InlineKeyboardButton("📝 Создать КП", callback_data=f"lead_proposal_{message_id}")
+        ],
+        [
+            InlineKeyboardButton("📋 Создать задачу week", callback_data=f"lead_task_week_{message_id}")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
