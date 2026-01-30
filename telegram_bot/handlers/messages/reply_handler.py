@@ -590,110 +590,129 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         log.info(f"🔍 [RAG Decision] use_rag={use_rag}, intent={rag_decision.get('intent')}, confidence={rag_decision.get('confidence', 0):.2f}, reason={rag_decision.get('reason')}")
         
+        # Выполняем RAG поиск ТОЛЬКО если use_rag = True
         if use_rag:
             log.info(f"🔍 [RAG] Запрос требует поиска в базе знаний: '{text[:100]}'")
-        try:
-            from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
-            
-            log.info(f"🔍 [RAG] Поиск в базе знаний для запроса: '{text[:100]}'")
-            
-            client = get_qdrant_client()
-            if client:
-                # Генерируем эмбеддинг для запроса
-                query_embedding = await generate_embedding_async(text)
+            try:
+                from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
                 
-                if query_embedding:
-                    collection_name = "hr2137_bot_knowledge_base"
+                log.info(f"🔍 [RAG] Поиск в базе знаний для запроса: '{text[:100]}'")
+                
+                client = get_qdrant_client()
+                if client:
+                    # Генерируем эмбеддинг для запроса
+                    query_embedding = await generate_embedding_async(text)
                     
-                    try:
-                        # Ищем в Qdrant
-                        search_results = client.query_points(
-                            collection_name=collection_name,
-                            query=query_embedding,
-                            limit=5
-                        )
+                    if query_embedding:
+                        collection_name = "hr2137_bot_knowledge_base"
                         
-                        if search_results.points:
-                            log.info(f"✅ [RAG] Найдено {len(search_results.points)} результатов в базе знаний")
+                        try:
+                            # Ищем в Qdrant
+                            search_results = client.query_points(
+                                collection_name=collection_name,
+                                query=query_embedding,
+                                limit=5
+                            )
                             
-                            # Собираем результаты
-                            results = []
-                            for point in search_results.points:
-                                payload = point.payload if hasattr(point, 'payload') else {}
-                                score = point.score if hasattr(point, 'score') else 0.0
+                            if search_results.points:
+                                log.info(f"✅ [RAG] Найдено {len(search_results.points)} результатов в базе знаний")
                                 
-                                # Извлекаем информацию о документе
-                                file_name = payload.get("file_name") or payload.get("title") or payload.get("source", "Документ")
-                                text_content = payload.get("text") or payload.get("content", "")
+                                # Собираем результаты
+                                results = []
+                                for point in search_results.points:
+                                    payload = point.payload if hasattr(point, 'payload') else {}
+                                    score = point.score if hasattr(point, 'score') else 0.0
+                                    
+                                    # Извлекаем информацию о документе
+                                    file_name = payload.get("file_name") or payload.get("title") or payload.get("source", "Документ")
+                                    text_content = payload.get("text") or payload.get("content", "")
+                                    
+                                    if text_content and score > 0.3:  # Минимальный порог релевантности
+                                        results.append({
+                                            "file_name": file_name,
+                                            "text": text_content,
+                                            "score": score
+                                        })
                                 
-                                if text_content and score > 0.3:  # Минимальный порог релевантности
-                                    results.append({
-                                        "file_name": file_name,
-                                        "text": text_content,
-                                        "score": score
-                                    })
-                            
-                            # Сортируем по score и берем топ-3
-                            results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)[:3]
-                            
-                            if results_sorted:
-                                rag_context = "\n\n📚 Релевантная информация из базы знаний:\n\n"
-                                for i, result in enumerate(results_sorted, 1):
-                                    file_name = result.get('file_name', 'Документ')
-                                    text_snippet = result.get('text', '')[:300]  # Первые 300 символов
-                                    score = result.get('score', 0)
-                                    rag_context += f"{i}. {file_name} (релевантность: {score:.2f}):\n{text_snippet}...\n\n"
-                                    
-                                    # Сохраняем полные тексты документов для RAGAS оценки
-                                    rag_documents = [r.get('text', '') for r in results_sorted]
-                                    
-                                    # Детальное логирование найденных документов
-                                    log.info(f"✅ [RAG] Сформирован контекст из {len(results_sorted)} документов:")
+                                # Сортируем по score и берем топ-3
+                                results_sorted = sorted(results, key=lambda x: x.get('score', 0), reverse=True)[:3]
+                                
+                                if results_sorted:
+                                    rag_context = "\n\n📚 Релевантная информация из базы знаний:\n\n"
                                     for i, result in enumerate(results_sorted, 1):
                                         file_name = result.get('file_name', 'Документ')
+                                        text_snippet = result.get('text', '')[:300]  # Первые 300 символов
                                         score = result.get('score', 0)
-                                        text_length = len(result.get('text', ''))
-                                        log.info(f"  📄 Документ {i}: {file_name} | Релевантность: {score:.3f} | Длина: {text_length} символов")
+                                        rag_context += f"{i}. {file_name} (релевантность: {score:.2f}):\n{text_snippet}...\n\n"
+                                        
+                                        # Сохраняем полные тексты документов для RAGAS оценки
+                                        rag_documents = [r.get('text', '') for r in results_sorted]
+                                        
+                                        # Детальное логирование найденных документов
+                                        log.info(f"✅ [RAG] Сформирован контекст из {len(results_sorted)} документов:")
+                                        for i, result in enumerate(results_sorted, 1):
+                                            file_name = result.get('file_name', 'Документ')
+                                            score = result.get('score', 0)
+                                            text_length = len(result.get('text', ''))
+                                            log.info(f"  📄 Документ {i}: {file_name} | Релевантность: {score:.3f} | Длина: {text_length} символов")
+                                else:
+                                    log.info(f"ℹ️ [RAG] Результаты найдены, но не прошли порог релевантности")
                             else:
-                                log.info(f"ℹ️ [RAG] Результаты найдены, но не прошли порог релевантности")
-                        else:
-                            log.info(f"ℹ️ [RAG] Результаты не найдены в базе знаний для запроса: '{text[:100]}'")
-                    except Exception as search_error:
-                        error_str = str(search_error).lower()
-                        if "timeout" in error_str or "timed out" in error_str:
-                            log.warning(f"⚠️ [RAG] Таймаут при поиске в базе знаний: {search_error}")
-                        else:
-                            log.warning(f"⚠️ [RAG] Ошибка поиска в базе знаний: {search_error}")
+                                log.info(f"ℹ️ [RAG] Результаты не найдены в базе знаний для запроса: '{text[:100]}'")
+                        except Exception as search_error:
+                            error_str = str(search_error).lower()
+                            if "timeout" in error_str or "timed out" in error_str:
+                                log.warning(f"⚠️ [RAG] Таймаут при поиске в базе знаний: {search_error}")
+                            else:
+                                log.warning(f"⚠️ [RAG] Ошибка поиска в базе знаний: {search_error}")
+                    else:
+                        log.warning(f"⚠️ [RAG] Не удалось создать эмбеддинг для запроса")
                 else:
-                    log.warning(f"⚠️ [RAG] Не удалось создать эмбеддинг для запроса")
-            else:
-                log.warning(f"⚠️ [RAG] Qdrant клиент недоступен")
-        except Exception as e:
-            log.warning(f"⚠️ Ошибка RAG поиска: {e}")
-            import traceback
-            log.debug(traceback.format_exc())
+                    log.warning(f"⚠️ [RAG] Qdrant клиент недоступен")
+            except Exception as e:
+                log.warning(f"⚠️ Ошибка RAG поиска: {e}")
+                import traceback
+                log.debug(traceback.format_exc())
         else:
             log.info(f"ℹ️ [RAG] Запрос не требует поиска в базе знаний (приветствие/простой вопрос): '{text[:100]}'")
         
         # Формируем промпт с подстановкой переменных
         system_prompt = CHAT_PROMPT
         
-        # Подставляем RAG контекст (если есть)
+        # Подставляем RAG контекст и инструкции (если есть)
         if rag_context:
+            # Если есть RAG контекст - добавляем инструкции по использованию базы знаний
+            rag_instructions = """КРИТИЧЕСКИ ВАЖНО - ИСПОЛЬЗОВАНИЕ БАЗЫ ЗНАНИЙ:
+- ✅ ВСЕГДА используй информацию из базы знаний (RAG), если она предоставлена ниже
+- ✅ Отвечай на основе предоставленной информации из базы знаний
+- ✅ Если информация из базы знаний релевантна - используй её в первую очередь
+- ❌ НЕ выдумывай кейсы, методики или данные, если их нет в базе знаний
+- ✅ Предлагай уточняющие вопросы для лучшего понимания задачи
+
+"""
+            rag_instructions_consulting = """ВАЖНО:
+- Всегда используй информацию из базы знаний (RAG) если она предоставлена
+- Не выдумывай кейсы или методики
+- Предлагай уточняющие вопросы для лучшего понимания задачи
+
+Релевантная информация из базы знаний:
+"""
+            final_instruction = "Ответь по делу, используя информацию из базы знаний (если она предоставлена выше). НЕ используй Markdown форматирование!"
+            final_instruction_consulting = "Ответь по делу, используя информацию из базы знаний. НЕ используй Markdown форматирование!"
+            
+            system_prompt = system_prompt.replace("{{rag_instructions}}", rag_instructions)
+            system_prompt = system_prompt.replace("{{rag_instructions_consulting}}", rag_instructions_consulting)
             system_prompt = system_prompt.replace("{{rag_context}}", rag_context)
+            system_prompt = system_prompt.replace("{{final_instruction}}", final_instruction)
+            system_prompt = system_prompt.replace("{{final_instruction_consulting}}", final_instruction_consulting)
         else:
-            # Если RAG контекста нет - убираем упоминания базы знаний из промпта
+            # Если RAG контекста нет - убираем все упоминания базы знаний
+            system_prompt = system_prompt.replace("{{rag_instructions}}", "")
+            system_prompt = system_prompt.replace("{{rag_instructions_consulting}}", "ВАЖНО:\n- Не выдумывай кейсы или методики\n- Предлагай уточняющие вопросы для лучшего понимания задачи\n\n")
             system_prompt = system_prompt.replace("{{rag_context}}", "")
-            # Убираем блок про базу знаний, если RAG не используется
-            system_prompt = system_prompt.replace(
-                "КРИТИЧЕСКИ ВАЖНО - ИСПОЛЬЗОВАНИЕ БАЗЫ ЗНАНИЙ:\n- ✅ ВСЕГДА используй информацию из базы знаний (RAG), если она предоставлена ниже\n- ✅ Отвечай на основе предоставленной информации из базы знаний\n- ✅ Если информация из базы знаний релевантна - используй её в первую очередь\n- ❌ НЕ выдумывай кейсы, методики или данные, если их нет в базе знаний\n- ❌ Если информации нет в базе знаний - честно скажи об этом\n- ✅ Предлагай уточняющие вопросы для лучшего понимания задачи\n\n",
-                ""
-            )
-            # Убираем упоминание базы знаний из финальной инструкции
-            system_prompt = system_prompt.replace(
-                "Ответь по делу, используя информацию из базы знаний (если она предоставлена выше). НЕ используй Markdown форматирование!",
-                "Ответь по делу, дружелюбно и профессионально. НЕ используй Markdown форматирование!"
-            )
+            final_instruction = "Ответь по делу, дружелюбно и профессионально. НЕ используй Markdown форматирование!"
+            system_prompt = system_prompt.replace("{{final_instruction}}", final_instruction)
+            system_prompt = system_prompt.replace("{{final_instruction_consulting}}", final_instruction)
         
         # Подставляем историю
         history_text = history if history else "Истории разговора нет."
