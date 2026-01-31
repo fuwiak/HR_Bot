@@ -151,10 +151,27 @@ async def handle_email_reply_last(query):
         
         user_id = query.from_user.id
         
+        if not query.message:
+            log.error(f"📧 [Email Reply Last] query.message is None для user_id={user_id}")
+            await query.answer("❌ Ошибка: сообщение не найдено", show_alert=True)
+            return
+        
+        chat_id = query.message.chat.id
+        log.info(f"📧 [Email Reply Last] Начало обработки - user_id={user_id}, chat_id={chat_id}")
+        
+        # Показываем индикатор печати
+        try:
+            await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            log.info(f"📧 [Email Reply Last] TYPING action отправлен для chat_id={chat_id}")
+        except Exception as typing_error:
+            log.error(f"📧 [Email Reply Last] Ошибка отправки TYPING action: {typing_error}")
+        
         # Получаем последнее письмо
+        log.info(f"📧 [Email Reply Last] Получение последнего письма...")
         emails = await check_new_emails(since_days=7, limit=1)
         
         if not emails:
+            log.warning(f"📧 [Email Reply Last] Новых писем не найдено для user_id={user_id}")
             await query.answer("📭 Новых писем не найдено", show_alert=True)
             return
         
@@ -164,8 +181,11 @@ async def handle_email_reply_last(query):
         subject = email_data.get("subject", "Без темы")
         body = email_data.get("body", email_data.get("preview", ""))
         
+        log.info(f"📧 [Email Reply Last] Найдено письмо - email_id={email_id}, от={from_addr}, тема={subject}")
+        
         # Сохраняем в кэш
         email_cache[email_id] = email_data
+        log.info(f"📧 [Email Reply Last] Письмо сохранено в кэш для email_id={email_id}")
         
         # Показываем меню выбора типа ответа
         text = f"📧 *Ответить на письмо*\n\n"
@@ -186,8 +206,10 @@ async def handle_email_reply_last(query):
         ]
         
         reply_markup = InlineKeyboardMarkup(keyboard)
+        log.info(f"📧 [Email Reply Last] Отправка меню с кнопками для email_id={email_id}")
         await query.answer()
         await query.edit_message_text(text, parse_mode='Markdown', reply_markup=reply_markup)
+        log.info(f"📧 [Email Reply Last] Меню успешно отправлено для email_id={email_id}")
         
     except Exception as e:
         log.error(f"❌ Ошибка handle_email_reply_last: {e}")
