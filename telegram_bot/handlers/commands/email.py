@@ -4,6 +4,7 @@ Email команды
 from typing import Dict
 from telegram import Update
 from telegram.ext import ContextTypes
+from telegram.constants import ChatAction
 import logging
 
 log = logging.getLogger(__name__)
@@ -284,6 +285,9 @@ async def handle_email_proposal(query, email_id: str):
     try:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
+        # Показываем индикатор печати
+        await query.bot.send_chat_action(chat_id=query.message.chat.id, action=ChatAction.TYPING)
+        
         email_data = email_cache.get(email_id)
         if not email_data:
             await query.answer("❌ Данные письма не найдены", show_alert=True)
@@ -376,6 +380,9 @@ async def handle_email_reply_primary(query, email_id: str):
     try:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
+        # Показываем индикатор печати
+        await query.bot.send_chat_action(chat_id=query.message.chat.id, action=ChatAction.TYPING)
+        
         email_data = email_cache.get(email_id)
         if not email_data:
             await query.answer("❌ Данные письма не найдены", show_alert=True)
@@ -415,6 +422,9 @@ async def handle_email_reply_followup(query, email_id: str):
     try:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
+        # Показываем индикатор печати
+        await query.bot.send_chat_action(chat_id=query.message.chat.id, action=ChatAction.TYPING)
+        
         email_data = email_cache.get(email_id)
         if not email_data:
             await query.answer("❌ Данные письма не найдены", show_alert=True)
@@ -453,6 +463,9 @@ async def handle_email_reply_report(query, email_id: str):
     """Обработка отправки письма с отчетом"""
     try:
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        # Показываем индикатор печати
+        await query.bot.send_chat_action(chat_id=query.message.chat.id, action=ChatAction.TYPING)
         
         email_data = email_cache.get(email_id)
         if not email_data:
