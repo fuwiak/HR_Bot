@@ -86,7 +86,7 @@ EMAIL_TEMPLATES = {
         </div>
         <div class="footer">
             <p>С уважением,<br>
-            <strong>Анастасия Новоселова</strong><br>
+            <strong>Анастасия Новосёлова</strong><br>
             HR-консультант</p>
         </div>
     </div>
@@ -146,7 +146,7 @@ EMAIL_TEMPLATES = {
         </div>
         <div class="footer">
             <p>С уважением,<br>
-            <strong>Анастасия Новоселова</strong><br>
+            <strong>Анастасия Новосёлова</strong><br>
             HR-консультант</p>
         </div>
     </div>
@@ -216,7 +216,7 @@ EMAIL_TEMPLATES = {
         </div>
         <div class="footer">
             <p>С уважением,<br>
-            <strong>Анастасия Новоселова</strong><br>
+            <strong>Анастасия Новосёлова</strong><br>
             HR-консультант</p>
         </div>
     </div>
