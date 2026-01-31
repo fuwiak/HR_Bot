@@ -197,6 +197,113 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         log.warning(f"⚠️ Ошибка сохранения сообщения: {e}")
     
+    # Обработка нажатий на кнопки Reply Keyboard (кнопки снизу)
+    if text == "📚 База знаний":
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [
+                InlineKeyboardButton("🔍 Поиск", callback_data="rag_search_menu"),
+                InlineKeyboardButton("📚 Документы", callback_data="rag_docs")
+            ],
+            [
+                InlineKeyboardButton("📊 Статистика", callback_data="rag_stats"),
+                InlineKeyboardButton("📤 Загрузить", callback_data="rag_upload_menu")
+            ],
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+        ]
+        await update.message.reply_text(
+            "📚 *База знаний*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🔍 *Поиск* — семантический поиск\n"
+            "   по методикам, кейсам, шаблонам\n\n"
+            "📚 *Документы* — список всех\n"
+            "   документов в базе\n\n"
+            "📊 *Статистика* — информация\n"
+            "   о базе знаний\n\n"
+            "📤 *Загрузить* — инструкция\n"
+            "   по загрузке документов",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    elif text == "📋 Проекты":
+        from telegram_bot.handlers.commands.weeek import show_weeek_projects
+        from telegram import CallbackQuery
+        # Создаем фиктивный query для вызова функции
+        class FakeQuery:
+            def __init__(self, msg):
+                self.message = msg
+                self.from_user = msg.from_user
+                self.answer = lambda: None
+        fake_query = FakeQuery(update.message)
+        await show_weeek_projects(fake_query, context)
+        return
+    elif text == "🛠 Инструменты":
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [
+            [
+                InlineKeyboardButton("📝 Суммаризация", callback_data="summary_menu"),
+                InlineKeyboardButton("💼 Демо КП", callback_data="demo_proposal_menu")
+            ],
+            [
+                InlineKeyboardButton("💡 Гипотеза", callback_data="hypothesis_menu"),
+                InlineKeyboardButton("📊 Отчет", callback_data="report_menu")
+            ],
+            [InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]
+        ]
+        await update.message.reply_text(
+            "🛠 *Инструменты*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📝 *Суммаризация* — краткое\n"
+            "   содержание текста\n\n"
+            "💼 *Демо КП* — генерация\n"
+            "   коммерческого предложения\n\n"
+            "💡 *Гипотеза* — анализ\n"
+            "   гипотез проекта\n\n"
+            "📊 *Отчет* — создание отчетов",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    elif text == "📧 Email":
+        from telegram_bot.handlers.commands.email import handle_email_reply_last
+        from telegram import CallbackQuery
+        class FakeQuery:
+            def __init__(self, msg):
+                self.message = msg
+                self.from_user = msg.from_user
+                self.bot = context.bot
+                self.answer = lambda: None
+        fake_query = FakeQuery(update.message)
+        await handle_email_reply_last(fake_query)
+        return
+    elif text == "❓ Помощь":
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        keyboard = [[InlineKeyboardButton("🔙 Главное меню", callback_data="back_to_menu")]]
+        await update.message.reply_text(
+            "❓ *Помощь*\n\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📚 Используйте команды бота для работы:\n\n"
+            "/start — начать работу\n"
+            "/menu — главное меню\n"
+            "/show_keyboard — показать кнопки\n"
+            "/hide_keyboard — скрыть кнопки\n\n"
+            "💡 Кнопки снизу позволяют быстро\n"
+            "   получить доступ к функциям бота.",
+            parse_mode='Markdown',
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+    elif text == "🏠 Главное меню":
+        from telegram_bot.handlers.commands.basic import menu
+        await menu(update, context)
+        return
+    elif text == "📊 Статус":
+        from telegram_bot.handlers.commands.basic import status_command
+        await status_command(update, context)
+        return
+    # "💬 Чат с AI" обрабатывается как обычное сообщение ниже
+    
     # Показываем что печатаем
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
     

@@ -1,13 +1,81 @@
 """
 Basic команды
 """
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import (
+    InlineKeyboardButton, 
+    InlineKeyboardMarkup, 
+    WebAppInfo,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    KeyboardButton
+)
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram_bot.storage.email_subscribers import add_email_subscriber
 import logging
 
 log = logging.getLogger(__name__)
+
+
+def get_reply_keyboard():
+    """Создает Reply Keyboard (кнопки снизу) с основными командами"""
+    keyboard = [
+        [
+            KeyboardButton("📚 База знаний"),
+            KeyboardButton("📋 Проекты")
+        ],
+        [
+            KeyboardButton("🛠 Инструменты"),
+            KeyboardButton("💬 Чат с AI")
+        ],
+        [
+            KeyboardButton("📧 Email"),
+            KeyboardButton("❓ Помощь")
+        ],
+        [
+            KeyboardButton("🏠 Главное меню"),
+            KeyboardButton("📊 Статус")
+        ]
+    ]
+    return ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True,  # Автоматически подстраивает размер кнопок
+        one_time_keyboard=False,  # Кнопки остаются видимыми после нажатия
+        input_field_placeholder="Выберите действие или введите сообщение..."
+    )
+
+
+async def show_keyboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /show_keyboard - показать кнопки меню снизу"""
+    try:
+        reply_markup = get_reply_keyboard()
+        await update.message.reply_text(
+            "⌨️ *Кнопки меню показаны*\n\n"
+            "Используйте кнопки снизу для быстрого доступа к функциям бота.",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        log.info(f"✅ Кнопки меню показаны для user_id={update.message.from_user.id}")
+    except Exception as e:
+        log.error(f"❌ Ошибка показа клавиатуры: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
+
+async def hide_keyboard_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /hide_keyboard - скрыть кнопки меню снизу"""
+    try:
+        reply_markup = ReplyKeyboardRemove(remove_keyboard=True)
+        await update.message.reply_text(
+            "⌨️ *Кнопки меню скрыты*\n\n"
+            "Используйте /show_keyboard чтобы показать их снова.",
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+        log.info(f"✅ Кнопки меню скрыты для user_id={update.message.from_user.id}")
+    except Exception as e:
+        log.error(f"❌ Ошибка скрытия клавиатуры: {e}")
+        await update.message.reply_text(f"❌ Ошибка: {str(e)}")
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
@@ -76,10 +144,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "📬 Уведомления о новых письмах приходят автоматически"
         )
         
+        # Отправляем приветственное сообщение с inline кнопками
         await update.message.reply_text(
             welcome_text,
             parse_mode='Markdown',
             reply_markup=reply_markup
+        )
+        
+        # Также показываем Reply Keyboard (кнопки снизу)
+        reply_keyboard = get_reply_keyboard()
+        await update.message.reply_text(
+            "⌨️ *Кнопки меню активированы*\n\n"
+            "Используйте кнопки снизу для быстрого доступа.\n"
+            "Или используйте /hide_keyboard чтобы скрыть их.",
+            parse_mode='Markdown',
+            reply_markup=reply_keyboard
         )
         
         log.info(f"✅ Команда /start выполнена успешно для user_id={user_id}")

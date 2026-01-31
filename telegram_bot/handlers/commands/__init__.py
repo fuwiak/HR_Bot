@@ -1,7 +1,14 @@
 """
 Обработчики команд
 """
-from .basic import start, menu, status_command, myid_command
+from .basic import (
+    start, 
+    menu, 
+    status_command, 
+    myid_command,
+    show_keyboard_command,
+    hide_keyboard_command
+)
 from .rag import rag_search_command, rag_stats_command, rag_docs_command, rag_upload_command
 from .weeek import (
     weeek_info_command,
@@ -27,6 +34,8 @@ __all__ = [
     'menu',
     'status_command',
     'myid_command',
+    'show_keyboard_command',
+    'hide_keyboard_command',
     # RAG
     'rag_search_command',
     'rag_stats_command',

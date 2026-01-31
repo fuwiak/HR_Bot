@@ -67,6 +67,8 @@ from telegram_bot.handlers import (
     hypothesis_command,
     report_command,
     upload_document_command,
+    show_keyboard_command,
+    hide_keyboard_command,
     handle_document,
 )
 
@@ -233,6 +235,10 @@ def main():
     app.add_handler(CommandHandler("myid", myid_command))
     app.add_handler(CommandHandler("unsubscribe", unsubscribe_command))
     
+    # Reply Keyboard commands (кнопки снизу)
+    app.add_handler(CommandHandler("show_keyboard", show_keyboard_command))
+    app.add_handler(CommandHandler("hide_keyboard", hide_keyboard_command))
+    
     # Email commands
     app.add_handler(CommandHandler("email_check", email_check_command))
     app.add_handler(CommandHandler("email_draft", email_draft_command))
@@ -273,6 +279,8 @@ def main():
             commands = [
                 BotCommand("start", "🚀 Начать работу с ботом"),
                 BotCommand("menu", "🏠 Главное меню"),
+                BotCommand("show_keyboard", "⌨️ Показать кнопки меню"),
+                BotCommand("hide_keyboard", "⌨️ Скрыть кнопки меню"),
                 BotCommand("status", "📊 Статус проектов"),
                 BotCommand("email_check", "📧 Проверить новые письма"),
                 BotCommand("email_draft", "✉️ Подготовить ответ на письмо"),
