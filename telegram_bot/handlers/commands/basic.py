@@ -152,14 +152,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         # Также показываем Reply Keyboard (кнопки снизу)
-        reply_keyboard = get_reply_keyboard()
-        await update.message.reply_text(
-            "⌨️ *Кнопки меню активированы*\n\n"
-            "Используйте кнопки снизу для быстрого доступа.\n"
-            "Или используйте /hide_keyboard чтобы скрыть их.",
-            parse_mode='Markdown',
-            reply_markup=reply_keyboard
-        )
+        try:
+            reply_keyboard = get_reply_keyboard()
+            await update.message.reply_text(
+                "⌨️ *Кнопки меню активированы*\n\n"
+                "Используйте кнопки снизу для быстрого доступа.\n"
+                "Или используйте /hide_keyboard чтобы скрыть их.",
+                parse_mode='Markdown',
+                reply_markup=reply_keyboard
+            )
+        except Exception as keyboard_error:
+            log.warning(f"⚠️ Ошибка показа Reply Keyboard: {keyboard_error}")
+            # Продолжаем работу даже если клавиатура не показалась
         
         log.info(f"✅ Команда /start выполнена успешно для user_id={user_id}")
         

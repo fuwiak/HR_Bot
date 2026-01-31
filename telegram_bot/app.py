@@ -13,7 +13,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
-from telegram import BotCommand
+from telegram import BotCommand, MenuButtonWebApp, MenuButtonCommands, WebAppInfo
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -305,6 +305,34 @@ def main():
                 await app.bot.set_my_commands(commands)
                 log.info(f"✅ Grid menu установлен: {len(commands)} команд")
                 log.info("✅ Bot Menu Button создан автоматически (expand/collapse доступно)")
+                
+                # Настраиваем Attachment Menu (меню при нажатии на кнопку "+" рядом с полем ввода)
+                # Attachment Menu - это Bot Menu Button, который появляется рядом с полем ввода
+                from telegram_bot.config import MINI_APP_URL
+                try:
+                    if MINI_APP_URL:
+                        # Пробуем установить Menu Button Web App для attachment menu
+                        # Примечание: для глобальной установки может потребоваться BotFather
+                        menu_button = MenuButtonWebApp(text="🌐 Mini App", web_app=WebAppInfo(url=MINI_APP_URL))
+                        # Пробуем установить глобально (может не работать, тогда настраивается через BotFather)
+                        try:
+                            await app.bot.set_chat_menu_button(chat_id=None, menu_button=menu_button)
+                            log.info(f"✅ Attachment Menu установлен с Mini App: {MINI_APP_URL}")
+                        except Exception as global_error:
+                            # Если глобальная установка не работает, используем MenuButtonCommands
+                            log.info(f"💡 Attachment Menu: для Mini App настройте через BotFather (/setmenubutton)")
+                            log.info(f"   URL: {MINI_APP_URL}")
+                    else:
+                        # Используем MenuButtonCommands (команды меню)
+                        menu_button_commands = MenuButtonCommands()
+                        try:
+                            await app.bot.set_chat_menu_button(chat_id=None, menu_button=menu_button_commands)
+                            log.info("✅ Attachment Menu установлен (MenuButtonCommands)")
+                        except Exception as cmd_error:
+                            log.info("💡 Attachment Menu: автоматически настроен через Bot Commands Menu")
+                except Exception as menu_error:
+                    log.warning(f"⚠️ Не удалось установить Attachment Menu: {menu_error}")
+                    log.info("💡 Attachment Menu можно настроить через BotFather: /setmenubutton")
             except Exception as e:
                 log.error(f"❌ Ошибка установки grid menu: {e}")
                 import traceback
