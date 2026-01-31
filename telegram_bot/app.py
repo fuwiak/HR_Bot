@@ -13,6 +13,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv
+from telegram import BotCommand
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -266,6 +267,41 @@ def main():
     # Запуск бота: webhook для production (Railway) или polling для локальной разработки
     async def start_bot():
         """Асинхронный запуск бота с webhook или polling"""
+        # Функция для настройки grid menu (Bot Commands Menu)
+        async def setup_bot_commands():
+            """Настройка grid menu с командами бота"""
+            commands = [
+                BotCommand("start", "🚀 Начать работу с ботом"),
+                BotCommand("menu", "🏠 Главное меню"),
+                BotCommand("status", "📊 Статус проектов"),
+                BotCommand("email_check", "📧 Проверить новые письма"),
+                BotCommand("email_draft", "✉️ Подготовить ответ на письмо"),
+                BotCommand("rag_search", "🔍 Поиск в базе знаний"),
+                BotCommand("rag_docs", "📚 Список документов"),
+                BotCommand("weeek_projects", "📋 Список проектов"),
+                BotCommand("weeek_tasks", "✅ Список задач"),
+                BotCommand("yadisk_list", "📁 Список файлов"),
+                BotCommand("summary", "📝 Суммаризация текста"),
+                BotCommand("demo_proposal", "💼 Демо КП"),
+                BotCommand("hypothesis", "💡 Гипотеза"),
+                BotCommand("report", "📊 Отчет"),
+                BotCommand("upload", "📤 Загрузить документ"),
+                BotCommand("myid", "🆔 Мой Telegram ID"),
+                BotCommand("unsubscribe", "❌ Отписаться от уведомлений"),
+            ]
+            
+            try:
+                # Устанавливаем команды меню
+                # Telegram автоматически создаст кнопку меню рядом с полем ввода,
+                # которая может раскрываться (expand) и сворачиваться (collapse)
+                await app.bot.set_my_commands(commands)
+                log.info(f"✅ Grid menu установлен: {len(commands)} команд")
+                log.info("✅ Bot Menu Button создан автоматически (expand/collapse доступно)")
+            except Exception as e:
+                log.error(f"❌ Ошибка установки grid menu: {e}")
+                import traceback
+                log.error(traceback.format_exc())
+        
         if USE_WEBHOOK and WEBHOOK_URL:
             # Используем webhook для production
             webhook_path = f"/webhook/{TELEGRAM_BOT_TOKEN}"
@@ -279,6 +315,9 @@ def main():
                 await app.start()
             else:
                 log.warning("⚠️ Приложение уже запущено, пропускаем повторный запуск")
+            
+            # Устанавливаем grid menu
+            await setup_bot_commands()
             
             await app.bot.set_webhook(
                 url=full_webhook_url,
@@ -350,6 +389,9 @@ def main():
                 await app.start()
             else:
                 log.warning("⚠️ Приложение уже запущено, пропускаем повторный запуск")
+            
+            # Устанавливаем grid menu
+            await setup_bot_commands()
             
             try:
                 from services.agents.integrate_scenarios import start_background_tasks
