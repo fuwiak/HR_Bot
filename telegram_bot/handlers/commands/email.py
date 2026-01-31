@@ -286,15 +286,24 @@ async def handle_email_proposal(query, email_id: str):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
         user_id = query.from_user.id
+        if not query.message:
+            log.error(f"📧 [Email Reply] query.message is None для user_id={user_id}, email_id={email_id}")
+            await query.answer("❌ Ошибка: сообщение не найдено", show_alert=True)
+            return
+        
         chat_id = query.message.chat.id
         log.info(f"📧 [Email Reply] Отправка с КП - user_id={user_id}, chat_id={chat_id}, email_id={email_id}")
         
         # Показываем индикатор печати
-        await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-        log.info(f"📧 [Email Reply] TYPING action отправлен для chat_id={chat_id}")
+        try:
+            await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            log.info(f"📧 [Email Reply] TYPING action отправлен для chat_id={chat_id}")
+        except Exception as typing_error:
+            log.error(f"📧 [Email Reply] Ошибка отправки TYPING action: {typing_error}")
         
         email_data = email_cache.get(email_id)
         if not email_data:
+            log.warning(f"📧 [Email Reply] Данные письма не найдены в кэше для email_id={email_id}")
             await query.answer("❌ Данные письма не найдены", show_alert=True)
             return
         
@@ -386,15 +395,24 @@ async def handle_email_reply_primary(query, email_id: str):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
         user_id = query.from_user.id
+        if not query.message:
+            log.error(f"📧 [Email Reply] query.message is None для user_id={user_id}, email_id={email_id}")
+            await query.answer("❌ Ошибка: сообщение не найдено", show_alert=True)
+            return
+        
         chat_id = query.message.chat.id
         log.info(f"📧 [Email Reply] Первичный ответ - user_id={user_id}, chat_id={chat_id}, email_id={email_id}")
         
         # Показываем индикатор печати
-        await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-        log.info(f"📧 [Email Reply] TYPING action отправлен для chat_id={chat_id}")
+        try:
+            await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            log.info(f"📧 [Email Reply] TYPING action отправлен для chat_id={chat_id}")
+        except Exception as typing_error:
+            log.error(f"📧 [Email Reply] Ошибка отправки TYPING action: {typing_error}")
         
         email_data = email_cache.get(email_id)
         if not email_data:
+            log.warning(f"📧 [Email Reply] Данные письма не найдены в кэше для email_id={email_id}")
             await query.answer("❌ Данные письма не найдены", show_alert=True)
             return
         
@@ -434,15 +452,24 @@ async def handle_email_reply_followup(query, email_id: str):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
         user_id = query.from_user.id
+        if not query.message:
+            log.error(f"📧 [Email Reply] query.message is None для user_id={user_id}, email_id={email_id}")
+            await query.answer("❌ Ошибка: сообщение не найдено", show_alert=True)
+            return
+        
         chat_id = query.message.chat.id
         log.info(f"📧 [Email Reply] Уточняющий ответ - user_id={user_id}, chat_id={chat_id}, email_id={email_id}")
         
         # Показываем индикатор печати
-        await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-        log.info(f"📧 [Email Reply] TYPING action отправлен для chat_id={chat_id}")
+        try:
+            await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            log.info(f"📧 [Email Reply] TYPING action отправлен для chat_id={chat_id}")
+        except Exception as typing_error:
+            log.error(f"📧 [Email Reply] Ошибка отправки TYPING action: {typing_error}")
         
         email_data = email_cache.get(email_id)
         if not email_data:
+            log.warning(f"📧 [Email Reply] Данные письма не найдены в кэше для email_id={email_id}")
             await query.answer("❌ Данные письма не найдены", show_alert=True)
             return
         
@@ -482,15 +509,24 @@ async def handle_email_reply_report(query, email_id: str):
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
         
         user_id = query.from_user.id
+        if not query.message:
+            log.error(f"📧 [Email Reply] query.message is None для user_id={user_id}, email_id={email_id}")
+            await query.answer("❌ Ошибка: сообщение не найдено", show_alert=True)
+            return
+        
         chat_id = query.message.chat.id
         log.info(f"📧 [Email Reply] Отправка с отчетом - user_id={user_id}, chat_id={chat_id}, email_id={email_id}")
         
         # Показываем индикатор печати
-        await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-        log.info(f"📧 [Email Reply] TYPING action отправлен для chat_id={chat_id}")
+        try:
+            await query.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            log.info(f"📧 [Email Reply] TYPING action отправлен для chat_id={chat_id}")
+        except Exception as typing_error:
+            log.error(f"📧 [Email Reply] Ошибка отправки TYPING action: {typing_error}")
         
         email_data = email_cache.get(email_id)
         if not email_data:
+            log.warning(f"📧 [Email Reply] Данные письма не найдены в кэше для email_id={email_id}")
             await query.answer("❌ Данные письма не найдены", show_alert=True)
             return
         
