@@ -288,6 +288,11 @@ async def handle_response_rating(query: CallbackQuery, context: ContextTypes.DEF
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query:
+        return
+    
+    log.info(f"🔘 [Callback Router] Получен callback: {query.data} от user_id={query.from_user.id}, chat_id={query.message.chat.id if query.message else 'N/A'}")
+    
     await query.answer()
     
     # Обработка оценки ответа (поддерживаем оба формата: с bot_message_id и временный)
@@ -1064,15 +1069,19 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_email_reply_last(query)
     elif query.data.startswith("email_reply_primary_"):
         email_id = query.data.replace("email_reply_primary_", "")
+        log.info(f"📧 [Callback Router] Вызов handle_email_reply_primary для email_id={email_id}")
         await handle_email_reply_primary(query, email_id)
     elif query.data.startswith("email_reply_followup_"):
         email_id = query.data.replace("email_reply_followup_", "")
+        log.info(f"📧 [Callback Router] Вызов handle_email_reply_followup для email_id={email_id}")
         await handle_email_reply_followup(query, email_id)
     elif query.data.startswith("email_reply_proposal_"):
         email_id = query.data.replace("email_reply_proposal_", "")
+        log.info(f"📧 [Callback Router] Вызов handle_email_proposal для email_id={email_id}")
         await handle_email_proposal(query, email_id)
     elif query.data.startswith("email_reply_report_"):
         email_id = query.data.replace("email_reply_report_", "")
+        log.info(f"📧 [Callback Router] Вызов handle_email_reply_report для email_id={email_id}")
         await handle_email_reply_report(query, email_id)
     elif query.data.startswith("email_reply_"):
         email_id = query.data.replace("email_reply_", "")
