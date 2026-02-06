@@ -315,7 +315,10 @@ async def create_task(
         data["priority"] = priority
     
     try:
-        log.info(f"📤 [WEEEK] Создаю задачу: {task_title} в проекте {project_id}")
+        log.info(
+            "[WEEEK] action=create_task project_id=%s title=%s day=%s",
+            project_id, task_title, day or "(none)"
+        )
         log.debug(f"📤 Данные запроса: {data}")
         
         async with aiohttp.ClientSession() as session:
@@ -323,8 +326,10 @@ async def create_task(
                 response_text = await response.text()
                 
                 if response.status >= 400:
-                    log.error(f"❌ [WEEEK] Ошибка создания задачи: {response.status}")
-                    log.error(f"❌ Response: {response_text[:500]}")
+                    log.error(
+                        "[WEEEK] action=create_task status=fail project_id=%s title=%s http_status=%s response=%s",
+                        project_id, task_title, response.status, response_text[:500]
+                    )
                     return None
                 
                 result = await response.json() if response_text else {}
@@ -332,14 +337,20 @@ async def create_task(
                 # API возвращает {"success": true, "task": {...}}
                 if isinstance(result, dict) and "task" in result:
                     task = result["task"]
-                    log.info(f"✅ [WEEEK] Задача создана: {task_title} (ID: {task.get('id')})")
+                    task_id = task.get("id")
+                    log.info(
+                        "[WEEEK] action=create_task status=ok task_id=%s project_id=%s title=%s day=%s",
+                        task_id, project_id, task_title, day or "(none)"
+                    )
+                    if day:
+                        log.info("[WEEEK] action=add_date task_id=%s day=%s (set on create)", task_id, day)
                     return task
                 else:
-                    log.warning(f"⚠️ Неожиданный формат ответа, но статус 200")
+                    log.warning("[WEEEK] action=create_task status=ok response_format=unexpected")
                     return result
                 
     except Exception as e:
-        log.error(f"❌ [WEEEK] Ошибка создания задачи: {e}")
+        log.error("[WEEEK] action=create_task status=error project_id=%s title=%s error=%s", project_id, task_title, e)
         import traceback
         log.error(f"❌ Traceback: {traceback.format_exc()}")
         return None
@@ -400,33 +411,41 @@ async def update_task(
         data["tags"] = tags
     
     if not data:
-        log.warning("⚠️ Нет данных для обновления")
+        log.warning("[WEEEK] action=update_task task_id=%s status=skip reason=no_data", task_id)
         return None
     
     try:
-        log.info(f"📤 [WEEEK] Обновляю задачу {task_id}: {data}")
+        fields = ",".join(data.keys())
+        log.info(
+            "[WEEEK] action=update_task task_id=%s fields=%s payload=%s",
+            task_id, fields, data
+        )
+        if due_date is not None:
+            log.info("[WEEEK] action=add_date task_id=%s due_date=%s (update)", task_id, due_date)
         
         async with aiohttp.ClientSession() as session:
             async with session.put(url, json=data, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as response:
                 response_text = await response.text()
                 
                 if response.status >= 400:
-                    log.error(f"❌ [WEEEK] Ошибка обновления задачи: {response.status}")
-                    log.error(f"❌ Response: {response_text[:500]}")
+                    log.error(
+                        "[WEEEK] action=update_task status=fail task_id=%s http_status=%s response=%s",
+                        task_id, response.status, response_text[:500]
+                    )
                     return None
                 
                 result = await response.json() if response_text else {}
                 
                 if isinstance(result, dict) and "task" in result:
                     task = result["task"]
-                    log.info(f"✅ [WEEEK] Задача обновлена: {task_id}")
+                    log.info("[WEEEK] action=update_task status=ok task_id=%s fields=%s", task_id, fields)
                     return task
                 else:
-                    log.warning(f"⚠️ Неожиданный формат ответа")
+                    log.warning("[WEEEK] action=update_task status=ok task_id=%s response_format=unexpected", task_id)
                     return result
                 
     except Exception as e:
-        log.error(f"❌ [WEEEK] Ошибка обновления задачи: {e}")
+        log.error("[WEEEK] action=update_task status=error task_id=%s error=%s", task_id, e)
         import traceback
         log.error(f"❌ Traceback: {traceback.format_exc()}")
         return None
