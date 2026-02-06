@@ -65,8 +65,9 @@ LEADS_CHANNEL_URL = "https://t.me/HRAI_ANovoselova_Leads"
 # Глобальное состояние для отслеживания обработанных писем
 processed_email_ids: set = set()
 
-# Подавление подробных INFO-логов (для Railway). False = не подавлять; сейчас не требуется.
-SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS = os.getenv("SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS", "false").lower() in ("1", "true", "yes")
+# Подавление подробных INFO-логов (для Railway). По умолчанию включено — меньше шума в логах.
+# Чтобы включить подробные логи: SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS=0 или false
+SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS = os.getenv("SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS", "true").lower() not in ("0", "false", "no")
 
 # Интервал проверки почты (в секундах)
 email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "10"))  # 10 секунд по умолчанию
