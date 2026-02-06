@@ -65,6 +65,9 @@ LEADS_CHANNEL_URL = "https://t.me/HRAI_ANovoselova_Leads"
 # Глобальное состояние для отслеживания обработанных писем
 processed_email_ids: set = set()
 
+# Подавление подробных INFO-логов (для Railway). False = не подавлять; сейчас не требуется.
+SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS = os.getenv("SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS", "false").lower() in ("1", "true", "yes")
+
 # Интервал проверки почты (в секундах)
 email_check_interval = int(os.getenv("EMAIL_CHECK_INTERVAL", "10"))  # 10 секунд по умолчанию
 
@@ -258,8 +261,9 @@ async def email_monitor_task(bot):
         iteration += 1
         try:
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log.info(f"\n🔄 Итерация #{iteration} | {current_time}")
-            log.info(f"📬 Проверка новых писем...")
+            if not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
+                log.info(f"\n🔄 Итерация #{iteration} | {current_time}")
+                log.info(f"📬 Проверка новых писем...")
             
             from services.helpers.email_helper import check_new_emails
             
@@ -275,8 +279,9 @@ async def email_monitor_task(bot):
                 from_addr = email_data.get("from", "Неизвестно")
                 date_str = email_data.get("date", "")
                 
-                log.info(f"📧 Найдено письмо: ID={email_id}, От={from_addr}, Тема={subject[:50]}")
-                log.info(f"📋 Обработано писем в памяти: {len(processed_email_ids)}")
+                if not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
+                    log.info(f"📧 Найдено письмо: ID={email_id}, От={from_addr}, Тема={subject[:50]}")
+                    log.info(f"📋 Обработано писем в памяти: {len(processed_email_ids)}")
                 
                 # Парсим дату письма и проверяем, что оно новое
                 email_date = None
@@ -297,8 +302,9 @@ async def email_monitor_task(bot):
                     age = now - email_date
                     age_hours = age.total_seconds() / 3600
                     
-                    log.info(f"📅 Дата письма: {email_date.strftime('%Y-%m-%d %H:%M:%S')}")
-                    log.info(f"⏰ Возраст письма: {age_hours:.2f} часов")
+                    if not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
+                        log.info(f"📅 Дата письма: {email_date.strftime('%Y-%m-%d %H:%M:%S')}")
+                        log.info(f"⏰ Возраст письма: {age_hours:.2f} часов")
                     
                     if age_hours > EMAIL_MAX_AGE_HOURS:
                         log.info(f"⏭️  Письмо слишком старое ({age_hours:.2f} часов > {EMAIL_MAX_AGE_HOURS} часов), пропускаю")
@@ -323,14 +329,15 @@ async def email_monitor_task(bot):
                     log.info(f"✅ Письмо обработано и добавлено в список обработанных")
                     log.info(f"📊 Всего обработано: {len(processed_email_ids)}")
                 else:
-                    if email_id in processed_email_ids:
+                    if email_id in processed_email_ids and not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
                         log.info(f"⏭️  Письмо уже обработано ранее (ID: {email_id}), пропускаю")
                     else:
                         log.warning(f"⚠️  Email ID пустой или некорректный")
             else:
-                log.info(f"📭 Новых писем не найдено")
-            
-            log.info(f"⏳ Ожидание {email_check_interval} секунд до следующей проверки...")
+                if not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
+                    log.info(f"📭 Новых писем не найдено")
+            if not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
+                log.info(f"⏳ Ожидание {email_check_interval} секунд до следующей проверки...")
             
             # Ждем перед следующей проверкой
             await asyncio.sleep(email_check_interval)
@@ -343,6 +350,7 @@ async def email_monitor_task(bot):
             import traceback
             log.error(traceback.format_exc())
             log.error("=" * 80)
-            log.info(f"⏳ Повторная попытка через {email_check_interval} секунд...")
+            if not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
+                log.info(f"⏳ Повторная попытка через {email_check_interval} секунд...")
             # При ошибке ждем перед следующей попыткой
             await asyncio.sleep(email_check_interval)
