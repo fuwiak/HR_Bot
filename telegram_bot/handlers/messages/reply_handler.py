@@ -643,6 +643,8 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 from services.helpers.weeek_helper import create_task, get_project
                 
+                chat_id = update.effective_chat.id
+                await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
                 await update.message.reply_text("⏳ Создаю задачу...")
                 
                 # Получаем название проекта для отображения

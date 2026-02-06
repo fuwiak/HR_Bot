@@ -413,6 +413,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     elif query.data == "weeek_create_task_menu":
+        chat_id = query.message.chat.id
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
         await show_weeek_create_task_menu(query)
         return
     
