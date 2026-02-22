@@ -118,8 +118,8 @@ Railway Project: HR2137-Bot
 └── Service 3: Frontend (AnythingLLM)
     ├── Dockerfile: frontend/Dockerfile
     ├── Port: 3001
-    └── URL: frontend-production.up.railway.app (AnythingLLM Web UI)
-    └── В HR_Bot: ANYTHINGLLM_BASE_URL = URL этого сервиса
+    └── URL: https://anastassiya-hr-bot.up.railway.app (AnythingLLM Web UI)
+    └── В HR_Bot: ANYTHINGLLM_BASE_URL=https://anastassiya-hr-bot.up.railway.app
 ```
 
 ## ⚠️ Важные моменты

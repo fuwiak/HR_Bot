@@ -20,7 +20,7 @@ docker run -d -p 3001:3001 -v anythingllm_storage:/app/server/storage --name any
 
 ## Railway
 
-Сервис **Frontend** в Railway настроен на `frontend/Dockerfile` и отдаёт AnythingLLM. В настройках сервиса укажи **Port: 3001** (Settings → Networking). В HR_Bot задай `ANYTHINGLLM_BASE_URL` на публичный URL этого сервиса.
+Сервис **Frontend** в Railway настроен на `frontend/Dockerfile` и отдаёт AnythingLLM. Доступ: **https://anastassiya-hr-bot.up.railway.app**. В настройках сервиса укажи **Port: 3001** (Settings → Networking) и домен `anastassiya-hr-bot.up.railway.app`. В HR_Bot: `ANYTHINGLLM_BASE_URL=https://anastassiya-hr-bot.up.railway.app`.
 
 ## Подробнее
 
