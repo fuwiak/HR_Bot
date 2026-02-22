@@ -1,7 +1,16 @@
 #!/bin/sh
-# 1) Применяет миграции Prisma (создаёт таблицы system_settings, workspace_documents и др.).
-# 2) Копирует custom agent skills в хранилище AnythingLLM.
-# 3) Запускает AnythingLLM.
+# 1) Подставляет OpenRouter в OPENAI_API_* если задан только OPENROUTER_API_KEY.
+# 2) Применяет миграции Prisma (создаёт таблицы system_settings, workspace_documents и др.).
+# 3) Копирует custom agent skills в хранилище AnythingLLM.
+# 4) Запускает AnythingLLM.
+
+# Приоритет OpenRouter: если задан OPENROUTER_API_KEY — всегда подставляем его в OPENAI_API_*
+# (перезаписываем placeholder или пустое значение, чтобы не было 401 от OpenAI)
+if [ -n "${OPENROUTER_API_KEY}" ]; then
+  export OPENAI_API_KEY="${OPENROUTER_API_KEY}"
+  export OPENAI_API_BASE_URL="${OPENAI_API_BASE_URL:-https://openrouter.ai/api/v1}"
+  echo "[entrypoint] Использую OpenRouter: OPENAI_API_KEY и BASE_URL заданы из OPENROUTER_API_KEY"
+fi
 
 # Миграции Prisma — иначе "The table main.system_settings does not exist"
 if [ -f /app/server/package.json ] && [ -d /app/server/prisma ]; then
