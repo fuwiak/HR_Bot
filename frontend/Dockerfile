@@ -7,10 +7,12 @@
 
 FROM mintplexlabs/anythingllm:latest
 
-# Порт и каталог хранилища (обязателен для загрузок, иначе "No direct uploads path found")
+# Порт и каталог хранилища
 ENV SERVER_PORT=3001
 ENV PORT=3001
 ENV STORAGE_DIR=/app/server/storage
+# Чтобы customModels.js не падал при старте (можно переопределить в Railway реальным ключом или использовать OpenRouter в UI)
+ENV OPENAI_API_KEY=sk-placeholder
 
 # Каталог хранилища обязателен; 777 — запись от любого пользователя образа
 RUN mkdir -p /app/server/storage && chmod 777 /app/server/storage

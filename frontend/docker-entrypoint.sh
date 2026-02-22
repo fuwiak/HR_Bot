@@ -13,8 +13,10 @@ STORAGE="${STORAGE_DIR:-/app/server/storage}"
 SKILLS_DEST="${STORAGE}/plugins/agent-skills"
 SKILLS_SRC="/app/skills-bundle"
 
+# Каталоги, которые AnythingLLM ожидает (иначе "No direct uploads path found")
+mkdir -p "${STORAGE}/direct-uploads" "${STORAGE}/documents" "${SKILLS_DEST}"
+
 echo "[entrypoint] Копирую custom agent skills из ${SKILLS_SRC} в ${SKILLS_DEST}"
-mkdir -p "${SKILLS_DEST}"
 
 if [ -d "${SKILLS_SRC}" ]; then
   cp -r "${SKILLS_SRC}/." "${SKILLS_DEST}/"

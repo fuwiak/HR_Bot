@@ -72,9 +72,10 @@ Frontend (AnythingLLM) z tego repozytorium jest dostępny pod adresem: **https:/
 | `STORAGE_DIR`   | `/app/server/storage` | нет | Уже задано в Dockerfile; можно не дублировать. |
 | `DISABLE_TELEMETRY` | `true` | нет       | Отключить анонимную телеметрию AnythingLLM. |
 | `WEEEEK_TOKEN`  | `e9b78361-...` | нет    | API-ключ Weeeek — нужен для работы custom agent skill «Weeeek Manager». |
-| `DATABASE_URL`  | —              | нет    | Если задан (PostgreSQL), AnythingLLM использует его; при старте контейнера применяются миграции Prisma (`system_settings`, `workspace_documents` и др.). Без `DATABASE_URL` используется встроенная SQLite. |
+| `DATABASE_URL`  | —              | нет    | Если задан (PostgreSQL), AnythingLLM использует его; при старте контейнера применяются миграции Prisma. Без — встроенная SQLite. |
+| `OPENAI_API_KEY` | —             | нет    | В образе задан placeholder, чтобы приложение не падало при старте. Для использования OpenAI задайте реальный ключ в Railway; при использовании только OpenRouter в UI можно не менять. |
 
-Остальное (LLM, Embedder, векторная БД) настраивается после первого входа через веб-интерфейс AnythingLLM (Settings в приложении).
+Остальное (LLM, Embedder, векторная БД) настраивается после первого входа через веб-интерфейс AnythingLLM (Settings в приложении). В entrypoint создаются каталоги `direct-uploads` и `documents` в хранилище (устраняет ошибку «No direct uploads path found»).
 
 **Ошибка «The table main.system_settings does not exist»:** при старте контейнера entrypoint автоматически запускает `prisma migrate deploy` (или `prisma db push`), создавая нужные таблицы. После обновления образа сделайте **Redeploy** сервиса Frontend.
 
