@@ -24,12 +24,12 @@ COPY plugins/agent-skills/ /app/skills-bundle/
 # ────────────────────────────────────────────────────────────────────────────────
 
 # Entrypoint: копирует скиллы в хранилище и запускает AnythingLLM
+# Запуск через sh — базовый образ может запрещать chmod в /app
 COPY frontend/docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 3001
 
 # В Railway: Settings → Networking → Port = 3001; Variables: PORT=3001, SERVER_PORT=3001.
 # Для сохранения данных: Dashboard → Volumes, mount path /app/server/storage
 
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/app/docker-entrypoint.sh"]
