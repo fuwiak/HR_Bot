@@ -29,20 +29,20 @@ WEB_INTERFACE_PORT = "8081"
 PORT = "8081"
 SECRET_KEY = "required"
 
-# ===================== СЕРВИС 3: Frontend =====================
+# ===================== СЕРВИС 3: Frontend (AnythingLLM) =====================
 [service.frontend]
-name = "Frontend"
-description = "Next.js frontend приложение"
+name = "AnythingLLM"
+description = "AnythingLLM — веб-интерфейс RAG, база знаний, настройка LLM/эмбеддингов"
 dockerfile = "frontend/Dockerfile"
-root_directory = "/"
-port = 3000
+root_directory = "frontend"
+port = 3001
 
-# Переменные окружения
+# Переменные окружения (AnythingLLM)
 [service.frontend.env]
-PORT = "3000"
-NODE_ENV = "production"
-NEXT_PUBLIC_API_URL = "https://backend-service.up.railway.app"
-BACKEND_URL = "https://backend-service.up.railway.app"
+SERVER_PORT = "3001"
+PORT = "3001"
+# Опционально: LLM, Embedder, Vector DB настраиваются в UI AnythingLLM после первого входа
+# DISABLE_TELEMETRY = "true"
 
 # ===================== ОБЩИЕ ПЕРЕМЕННЫЕ =====================
 # Эти переменные можно добавить в Project Variables (доступны всем сервисам)

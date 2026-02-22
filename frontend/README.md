@@ -1,73 +1,28 @@
-# HR2137 Bot Frontend (Next.js)
+# Frontend: AnythingLLM
 
-Frontend приложение для HR2137 Bot, переписанное на Next.js 14 с сохранением всей функциональности.
+**Сервис frontend в этом репозитории — это только AnythingLLM.** Старый Next.js UI для деплоя больше не используется.
 
-## Установка
+## Что здесь
 
-```bash
-npm install
-```
+- **Dockerfile** — собирает образ [AnythingLLM](https://github.com/Mintplex-Labs/anything-llm) (официальный `mintplexlabs/anythingllm`). Веб-интерфейс RAG: настройка LLM (OpenRouter), эмбеддингов, векторной БД, загрузка документов, workspace, чат с базой знаний.
+- **Порт:** 3001 (не 3000).
+- HR_Bot подключается к AnythingLLM по API: см. `docs/ANYTHINGLLM_SETUP.md`.
 
-## Разработка
-
-```bash
-npm run dev
-```
-
-Приложение будет доступно на http://localhost:3000
-
-**Важно**: FastAPI backend должен быть запущен на http://localhost:8081
-
-## Переменные окружения
-
-Создайте файл `.env.local`:
-
-```
-NEXT_PUBLIC_API_URL=http://localhost:8081
-```
-
-## Структура
-
-- `/app` - страницы Next.js (App Router)
-  - `page.tsx` - главная страница
-  - `architecture/page.tsx` - страница архитектуры
-  - `rag/page.tsx` - RAG Dashboard
-- `/components` - React компоненты
-  - `LayoutWrapper.tsx` - общий layout с сайдбаром
-- `/lib` - утилиты и API клиент
-  - `api.ts` - функции для работы с FastAPI backend
-
-## Функциональность
-
-- ✅ Главная страница с демо формами (Email, КП, RAG поиск)
-- ✅ Страница архитектуры системы
-- ✅ Полный RAG Dashboard с табами:
-  - Обзор (статус, быстрые действия)
-  - Векторная БД (информация о коллекции)
-  - Метрики (Precision@K, MRR, Groundedness)
-  - Workflow (загрузка, оценка, анализ)
-  - Файлы (управление документами)
-  - Тест (тестовые запросы к RAG)
-- ✅ Интеграция с FastAPI backend через API клиент
-- ✅ Сохранены все функции оригинального интерфейса
-- ✅ Адаптивный дизайн (Facebook-like UI)
-
-## Технологии
-
-- Next.js 14 (App Router)
-- React 18
-- TypeScript
-- CSS Modules
-
-## Сборка для production
+## Локальный запуск
 
 ```bash
-npm run build
-npm start
+# Из корня репозитория
+docker build -f frontend/Dockerfile -t anythingllm frontend/
+docker run -d -p 3001:3001 -v anythingllm_storage:/app/server/storage --name anythingllm anythingllm
 ```
 
-## ДеплойNext.js приложение можно задеплоить на:
-- Vercel (рекомендуется)
-- Railway
-- Docker
-- Любой Node.js хостинг
+Открой в браузере: **http://localhost:3001**.
+
+## Railway
+
+Сервис **Frontend** в Railway настроен на `frontend/Dockerfile` и отдаёт AnythingLLM. В настройках сервиса укажи **Port: 3001** (Settings → Networking). В HR_Bot задай `ANYTHINGLLM_BASE_URL` на публичный URL этого сервиса.
+
+## Подробнее
+
+- `README_ANYTHINGLLM.md` — кратко про сборку и запуск.
+- `docs/ANYTHINGLLM_SETUP.md` — настройка AnythingLLM и интеграция с HR_Bot.

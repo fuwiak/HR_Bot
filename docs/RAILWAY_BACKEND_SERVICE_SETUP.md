@@ -115,11 +115,11 @@ Railway Project: HR2137-Bot
 │   ├── Port: 8081
 │   └── URL: backend-production.up.railway.app ← Используется Frontend
 │
-└── Service 3: Frontend
+└── Service 3: Frontend (AnythingLLM)
     ├── Dockerfile: frontend/Dockerfile
-    ├── Port: 3000
-    └── URL: frontend-production.up.railway.app
-    └── NEXT_PUBLIC_API_URL → backend-production.up.railway.app
+    ├── Port: 3001
+    └── URL: frontend-production.up.railway.app (AnythingLLM Web UI)
+    └── В HR_Bot: ANYTHINGLLM_BASE_URL = URL этого сервиса
 ```
 
 ## ⚠️ Важные моменты

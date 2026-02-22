@@ -863,11 +863,34 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         use_rag = rag_decision.get("use_rag", False)
         rag_context = ""
         rag_documents = []  # Сохраняем информацию о найденных документах для логирования и RAGAS
+        response = None  # Будет задан либо AnythingLLM, либо openrouter_chat
         
         log.info(f"🔍 [RAG Decision] use_rag={use_rag}, intent={rag_decision.get('intent')}, confidence={rag_decision.get('confidence', 0):.2f}, reason={rag_decision.get('reason')}")
         
-        # Выполняем RAG поиск ТОЛЬКО если use_rag = True
+        # AnythingLLM: при включённом флаге и use_rag — запрос к workspace API вместо Qdrant+OpenRouter
         if use_rag:
+            try:
+                from services.integrations.anythingllm_client import (
+                    use_anythingllm_rag,
+                    is_configured,
+                    chat_with_workspace_env,
+                )
+                if use_anythingllm_rag() and is_configured():
+                    log.info("🔍 [AnythingLLM] Запрос к workspace API")
+                    resp, sources = await chat_with_workspace_env(message=text, history=None)
+                    if resp:
+                        response = resp
+                        rag_documents = [
+                            (s.get("content") or s.get("text") or "")
+                            for s in (sources or [])
+                            if isinstance(s, dict)
+                        ]
+                        log.info(f"✅ [AnythingLLM] Ответ получен, источников: {len(rag_documents)}")
+            except Exception as e:
+                log.warning("⚠️ [AnythingLLM] Ошибка: %s, fallback на Qdrant+OpenRouter", e)
+        
+        # Выполняем RAG поиск (Qdrant) и LLM только если ответ ещё не получен от AnythingLLM
+        if response is None and use_rag:
             log.info(f"🔍 [RAG] Запрос требует поиска в базе знаний: '{text[:100]}'")
             try:
                 from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
@@ -949,16 +972,18 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 log.warning(f"⚠️ Ошибка RAG поиска: {e}")
                 import traceback
                 log.debug(traceback.format_exc())
-        else:
+        elif not use_rag:
             log.info(f"ℹ️ [RAG] Запрос не требует поиска в базе знаний (приветствие/простой вопрос): '{text[:100]}'")
         
-        # Формируем промпт с подстановкой переменных
-        system_prompt = CHAT_PROMPT
-        
-        # Подставляем RAG контекст и инструкции (если есть)
-        if rag_context:
-            # Если есть RAG контекст - добавляем инструкции по использованию базы знаний
-            rag_instructions = """КРИТИЧЕСКИ ВАЖНО - ИСПОЛЬЗОВАНИЕ БАЗЫ ЗНАНИЙ:
+        # Генерация ответа через LLM только если ответ ещё не получен (например от AnythingLLM)
+        if response is None:
+            # Формируем промпт с подстановкой переменных
+            system_prompt = CHAT_PROMPT
+            
+            # Подставляем RAG контекст и инструкции (если есть)
+            if rag_context:
+                # Если есть RAG контекст - добавляем инструкции по использованию базы знаний
+                rag_instructions = """КРИТИЧЕСКИ ВАЖНО - ИСПОЛЬЗОВАНИЕ БАЗЫ ЗНАНИЙ:
 - ✅ ВСЕГДА используй информацию из базы знаний (RAG), если она предоставлена ниже
 - ✅ Отвечай на основе предоставленной информации из базы знаний
 - ✅ Если информация из базы знаний релевантна - используй её в первую очередь
@@ -968,7 +993,7 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 - ❌ НИКОГДА не давай формальные инструкции типа "Уточните, пожалуйста..." с примерами
 
 """
-            rag_instructions_consulting = """ВАЖНО:
+                rag_instructions_consulting = """ВАЖНО:
 - Всегда используй информацию из базы знаний (RAG) если она предоставлена
 - Не выдумывай кейсы или методики
 - Если нужно что-то уточнить - задай простой вопрос естественным языком, БЕЗ примеров и инструкций
@@ -979,73 +1004,73 @@ async def reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Релевантная информация из базы знаний:
 """
-            final_instruction = "Ответь по делу, используя информацию из базы знаний (если она предоставлена выше). КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй 'вы' (вас, вам, ваш, ваша), НИКОГДА не используй 'ты'. ВСЕГДА используй ЖЕНСКУЮ форму глаголов (работала, сделала, помогла, подготовила, готова, рада и т.д.). НЕ используй Markdown форматирование! НЕ используй слово 'Пример'! Задавай вопросы естественно, без инструкций."
-            final_instruction_consulting = "Ответь по делу, используя информацию из базы знаний. КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй 'вы' (вас, вам, ваш, ваша), НИКОГДА не используй 'ты'. ВСЕГДА используй ЖЕНСКУЮ форму глаголов (работала, сделала, помогла, подготовила, готова, рада и т.д.). НЕ используй Markdown форматирование! НЕ используй слово 'Пример'! Задавай вопросы естественно, без инструкций."
+                final_instruction = "Ответь по делу, используя информацию из базы знаний (если она предоставлена выше). КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй 'вы' (вас, вам, ваш, ваша), НИКОГДА не используй 'ты'. ВСЕГДА используй ЖЕНСКУЮ форму глаголов (работала, сделала, помогла, подготовила, готова, рада и т.д.). НЕ используй Markdown форматирование! НЕ используй слово 'Пример'! Задавай вопросы естественно, без инструкций."
+                final_instruction_consulting = "Ответь по делу, используя информацию из базы знаний. КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй 'вы' (вас, вам, ваш, ваша), НИКОГДА не используй 'ты'. ВСЕГДА используй ЖЕНСКУЮ форму глаголов (работала, сделала, помогла, подготовила, готова, рада и т.д.). НЕ используй Markdown форматирование! НЕ используй слово 'Пример'! Задавай вопросы естественно, без инструкций."
+                
+                system_prompt = system_prompt.replace("{{rag_instructions}}", rag_instructions)
+                system_prompt = system_prompt.replace("{{rag_instructions_consulting}}", rag_instructions_consulting)
+                system_prompt = system_prompt.replace("{{rag_context}}", rag_context)
+                system_prompt = system_prompt.replace("{{final_instruction}}", final_instruction)
+                system_prompt = system_prompt.replace("{{final_instruction_consulting}}", final_instruction_consulting)
+            else:
+                # Если RAG контекста нет - убираем все упоминания базы знаний
+                system_prompt = system_prompt.replace("{{rag_instructions}}", "")
+                system_prompt = system_prompt.replace("{{rag_instructions_consulting}}", "ВАЖНО:\n- Не выдумывай кейсы или методики\n- Если нужно что-то уточнить - задай простой вопрос естественным языком, БЕЗ примеров и инструкций\n- НИКОГДА не используй слово 'Пример' в ответах\n- НИКОГДА не давай формальные инструкции типа 'Уточните, пожалуйста...' с примерами\n- КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй 'вы' (вас, вам, ваш, ваша), НИКОГДА не используй 'ты'\n- КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй ЖЕНСКУЮ форму глаголов (работала, сделала, помогла, подготовила, готова, рада и т.д.)\n\n")
+                system_prompt = system_prompt.replace("{{rag_context}}", "")
+                final_instruction = "Ответь по делу, дружелюбно и профессионально. КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй 'вы' (вас, вам, ваш, ваша), НИКОГДА не используй 'ты'. ВСЕГДА используй ЖЕНСКУЮ форму глаголов (работала, сделала, помогла, подготовила, готова, рада и т.д.). НЕ используй Markdown форматирование! НЕ используй слово 'Пример'! Задавай вопросы естественно, без инструкций."
+                system_prompt = system_prompt.replace("{{final_instruction}}", final_instruction)
+                system_prompt = system_prompt.replace("{{final_instruction_consulting}}", final_instruction)
             
-            system_prompt = system_prompt.replace("{{rag_instructions}}", rag_instructions)
-            system_prompt = system_prompt.replace("{{rag_instructions_consulting}}", rag_instructions_consulting)
-            system_prompt = system_prompt.replace("{{rag_context}}", rag_context)
-            system_prompt = system_prompt.replace("{{final_instruction}}", final_instruction)
-            system_prompt = system_prompt.replace("{{final_instruction_consulting}}", final_instruction_consulting)
-        else:
-            # Если RAG контекста нет - убираем все упоминания базы знаний
-            system_prompt = system_prompt.replace("{{rag_instructions}}", "")
-            system_prompt = system_prompt.replace("{{rag_instructions_consulting}}", "ВАЖНО:\n- Не выдумывай кейсы или методики\n- Если нужно что-то уточнить - задай простой вопрос естественным языком, БЕЗ примеров и инструкций\n- НИКОГДА не используй слово 'Пример' в ответах\n- НИКОГДА не давай формальные инструкции типа 'Уточните, пожалуйста...' с примерами\n- КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй 'вы' (вас, вам, ваш, ваша), НИКОГДА не используй 'ты'\n- КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй ЖЕНСКУЮ форму глаголов (работала, сделала, помогла, подготовила, готова, рада и т.д.)\n\n")
-            system_prompt = system_prompt.replace("{{rag_context}}", "")
-            final_instruction = "Ответь по делу, дружелюбно и профессионально. КРИТИЧЕСКИ ВАЖНО: ВСЕГДА используй 'вы' (вас, вам, ваш, ваша), НИКОГДА не используй 'ты'. ВСЕГДА используй ЖЕНСКУЮ форму глаголов (работала, сделала, помогла, подготовила, готова, рада и т.д.). НЕ используй Markdown форматирование! НЕ используй слово 'Пример'! Задавай вопросы естественно, без инструкций."
-            system_prompt = system_prompt.replace("{{final_instruction}}", final_instruction)
-            system_prompt = system_prompt.replace("{{final_instruction_consulting}}", final_instruction)
-        
-        # Подставляем историю
-        history_text = history if history else "Истории разговора нет."
-        system_prompt = system_prompt.replace("{{history}}", history_text)
-        
-        # Подставляем текущее сообщение
-        system_prompt = system_prompt.replace("{{message}}", text)
-        
-        # Формируем сообщения для LLM
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        
-        # Добавляем текущее сообщение как user сообщение (для совместимости)
-        messages.append({"role": "user", "content": text})
-        
-        # Обновляем индикатор перед генерацией ответа (может занять время)
-        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-        
-        # Создаем задачу для периодического обновления typing индикатора во время долгой генерации
-        import asyncio
-        typing_task = None
-        
-        async def keep_typing():
-            """Периодически обновляет typing индикатор каждые 3 секунды"""
-            while True:
-                await asyncio.sleep(3)
-                try:
-                    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-                except Exception:
-                    break
-        
-        # Запускаем задачу обновления typing
-        typing_task = asyncio.create_task(keep_typing())
-        
-        try:
-        # Получаем ответ от LLM
-            log.info(f"🤖 Генерация ответа для пользователя {user_id}...")
-            if rag_context and rag_documents:
-                log.info(f"📝 [RAG Response] Используется RAG контекст из {len(rag_documents)} документов")
-                log.info(f"📝 [RAG Response] Размер контекста: {len(rag_context)} символов")
-            response = await openrouter_chat(messages, use_system_message=False)
-            log.info(f"✅ Ответ сгенерирован: {response[:100] if response else 'None'}...")
-        finally:
-            # Останавливаем задачу обновления typing
-            if typing_task:
-                typing_task.cancel()
-                try:
-                    await typing_task
-                except asyncio.CancelledError:
-                    pass
+            # Подставляем историю
+            history_text = history if history else "Истории разговора нет."
+            system_prompt = system_prompt.replace("{{history}}", history_text)
+            
+            # Подставляем текущее сообщение
+            system_prompt = system_prompt.replace("{{message}}", text)
+            
+            # Формируем сообщения для LLM
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            
+            # Добавляем текущее сообщение как user сообщение (для совместимости)
+            messages.append({"role": "user", "content": text})
+            
+            # Обновляем индикатор перед генерацией ответа (может занять время)
+            await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+            
+            # Создаем задачу для периодического обновления typing индикатора во время долгой генерации
+            import asyncio
+            typing_task = None
+            
+            async def keep_typing():
+                """Периодически обновляет typing индикатор каждые 3 секунды"""
+                while True:
+                    await asyncio.sleep(3)
+                    try:
+                        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+                    except Exception:
+                        break
+            
+            # Запускаем задачу обновления typing
+            typing_task = asyncio.create_task(keep_typing())
+            
+            try:
+                # Получаем ответ от LLM
+                log.info(f"🤖 Генерация ответа для пользователя {user_id}...")
+                if rag_context and rag_documents:
+                    log.info(f"📝 [RAG Response] Используется RAG контекст из {len(rag_documents)} документов")
+                    log.info(f"📝 [RAG Response] Размер контекста: {len(rag_context)} символов")
+                response = await openrouter_chat(messages, use_system_message=False)
+                log.info(f"✅ Ответ сгенерирован: {response[:100] if response else 'None'}...")
+            finally:
+                # Останавливаем задачу обновления typing
+                if typing_task:
+                    typing_task.cancel()
+                    try:
+                        await typing_task
+                    except asyncio.CancelledError:
+                        pass
         
         # Обновляем индикатор перед отправкой ответа
         await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)

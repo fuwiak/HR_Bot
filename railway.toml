@@ -4,7 +4,7 @@
 # Railway использует файлы в .railway/ для каждого сервиса:
 #   - .railway/telegram-bot.toml → Dockerfile (главный)
 #   - .railway/backend.toml → Dockerfile.backend
-#   - .railway/frontend.toml → frontend/Dockerfile
+#   - .railway/frontend.toml → frontend/Dockerfile (AnythingLLM, порт 3001)
 #   - .railway/yadisk-indexer.toml → Dockerfile.yadisk
 #
 # При создании нового сервиса Railway будет использовать конфигурацию из .railway/*.toml

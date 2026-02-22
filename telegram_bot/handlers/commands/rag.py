@@ -31,6 +31,34 @@ async def rag_search_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         await update.message.reply_text(f"🔍 Ищу в базе знаний: *{query}*...", parse_mode='Markdown')
         
+        # AnythingLLM: при включённом флаге — один вызов к workspace API
+        try:
+            from services.integrations.anythingllm_client import (
+                use_anythingllm_rag,
+                is_configured,
+                chat_with_workspace_env,
+            )
+            if use_anythingllm_rag() and is_configured():
+                log.info("🔍 [AnythingLLM] /rag_search через workspace API")
+                answer, sources_list = await chat_with_workspace_env(message=query, history=None)
+                if answer:
+                    answer_clean = remove_markdown(answer)
+                    text_out = f"🔍 Результаты поиска: {query}\n\n💡 Ответ на основе документов:\n\n{answer_clean}"
+                    if sources_list:
+                        text_out += "\n\n📚 Источники:\n\n"
+                        for i, s in enumerate(sources_list[:5], 1):
+                            content = (s.get("content") or s.get("text") or str(s))[:200]
+                            text_out += f"{i}. {content}...\n\n"
+                    if len(text_out) > 4000:
+                        parts = [text_out[i:i+4000] for i in range(0, len(text_out), 4000)]
+                        for part in parts:
+                            await update.message.reply_text(part)
+                    else:
+                        await update.message.reply_text(text_out)
+                    return
+        except Exception as e:
+            log.warning("⚠️ [AnythingLLM] /rag_search ошибка: %s, fallback на Qdrant", e)
+        
         from services.rag.qdrant_helper import get_qdrant_client, generate_embedding_async
         from services.helpers.llm_helper import generate_with_fallback
         

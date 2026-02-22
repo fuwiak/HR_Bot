@@ -515,6 +515,38 @@ async def rag_query(request_data: dict):
     top_k = request_data.get("top_k", 5)
     min_score = request_data.get("min_score", None)
     
+    # AnythingLLM: при включённом флаге — запрос к workspace API вместо RAGChain
+    try:
+        from services.integrations.anythingllm_client import (
+            use_anythingllm_rag,
+            is_configured,
+            chat_with_workspace_env,
+        )
+        if use_anythingllm_rag() and is_configured():
+            log.info("🔍 [AnythingLLM] /rag/query через workspace API")
+            answer, sources_list = await chat_with_workspace_env(message=user_query, history=None)
+            sources = [
+                s.get("content") or s.get("text") or str(s)
+                for s in (sources_list or [])
+                if isinstance(s, dict)
+            ]
+            return JSONResponse({
+                "status": "success",
+                "query": user_query,
+                "answer": answer or "",
+                "sources": sources,
+                "context_count": len(sources),
+                "provider": "anythingllm",
+                "model": "",
+                "confidence": 0.0,
+                "tokens_used": 0,
+                "error": None,
+                "method": "anythingllm",
+                "timestamp": datetime.now().isoformat()
+            })
+    except Exception as anythingllm_err:
+        log.warning("⚠️ [AnythingLLM] /rag/query ошибка: %s, fallback на RAGChain", anythingllm_err)
+    
     try:
         rag = get_rag_chain()
         if not rag:

@@ -1,51 +1,16 @@
-# Dockerfile для Frontend (Next.js) сервиса
-FROM node:18-alpine AS base
+# Dockerfile для AnythingLLM — веб-интерфейс RAG и базы знаний.
+# Старый Next.js UI больше не используется; frontend-сервис отдаёт только AnythingLLM.
+# Официальный образ: https://hub.docker.com/r/mintplexlabs/anythingllm
 
-# Install dependencies only when needed
-FROM base AS deps
-RUN apk add --no-cache libc6-compat
-WORKDIR /app
+FROM mintplexlabs/anythingllm:latest
 
-# Copy package files
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci
+# AnythingLLM слушает порт 3001 (по умолчанию в образе)
+ENV SERVER_PORT=3001
+ENV STORAGE_DIR=/app/server/storage
 
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-# Copy all frontend source files
-COPY frontend/ .
+EXPOSE 3001
 
-# Set environment variable for build
-ENV NEXT_TELEMETRY_DISABLED=1
+# Том для сохранения данных между перезапусками (при монтировании в Railway/хост)
+VOLUME /app/server/storage
 
-# Build Next.js (standalone output)
-RUN npm run build
-
-# Production image, copy all the files and run next
-FROM base AS runner
-WORKDIR /app
-
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
-
-# Copy built application from standalone output
-# Next.js standalone включает все необходимое в .next/standalone
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-# Copy public folder (created if it doesn't exist)
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-
-USER nextjs
-
-EXPOSE 3000
-
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-
-# Next.js standalone mode - запускаем server.js из корня standalone
-CMD ["node", "server.js"]
+# CMD наследуется из базового образа

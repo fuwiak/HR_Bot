@@ -1,3 +1,4 @@
+# Сервис Frontend = AnythingLLM (не Next.js). Порт 3001.
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "frontend/Dockerfile"
@@ -6,3 +7,4 @@ dockerfilePath = "frontend/Dockerfile"
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
+# В Railway Dashboard → Settings → Networking укажи Port: 3001

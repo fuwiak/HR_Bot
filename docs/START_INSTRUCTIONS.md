@@ -1,4 +1,4 @@
-# Инструкция по запуску Backend и Frontend
+# Инструкция по запуску Backend и AnythingLLM (Frontend)
 
 ## Запуск в 2 отдельных терминалах
 
@@ -11,14 +11,17 @@ python web_interface.py
 
 Backend будет доступен на: http://localhost:8081
 
-### Терминал 2 - Frontend (Next.js)
+### Терминал 2 - Frontend (AnythingLLM)
+
+Сервис Frontend в репозитории — это AnythingLLM (не Next.js). Запуск через Docker:
 
 ```bash
-cd /Users/user/HR_Bot/frontend
-npm run dev
+cd /Users/user/HR_Bot
+docker build -f frontend/Dockerfile -t anythingllm frontend/
+docker run -d -p 3001:3001 -v anythingllm_storage:/app/server/storage --name anythingllm anythingllm
 ```
 
-Frontend будет доступен на: http://localhost:3000
+AnythingLLM будет доступен на: http://localhost:3001
 
 ---
 
@@ -30,10 +33,9 @@ cd /Users/user/HR_Bot
 ./start_backend.sh
 ```
 
-### Терминал 2
+### Терминал 2 (AnythingLLM)
 ```bash
-cd /Users/user/HR_Bot
-./start_frontend.sh
+docker run -d -p 3001:3001 -v anythingllm_storage:/app/server/storage --name anythingllm mintplexlabs/anythingllm
 ```
 
 ---
@@ -41,20 +43,14 @@ cd /Users/user/HR_Bot
 ## Проверка работы
 
 - Backend: http://localhost:8081/health
-- Frontend: http://localhost:3000
-- RAG Dashboard: http://localhost:3000/rag
+- AnythingLLM (Web UI RAG): http://localhost:3001
 
 ---
 
 ## Остановка
 
-В каждом терминале нажмите `Ctrl+C`
-
-Или используйте:
-```bash
-pkill -f "web_interface.py"
-pkill -f "next dev"
-```
+- Backend: в терминале `Ctrl+C` или `pkill -f "web_interface.py"`
+- AnythingLLM: `docker stop anythingllm`
 
 
 
