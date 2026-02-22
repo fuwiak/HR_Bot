@@ -122,27 +122,47 @@ function strip(s) {
   return (s || "").trim();
 }
 
+// Префикс всех команд — избегаем пересечения с обычным диалогом
+const PREFIX = /^weeek\s+/i;
+
 // Разбор текста пользователя и вызов нужного действия
 async function handler({ prompt }) {
-  const text = strip(prompt || "");
+  const raw = strip(prompt || "");
   if (!API_KEY) {
     return "Weeeek не настроен: задайте WEEEEK_TOKEN или WEEEK_API_KEY в окружении AnythingLLM.";
   }
 
+  // Все команды должны начинаться с "weeek "
+  if (!PREFIX.test(raw)) {
+    return (
+      "Weeeek Manager. Все команды начинаются с префикса **weeek**.\n\n" +
+      "• weeek info — информация о workspace\n" +
+      "• weeek проекты — список проектов\n" +
+      "• weeek задачи [id] — список задач (опционально: id проекта)\n" +
+      "• weeek задача 123 — информация о задаче\n" +
+      "• weeek добавь задачу: ID | Название — создать задачу\n" +
+      "• weeek создай проект: Название — создать проект\n" +
+      "• weeek заверши задачу: 123 — отметить выполненной\n" +
+      "• weeek возобнови задачу: 123 — снять выполнение\n" +
+      "• weeek удали задачу: 123 — удалить задачу"
+    );
+  }
+
+  const text = strip(raw.replace(PREFIX, ""));
   const lower = text.toLowerCase();
 
   // Инфо workspace
-  if (/^(weeek\s+info|workspace|инфо\s+weeek|информация\s+weeek)$/i.test(lower) || lower === "weeek") {
+  if (/^(info|workspace|инфо)$/i.test(lower) || lower === "") {
     return await getWorkspaceInfo();
   }
 
   // Список проектов
-  if (/^(list\s+projects|проекты|список\s+проектов|покажи\s+проекты|weeek\s+projects)$/i.test(lower)) {
+  if (/^(projects|проекты|список\s+проектов|покажи\s+проекты)$/i.test(lower)) {
     return await getProjects();
   }
 
-  // Список задач (опционально: "задачи 123" или "задачи проекта 123")
-  const tasksMatchList = lower.match(/^(list\s+tasks|задачи|покажи\s+задачи|weeek\s+tasks)(?:\s+(?:проекта\s+)?(\d+))?$/i);
+  // Список задач: "задачи" или "задачи 123" или "tasks 123"
+  const tasksMatchList = lower.match(/^(tasks|задачи|покажи\s+задачи)(?:\s+(?:проекта\s+)?(\d+))?$/i);
   const tasksMatchShort = text.match(/^задачи\s+(\d+)$/i);
   if (tasksMatchList) {
     const projectId = tasksMatchList[2] || null;
@@ -152,27 +172,27 @@ async function handler({ prompt }) {
     return await getTasks(tasksMatchShort[1], false);
   }
 
-  // Одна задача по ID
+  // Одна задача по ID: "задача 456" / "task 456"
   const oneTaskMatch = text.match(/^(?:задача|task)\s+(\d+)$/i);
   if (oneTaskMatch) {
     return await getTask(oneTaskMatch[1]);
   }
 
-  // Добавить задачу: "add task: 123 | Название" или "добавь задачу: 123 | Название" или "create task: 123 | Title"
+  // Добавить задачу: "добавь задачу: 1 | Название" / "add task: 1 | Title"
   const addTaskMatch = text.match(/^(?:add\s+task|create\s+task|добавь\s+задачу|создай\s+задачу)\s*:\s*(.+?)\s*\|\s*(.+)$/i)
     || text.match(/^(?:add\s+task|create\s+task|добавь\s+задачу|создай\s+задачу)\s+(\d+)\s+\|\s*(.+)$/i);
   if (addTaskMatch) {
     const projectId = strip(addTaskMatch[1]);
     const title = strip(addTaskMatch[2]);
-    if (!projectId || !title) return "Укажите ID проекта и название задачи, например: добавь задачу: 1 | Купить молоко";
+    if (!projectId || !title) return "Пример: weeek добавь задачу: 1 | Купить молоко";
     return await createTask(projectId, title, "", "action", null);
   }
 
-  // Создать проект: "create project: Name" / "создай проект: Название"
+  // Создать проект
   const addProjectMatch = text.match(/^(?:create\s+project|создай\s+проект)\s*:\s*(.+)$/i);
   if (addProjectMatch) {
     const name = strip(addProjectMatch[1]);
-    if (!name) return "Укажите название проекта, например: создай проект: Маркетинг";
+    if (!name) return "Пример: weeek создай проект: Маркетинг";
     return await createProject(name, "", false);
   }
 
@@ -198,16 +218,14 @@ async function handler({ prompt }) {
   }
 
   return (
-    "Weeeek Manager. Команды:\n" +
-    "• проекты / list projects — список проектов\n" +
-    "• задачи [project_id] / list tasks — список задач\n" +
-    "• задача 123 — информация о задаче\n" +
-    "• добавь задачу: ID_проекта | Название — создать задачу\n" +
-    "• создай проект: Название — создать проект\n" +
-    "• заверши задачу: ID_задачи — отметить выполненной\n" +
-    "• возобнови задачу: ID_задачи — снять выполнение\n" +
-    "• удали задачу: ID_задачи — удалить задачу\n" +
-    "• weeek info — информация о workspace"
+    "Weeeek Manager. Все команды с префиксом **weeek**:\n" +
+    "• weeek info — информация о workspace\n" +
+    "• weeek проекты — список проектов\n" +
+    "• weeek задачи [id] — список задач\n" +
+    "• weeek задача 123 — информация о задаче\n" +
+    "• weeek добавь задачу: ID | Название — создать задачу\n" +
+    "• weeek создай проект: Название — создать проект\n" +
+    "• weeek заверши задачу: 123 / weeek возобнови задачу: 123 / weeek удали задачу: 123"
   );
 }
 
