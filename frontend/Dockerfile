@@ -10,7 +10,6 @@ ENV STORAGE_DIR=/app/server/storage
 
 EXPOSE 3001
 
-# Том для сохранения данных между перезапусками (при монтировании в Railway/хост)
-VOLUME /app/server/storage
+# Сохранение данных AnythingLLM: в Railway настрой тома в Dashboard → Volumes (mount path: /app/server/storage)
 
 # CMD наследуется из базового образа
