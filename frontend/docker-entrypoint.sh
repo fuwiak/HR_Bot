@@ -4,12 +4,15 @@
 # 3) Копирует custom agent skills в хранилище AnythingLLM.
 # 4) Запускает AnythingLLM.
 
-# Приоритет OpenRouter: если задан OPENROUTER_API_KEY — всегда подставляем его в OPENAI_API_*
-# (перезаписываем placeholder или пустое значение, чтобы не было 401 от OpenAI)
-if [ -n "${OPENROUTER_API_KEY}" ]; then
-  export OPENAI_API_KEY="${OPENROUTER_API_KEY}"
+# OpenAI не используем — только OpenRouter. Убираем placeholder и подставляем ключ OpenRouter.
+case "${OPENAI_API_KEY}" in *[Pp]lace*) export OPENAI_API_KEY="" ;; esac
+ROUTER_KEY="${OPENROUTER_API_KEY:-${OPENROUTER_KEY}}"
+if [ -n "${ROUTER_KEY}" ]; then
+  export OPENAI_API_KEY="${ROUTER_KEY}"
   export OPENAI_API_BASE_URL="${OPENAI_API_BASE_URL:-https://openrouter.ai/api/v1}"
-  echo "[entrypoint] Использую OpenRouter: OPENAI_API_KEY и BASE_URL заданы из OPENROUTER_API_KEY"
+  echo "[entrypoint] OpenRouter: OPENAI_API_KEY и BASE_URL заданы (OpenAI отключён)"
+else
+  echo "[entrypoint] WARNING: Задайте OPENROUTER_API_KEY в Railway (Variables), иначе будет 401."
 fi
 
 # Миграции Prisma — иначе "The table main.system_settings does not exist"
