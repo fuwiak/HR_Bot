@@ -70,6 +70,7 @@ service-account*.json
 !package-lock.json
 !railway.json
 !railway.toml
+!plugins/agent-skills/**/plugin.json
 
 # Logs
 *.log

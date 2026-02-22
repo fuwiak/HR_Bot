@@ -1,0 +1,8 @@
+{
+  "name": "Weeeek Manager",
+  "hubId": "weeek-manager",
+  "description": "Управление проектами и задачами в Weeeek: список проектов и задач, создание задач и проектов, завершение и удаление задач",
+  "version": "1.0.0",
+  "author": "HR_Bot",
+  "entry": "handler.js"
+}

@@ -1,15 +1,35 @@
 # Dockerfile для AnythingLLM — веб-интерфейс RAG и базы знаний.
 # Старый Next.js UI больше не используется; frontend-сервис отдаёт только AnythingLLM.
 # Официальный образ: https://hub.docker.com/r/mintplexlabs/anythingllm
+#
+# Сборка: docker build -f frontend/Dockerfile -t anythingllm .  (из КОРНЯ репозитория!)
+# Railway использует корень репозитория как build context автоматически.
 
 FROM mintplexlabs/anythingllm:latest
 
-# AnythingLLM слушает порт 3001 (по умолчанию в образе)
+# Порт и каталог хранилища (обязателен для загрузок, иначе "No direct uploads path found")
 ENV SERVER_PORT=3001
+ENV PORT=3001
 ENV STORAGE_DIR=/app/server/storage
+
+# Каталог хранилища обязателен; 777 — запись от любого пользователя образа
+RUN mkdir -p /app/server/storage && chmod 777 /app/server/storage
+
+# ── Custom agent skills ────────────────────────────────────────────────────────
+# Копируем скиллы в /app/skills-bundle (ВНЕ volume-каталога STORAGE_DIR),
+# чтобы Railway-volume /app/server/storage не перекрыл их при монтировании.
+# Entrypoint при каждом старте копирует скиллы из /app/skills-bundle → STORAGE_DIR/plugins/agent-skills/.
+# Build context должен быть корень репозитория (Railway делает это автоматически).
+COPY plugins/agent-skills/ /app/skills-bundle/
+# ────────────────────────────────────────────────────────────────────────────────
+
+# Entrypoint: копирует скиллы в хранилище и запускает AnythingLLM
+COPY frontend/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 3001
 
-# Сохранение данных AnythingLLM: в Railway настрой тома в Dashboard → Volumes (mount path: /app/server/storage)
+# В Railway: Settings → Networking → Port = 3001; Variables: PORT=3001, SERVER_PORT=3001.
+# Для сохранения данных: Dashboard → Volumes, mount path /app/server/storage
 
-# CMD наследуется из базового образа
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

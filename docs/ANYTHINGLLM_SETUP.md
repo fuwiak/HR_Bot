@@ -61,7 +61,44 @@ Frontend (AnythingLLM) z tego repozytorium jest dostępny pod adresem: **https:/
 
 В AnythingLLM: **Settings → Developer API** → создайте API ключ. Не публикуйте ключ; он нужен только для сервисов HR_Bot.
 
-## 4. Переменные окружения HR_Bot
+## 4. Переменные окружения сервиса Frontend (AnythingLLM) в Railway
+
+В Railway откройте **сервис Frontend** → **Variables** и задайте:
+
+| Переменная      | Значение   | Обязательно | Описание |
+|-----------------|------------|-------------|----------|
+| `PORT`          | `3001`     | да          | Порт, на котором слушает приложение; должен совпадать с Port в Settings → Networking. |
+| `SERVER_PORT`   | `3001`     | да          | То же для AnythingLLM (читает эту переменную). |
+| `STORAGE_DIR`   | `/app/server/storage` | нет | Уже задано в Dockerfile; можно не дублировать. |
+| `DISABLE_TELEMETRY` | `true` | нет       | Отключить анонимную телеметрию AnythingLLM. |
+| `WEEEEK_TOKEN`  | `e9b78361-...` | нет    | API-ключ Weeeek — нужен для работы custom agent skill «Weeeek Manager». |
+
+Остальное (LLM, Embedder, векторная БД) настраивается после первого входа через веб-интерфейс AnythingLLM (Settings в приложении).
+
+## 4.1. Custom agent skills (Weeeek Manager)
+
+Скилл «Weeeek Manager» встроен прямо в Docker-образ: при каждом запуске контейнера entrypoint автоматически копирует папку скилла из `/app/skills-bundle/weeek-manager/` в `STORAGE_DIR/plugins/agent-skills/weeek-manager/`.
+
+**Что нужно сделать:**
+1. Убедиться, что в переменных сервиса Frontend на Railway задан **`WEEEEK_TOKEN`** (тот же ключ, что у Telegram-бота — `WEEEK_API_KEY`).
+2. После деплоя открыть AnythingLLM UI → **Agents** → найти скилл **«Weeeek Manager»** и включить его.
+3. Если скилл не появился — перезагрузить страницу (F5). Если всё равно нет — проверить логи Railway: должна быть строка `[entrypoint] Скиллы скопированы`.
+
+**Локальная сборка (из корня репозитория):**
+```bash
+docker build -f frontend/Dockerfile -t anythingllm .
+docker run -d -p 3001:3001 \
+  -v anythingllm_storage:/app/server/storage \
+  -e WEEEEK_TOKEN=e9b78361-0705-408a-af49-ca4300b5cf1b \
+  --name anythingllm anythingllm
+```
+⚠️ Важно: `docker build` запускать из **корня** репозитория (`.`), а не из `frontend/`.
+
+**Settings → Networking** для сервиса Frontend: **Port** = **3001**.
+
+---
+
+## 5. Переменные окружения HR_Bot (Telegram/Backend)
 
 Добавьте в окружение Telegram-бота и/или backend (например в Railway → Variables):
 
@@ -79,7 +116,7 @@ ANYTHINGLLM_WORKSPACE_SLUG=hr-bot
 
 Описание переменных также есть в `railway.env.example`.
 
-## 5. Поведение HR_Bot
+## 6. Поведение HR_Bot
 
 - **Ответы в Telegram** (обработчик сообщений): при запросе, для которого классификатор решил использовать RAG (`use_rag=True`), если включён AnythingLLM — запрос уходит в AnythingLLM workspace chat; иначе — поиск в Qdrant и ответ через OpenRouter.
 - **Команда /rag_search**: при включённом AnythingLLM — один вызов к workspace API; иначе — поиск в Qdrant и генерация через `generate_with_fallback`.
@@ -87,11 +124,20 @@ ANYTHINGLLM_WORKSPACE_SLUG=hr-bot
 
 При недоступности AnythingLLM или ошибке API бот автоматически переходит на старый пайплайн (Qdrant + OpenRouter).
 
-## 6. Документы
+## 7. Документы
 
 - Текущую базу в Qdrant можно не переносить: загрузите те же (или обновлённые) документы в workspace AnythingLLM через UI.
 - Если подключаете AnythingLLM к тому же Qdrant — избегайте конфликта имён коллекций; при отдельной БД в AnythingLLM загрузка только через AnythingLLM.
 
-## 7. Проверка API
+## 8. Проверка API
 
 На инстансе AnythingLLM откройте `/api/docs` — там полный список эндпоинтов и форматы запросов/ответов. При изменении формата ответа чата может потребоваться правка `services/integrations/anythingllm_client.py`.
+
+## 9. Ошибка «Application failed to respond» в Railway
+
+Если после деплоя открывается «Application failed to respond» на https://anastassiya-hr-bot.up.railway.app:
+
+1. **Порт** — приложение слушает **3001**. В Railway: сервис Frontend → **Settings → Networking → Port** укажи **3001** (без кавычек). Иначе Railway стучится не на тот порт и считает сервис недоступным.
+2. **Переменные** — в **Variables** сервиса добавь (если ещё нет): `PORT=3001`, `SERVER_PORT=3001`.
+3. **Хранилище** — в логах может быть «No direct uploads path found»: в Dockerfile уже создаётся каталог `/app/server/storage`. Для сохранения данных между деплоями: **Dashboard → сервис Frontend → Volumes** → добавь том с **Mount Path** `/app/server/storage`.
+4. После правок сделай **Redeploy** сервиса.
