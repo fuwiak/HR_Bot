@@ -1,6 +1,13 @@
 #!/bin/sh
-# Этот скрипт копирует custom agent skills в хранилище AnythingLLM при каждом запуске контейнера.
-# Необходимо, потому что Railway монтирует volume на STORAGE_DIR и перекрывает данные, записанные при сборке образа.
+# 1) Применяет миграции Prisma (создаёт таблицы system_settings, workspace_documents и др.).
+# 2) Копирует custom agent skills в хранилище AnythingLLM.
+# 3) Запускает AnythingLLM.
+
+# Миграции Prisma — иначе "The table main.system_settings does not exist"
+if [ -f /app/server/package.json ] && [ -d /app/server/prisma ]; then
+  echo "[entrypoint] Применяю миграции Prisma..."
+  ( cd /app/server && npx prisma migrate deploy ) 2>/dev/null || ( cd /app/server && npx prisma db push ) 2>/dev/null || true
+fi
 
 STORAGE="${STORAGE_DIR:-/app/server/storage}"
 SKILLS_DEST="${STORAGE}/plugins/agent-skills"
