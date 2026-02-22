@@ -1,11 +1,18 @@
 {
   "name": "Weeeek Manager",
   "hubId": "weeek-manager",
-  "description": "Управление проектами и задачами в Weeeek: список проектов и задач, создание задач и проектов, завершение и удаление задач",
+  "description": "Команды для Weeeek (три буквы «e»: weeek — не «week»). Управление проектами и задачами: список проектов и задач, создание задач и проектов, завершение и удаление. Все команды начинаются с префикса weeek.",
   "version": "1.0.0",
   "author": "HR_Bot",
   "entry": "handler.js",
   "active": true,
   "schema": "skill-1.0.0",
-  "imported": true
+  "imported": true,
+  "examples": [
+    {"prompt": "weeek проекты", "call": "{\"prompt\": \"weeek проекты\"}"},
+    {"prompt": "weeek задачи", "call": "{\"prompt\": \"weeek задачи\"}"},
+    {"prompt": "weeek добавь задачу: 1 | Позвонить клиенту", "call": "{\"prompt\": \"weeek добавь задачу: 1 | Позвонить клиенту\"}"},
+    {"prompt": "weeek info", "call": "{\"prompt\": \"weeek info\"}"},
+    {"prompt": "weeek создай проект: Маркетинг", "call": "{\"prompt\": \"weeek создай проект: Маркетинг\"}"}
+  ]
 }
