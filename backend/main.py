@@ -627,12 +627,14 @@ async def get_recent_emails(user_id: str = None, limit: int = 10):
         
         formatted_emails = []
         for email in (emails or []):
+            body = (email.get("body") or email.get("preview") or "")[:4000]
             formatted_emails.append({
                 "id": email.get("id", ""),
                 "subject": email.get("subject", "Без темы"),
                 "from": email.get("from", "Неизвестно"),
                 "date": email.get("date", ""),
-                "preview": email.get("preview", "")[:100] if email.get("preview") else ""
+                "preview": (email.get("preview") or "")[:200],
+                "body": body
             })
         
         # Создаем уведомления для новых писем (если user_id указан)
@@ -655,6 +657,29 @@ async def get_recent_emails(user_id: str = None, limit: int = 10):
             status_code=500,
             content={"error": str(e)}
         )
+
+
+@app.post("/api/email/reply")
+async def send_email_reply(request: Request):
+    """Отправить ответ на письмо (для AnythingLLM Email Manager и др.). Body: to_email, subject, content."""
+    try:
+        body = await request.json()
+        to_email = (body.get("to_email") or body.get("to") or "").strip()
+        subject = (body.get("subject") or body.get("topic") or "").strip()
+        content = (body.get("content") or body.get("body") or body.get("text") or "").strip()
+        if not to_email or not subject:
+            return JSONResponse(status_code=400, content={"error": "Нужны to_email и subject"})
+        if not content:
+            return JSONResponse(status_code=400, content={"error": "Нужен content (текст ответа)"})
+        from services.helpers.email_helper import send_email
+        reply_subject = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+        ok = await send_email(to_email=to_email, subject=reply_subject, body=content, is_html=False)
+        if not ok:
+            return JSONResponse(status_code=500, content={"error": "Не удалось отправить письмо"})
+        return {"ok": True, "message": "Письмо отправлено"}
+    except Exception as e:
+        log.error(f"❌ Ошибка в /api/email/reply: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 if __name__ == "__main__":
