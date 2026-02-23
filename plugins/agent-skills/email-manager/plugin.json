@@ -1,1 +1,61 @@
-{"name":"Email Manager","hubId":"email-manager","description":"Просмотр писем Yandex и ответы на них. Все команды с префиксом mail или письм. Требует HR_BOT_BACKEND_URL в окружении AnythingLLM.","version":"1.0.0","author":"HR_Bot","entry":"handler.js","active":true,"schema":"skill-1.0.0","imported":true,"examples":[{"prompt":"mail письма","call":"{\"prompt\": \"mail письма\"}"},{"prompt":"письмо 1","call":"{\"prompt\": \"mail письмо 1\"}"},{"prompt":"mail ответь на письмо 2: Добрый день, высылаю информацию...","call":"{\"prompt\": \"mail ответь на письмо 2: Добрый день, высылаю информацию...\"}"}]}
+{
+  "name": "Email Manager",
+  "hubId": "email-manager",
+  "description": "Проверка последних N писем в Yandex и ответы на них. Вызов через backend HR_Bot (IMAP). Параметры: action (list | get | reply), limit, email_number, reply_text.",
+  "version": "1.0.0",
+  "author": "HR_Bot",
+  "schema": "skill-1.0.0",
+  "active": true,
+  "imported": true,
+  "setup_args": {
+    "HR_BOT_BACKEND_URL": {
+      "type": "string",
+      "required": true,
+      "input": {
+        "type": "text",
+        "default": "",
+        "placeholder": "https://backend-production-099b.up.railway.app",
+        "hint": "URL бэкенда HR_Bot без слэша в конце (для /api/email/recent и /api/email/reply)"
+      }
+    }
+  },
+  "entrypoint": {
+    "file": "handler.js",
+    "params": {
+      "action": {
+        "description": "Действие: list — список писем, get — показать одно письмо по номеру, reply — отправить ответ",
+        "type": "string"
+      },
+      "limit": {
+        "description": "Сколько последних писем показать в списке (для action=list), по умолчанию 10",
+        "type": "number"
+      },
+      "email_number": {
+        "description": "Номер письма в списке (1 = самое новое). Для action=get и action=reply",
+        "type": "number"
+      },
+      "reply_text": {
+        "description": "Текст ответа на письмо. Для action=reply",
+        "type": "string"
+      }
+    }
+  },
+  "examples": [
+    {
+      "prompt": "Покажи последние 5 писем с Yandex",
+      "call": "{\"action\": \"list\", \"limit\": 5}"
+    },
+    {
+      "prompt": "Проверь последние 10 писем",
+      "call": "{\"action\": \"list\", \"limit\": 10}"
+    },
+    {
+      "prompt": "Покажи письмо номер 1 (последнее)",
+      "call": "{\"action\": \"get\", \"email_number\": 1}"
+    },
+    {
+      "prompt": "Ответь на письмо 2: Добрый день, высылаю информацию по запросу.",
+      "call": "{\"action\": \"reply\", \"email_number\": 2, \"reply_text\": \"Добрый день, высылаю информацию по запросу.\"}"
+    }
+  ]
+}
