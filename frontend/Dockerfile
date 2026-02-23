@@ -7,6 +7,9 @@
 
 FROM mintplexlabs/anythingllm:latest
 
+# Entrypoint должен работать от root, чтобы выставить права на смонтированный Railway volume
+USER root
+
 # Порт и каталог хранилища
 ENV SERVER_PORT=3001
 ENV PORT=3001
@@ -14,8 +17,11 @@ ENV STORAGE_DIR=/app/server/storage
 # Коллектор (документ-процессор) — обязателен для загрузки файлов в RAG
 ENV COLLECTOR_PORT=8888
 
-# Каталог хранилища обязателен; 777 — запись от любого пользователя образа
-RUN mkdir -p /app/server/storage && chmod 777 /app/server/storage
+# gosu — для запуска сервера от пользователя anythingllm после инициализации volume
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends gosu && rm -rf /var/lib/apt/lists/*
+
+# Каталог хранилища обязателен; при монтировании Railway volume права выставляет entrypoint
+RUN mkdir -p /app/server/storage
 # Постоянное хранилище: Railway Volumes (Mount Path: /app/server/storage). См. docs/RAILWAY_ANYTHINGLLM_VOLUME.md
 
 # ── Custom agent skills ────────────────────────────────────────────────────────

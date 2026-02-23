@@ -25,13 +25,16 @@ STORAGE="${STORAGE_DIR:-/app/server/storage}"
 SKILLS_DEST="${STORAGE}/plugins/agent-skills"
 SKILLS_SRC="/app/skills-bundle"
 
-# Каталоги, которые AnythingLLM ожидает (иначе "No direct uploads path found")
+# Каталоги, которые AnythingLLM ожидает (иначе "No direct uploads path found").
+# При монтировании Railway volume каталог приходит без прав на запись — создаём от root и отдаём anythingllm.
 mkdir -p "${STORAGE}/direct-uploads" "${STORAGE}/documents" "${SKILLS_DEST}"
+chown -R anythingllm:anythingllm "${STORAGE}"
 
 echo "[entrypoint] Копирую custom agent skills из ${SKILLS_SRC} в ${SKILLS_DEST}"
 
 if [ -d "${SKILLS_SRC}" ]; then
   cp -r "${SKILLS_SRC}/." "${SKILLS_DEST}/"
+  chown -R anythingllm:anythingllm "${SKILLS_DEST}"
   echo "[entrypoint] Скиллы скопированы:"
   ls "${SKILLS_DEST}"
 else
@@ -43,7 +46,7 @@ COLLECTOR_PORT="${COLLECTOR_PORT:-8888}"
 export COLLECTOR_PORT
 
 if [ -f /app/collector/index.js ]; then
-  node /app/collector/index.js &
+  gosu anythingllm node /app/collector/index.js &
   COLLECTOR_PID=$!
   echo "[entrypoint] Коллектор запущен (pid=${COLLECTOR_PID}, port=${COLLECTOR_PORT})"
 else
@@ -51,4 +54,4 @@ else
 fi
 
 echo "[entrypoint] Запускаю AnythingLLM server..."
-exec node /app/server/index.js
+exec gosu anythingllm node /app/server/index.js
