@@ -619,11 +619,16 @@ async def get_unread_email_count(user_id: str = None):
 
 @app.get("/api/email/recent")
 async def get_recent_emails(user_id: str = None, limit: int = 10):
-    """Получить последние письма"""
+    """Получить последние письма (для AnythingLLM Email Manager и др.). Проверка: curl \"https://ВАШ_BACKEND_URL/api/email/recent?limit=10\" """
+    import os
+    base = (os.getenv("BACKEND_URL") or os.getenv("RAILWAY_PUBLIC_DOMAIN") or "").strip().rstrip("/")
+    curl_hint = f"{base}/api/email/recent?limit={limit}" if base else "https://ВАШ_BACKEND_URL/api/email/recent?limit=10"
+    log.info("[EMAIL_API] GET /api/email/recent limit=%s | curl \"%s\"", limit, curl_hint)
     try:
         from services.helpers.email_helper import check_new_emails
         
         emails = await check_new_emails(since_days=7, limit=limit)
+        log.info("[EMAIL_API] IMAP вернул %s писем (since_days=7)", len(emails) if emails else 0)
         
         formatted_emails = []
         for email in (emails or []):
@@ -647,12 +652,13 @@ async def get_recent_emails(user_id: str = None, limit: int = 10):
                     "action_url": f"/email"
                 })
         
+        log.info("[EMAIL_API] Ответ: count=%s", len(formatted_emails))
         return {
             "emails": formatted_emails,
             "count": len(formatted_emails)
         }
     except Exception as e:
-        log.error(f"❌ Ошибка в /api/email/recent: {e}")
+        log.error("[EMAIL_API] ❌ Ошибка в /api/email/recent: %s", e)
         return JSONResponse(
             status_code=500,
             content={"error": str(e)}

@@ -67,9 +67,9 @@ async def check_new_emails(folder: str = "INBOX", since_days: int = 1, limit: in
         Список словарей с информацией о письмах
     """
     if not YANDEX_EMAIL or not YANDEX_PASSWORD:
-        log.error("❌ YANDEX_EMAIL или YANDEX_PASSWORD не установлены")
+        log.error("[EMAIL_IMAP] ❌ YANDEX_EMAIL или YANDEX_PASSWORD не установлены")
         return []
-    
+    log.info("[EMAIL_IMAP] check_new_emails folder=%s since_days=%s limit=%s", folder, since_days, limit)
     # aiimaplib недоступен в PyPI, всегда используем синхронную версию через asyncio.to_thread
     # Это безопасно, так как операция выполняется в отдельном потоке и не блокирует event loop
     return await asyncio.to_thread(_check_new_emails_sync, folder, since_days, limit)
@@ -79,6 +79,7 @@ def _check_new_emails_sync(folder: str, since_days: int, limit: int) -> List[Dic
     try:
         import imaplib
         
+        log.info("[EMAIL_IMAP] Подключение к %s:%s", YANDEX_IMAP_SERVER, YANDEX_IMAP_PORT)
         imap = imaplib.IMAP4_SSL(YANDEX_IMAP_SERVER, YANDEX_IMAP_PORT)
         imap.login(YANDEX_EMAIL, YANDEX_PASSWORD)
         imap.select(folder)
@@ -88,10 +89,12 @@ def _check_new_emails_sync(folder: str, since_days: int, limit: int) -> List[Dic
         status, messages = imap.search(None, "SINCE", date_since)
         
         if status != "OK":
+            log.warning("[EMAIL_IMAP] IMAP search status != OK: %s", status)
             imap.logout()
             return []
         
         email_ids = messages[0].split()
+        log.info("[EMAIL_IMAP] SINCE %s: найдено id писем: %s, берём до limit=%s", date_since, len(email_ids), limit)
         emails = []
         
         # Берем последние N писем (самые новые) и разворачиваем, чтобы самое новое было первым
@@ -105,9 +108,10 @@ def _check_new_emails_sync(folder: str, since_days: int, limit: int) -> List[Dic
                 emails.append(_parse_email(email_message, email_id.decode()))
         
         imap.logout()
+        log.info("[EMAIL_IMAP] Успех: возвращаем %s писем", len(emails))
         return emails  # Теперь самое новое письмо первое в списке
     except Exception as e:
-        log.error(f"❌ Ошибка чтения email (sync): {e}")
+        log.error("[EMAIL_IMAP] ❌ Ошибка чтения email (sync): %s", e)
         return []
 
 def _safe_decode(data: bytes, charset: str = None) -> str:
