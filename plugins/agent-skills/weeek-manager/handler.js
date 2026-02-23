@@ -42,21 +42,14 @@ async function getWorkspaceInfo() {
   return `Weeeek Workspace: ${ws.title || ws.name || "—"} (ID: ${ws.id}).`;
 }
 
-// GET /tm/projects — список проектов (команда: weeek проекты)
-// API: https://api.weeek.net/public/v1/tm/projects, ответ: { success, projects: [{ id, name, description, status, ... }] }
+// GET /tm/projects — список проектов (команда: weeek проекты). Только названия, без LLM.
+// Эквивалент: curl -H "Authorization: Bearer $WEEEEK_TOKEN" https://api.weeek.net/public/v1/tm/projects
 async function getProjects() {
   const r = await request("GET", "/tm/projects");
   if (!r.ok) return `Ошибка Weeeek: ${r.status}. ${r.text || ""}`;
   const list = r.data?.projects || [];
   if (!list.length) return "Проектов пока нет.";
-  const total = r.data?.total ?? list.length;
-  const lines = list.map((p) => {
-    const name = p.name || p.title || "—";
-    const desc = p.description ? `\n  ${String(p.description).trim()}` : "";
-    const status = p.status != null ? (p.status === "active" || p.status === 1 ? " (активен)" : " (завершён)") : "";
-    return `• ${p.id}: ${name}${status}${desc}`;
-  });
-  return `Проекты (всего ${total}):\n${lines.join("\n")}`;
+  return "Проекты:\n" + list.map((p) => `• ${p.id}: ${p.name || p.title || "—"}`).join("\n");
 }
 
 async function getTasks(projectId = null, completed = false) {
