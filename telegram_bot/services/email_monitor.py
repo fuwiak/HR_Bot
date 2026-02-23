@@ -280,6 +280,13 @@ async def email_monitor_task(bot):
                 from_addr = email_data.get("from", "Неизвестно")
                 date_str = email_data.get("date", "")
                 
+                # Сразу пропускаем, если это письмо уже обрабатывали (в т.ч. как "слишком старое") — не спамим лог
+                if email_id and email_id in processed_email_ids:
+                    if not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
+                        log.info(f"⏭️  Письмо ID={email_id} уже в обработанных, пропускаю")
+                    await asyncio.sleep(email_check_interval)
+                    continue
+                
                 if not SUPPRESS_VERBOSE_EMAIL_MONITOR_LOGS:
                     log.info(f"📧 Найдено письмо: ID={email_id}, От={from_addr}, Тема={subject[:50]}")
                     log.info(f"📋 Обработано писем в памяти: {len(processed_email_ids)}")
@@ -308,10 +315,9 @@ async def email_monitor_task(bot):
                         log.info(f"⏰ Возраст письма: {age_hours:.2f} часов")
                     
                     if age_hours > EMAIL_MAX_AGE_HOURS:
-                        log.info(f"⏭️  Письмо слишком старое ({age_hours:.2f} часов > {EMAIL_MAX_AGE_HOURS} часов), пропускаю")
-                        # Помечаем как обработанное, чтобы не проверять его снова
                         if email_id:
                             processed_email_ids.add(email_id)
+                        log.info(f"⏭️  Письмо слишком старое ({age_hours:.2f} ч > {EMAIL_MAX_AGE_HOURS} ч), добавлено в обработанные, пропускаю")
                         continue
                 else:
                     # Если дату не удалось распарсить, все равно проверяем по ID
