@@ -30,6 +30,9 @@ PORT = "8081"
 SECRET_KEY = "required"
 
 # ===================== СЕРВИС 3: Frontend (AnythingLLM) =====================
+# Обязательно: в Railway Dashboard → сервис Frontend → Volumes → добавить том
+# с Mount Path: /app/server/storage (иначе после каждого деплоя теряются workspace, пароль, анкета).
+# См. docs/RAILWAY_ANYTHINGLLM_VOLUME.md
 [service.frontend]
 name = "AnythingLLM"
 description = "AnythingLLM — веб-интерфейс RAG, база знаний, настройка LLM/эмбеддингов"

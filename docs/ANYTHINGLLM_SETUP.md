@@ -26,6 +26,8 @@ Szczegóły: [AnythingLLM Docker Quickstart](https://docs.anythingllm.com/instal
 
 Frontend (AnythingLLM) z tego repozytorium jest dostępny pod adresem: **https://anastassiya-hr-bot.up.railway.app**. W Railway dla serwisu Frontend ustaw w Settings → Networking port 3001 i domenę `anastassiya-hr-bot.up.railway.app`. W HR_Bot: `ANYTHINGLLM_BASE_URL=https://anastassiya-hr-bot.up.railway.app`.
 
+**⚠️ Важно: чтобы после каждого коммита/деплоя не сбрасывались workspace, пароль и анкета** — для сервиса Frontend **обязательно** добавьте **Volume** с **Mount Path** `/app/server/storage`. Подробно: **[RAILWAY_ANYTHINGLLM_VOLUME.md](RAILWAY_ANYTHINGLLM_VOLUME.md)**.
+
 ---
 
 ## Когда использовать
@@ -47,6 +49,7 @@ Frontend (AnythingLLM) z tego repozytorium jest dostępny pod adresem: **https:/
   Интерфейс: **http://localhost:3001**.
 
 - **Railway**: сервис Frontend настроен на `frontend/Dockerfile` и порт 3001. AnythingLLM Web UI доступен по адресу: **https://anastassiya-hr-bot.up.railway.app** — в Railway для сервиса Frontend укажите в Settings → Networking домен `anastassiya-hr-bot.up.railway.app` (или добавьте custom domain).
+  - **Чтобы данные (workspace, пароль, анкета) не пропадали после каждого деплоя:** в сервисе Frontend добавьте **Volume** с **Mount Path** `/app/server/storage`. См. [RAILWAY_ANYTHINGLLM_VOLUME.md](RAILWAY_ANYTHINGLLM_VOLUME.md).
 
 После развёртывания откройте веб-интерфейс: **https://anastassiya-hr-bot.up.railway.app**.
 

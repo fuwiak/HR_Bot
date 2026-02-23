@@ -17,6 +17,11 @@ ENV COLLECTOR_PORT=8888
 # Каталог хранилища обязателен; 777 — запись от любого пользователя образа
 RUN mkdir -p /app/server/storage && chmod 777 /app/server/storage
 
+# Точка монтирования для постоянного хранилища (workspace, пароль, документы).
+# Локально: docker run -v anythingllm_storage:/app/server/storage ...
+# Railway: Dashboard → Frontend → Volumes → Mount Path: /app/server/storage
+VOLUME /app/server/storage
+
 # ── Custom agent skills ────────────────────────────────────────────────────────
 # Копируем скиллы в /app/skills-bundle (ВНЕ volume-каталога STORAGE_DIR),
 # чтобы Railway-volume /app/server/storage не перекрыл их при монтировании.
@@ -33,6 +38,8 @@ EXPOSE 3001
 EXPOSE 8888
 
 # В Railway: Settings → Networking → Port = 3001; Variables: PORT=3001, SERVER_PORT=3001.
-# Для сохранения данных: Dashboard → Volumes, mount path /app/server/storage
+# ОБЯЗАТЕЛЬНО для сохранения данных между деплоями: Dashboard → сервис Frontend → Volumes
+# → Add Volume → Mount Path: /app/server/storage (иначе после каждого коммита сбрасываются workspace, пароль, анкета).
+# См. docs/RAILWAY_ANYTHINGLLM_VOLUME.md
 
 ENTRYPOINT ["/bin/sh", "/app/docker-entrypoint.sh"]
