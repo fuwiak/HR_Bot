@@ -20,9 +20,15 @@
 
 3. В UI AnythingLLM включите скилл **«Weeeek Manager»** в настройках агента.
 
-4. **Если агент «исправляет» weeek на week** или не вызывает скилл: в настройках агента (Agent → System Prompt / Instructions) добавьте: *«Сообщения, начинающиеся с weeek (три буквы e — бренд Weeeek), всегда обрабатывай через скилл Weeeek Manager. Не исправляй weeek на week.»* Затем перезагрузите страницу или новую сессию (`/exit`).
+4. **Чтобы агент вызывал скилл, а не отвечал сам:** в AnythingLLM откройте **Workspace → Agent** (или настройки агента) → поле **System Prompt** / **Instructions** и вставьте блок ниже. Тогда при любом сообщении, начинающемся с `weeek`, агент будет вызывать скилл Weeeek Manager, а не отвечать от себя.
 
 5. При необходимости перезагрузите страницу или завершите сессию (`/exit`) и начните новую.
+
+### Готовый System Prompt для агента (скопируйте в AnythingLLM)
+
+```
+When the user message starts with "weeek" (three letters e — the Weeeek service name, not "week"), you MUST call the skill "Weeeek Manager" and pass the full user message as the prompt. Return the skill result to the user. Do not answer from your own knowledge and do not correct "weeek" to "week". Examples: "weeek проекты", "weeek задачи", "weeek добавь задачу: 1 | Title" — always invoke Weeeek Manager skill.
+```
 
 ## Как писать команды (пошагово)
 
@@ -82,6 +88,8 @@
 ---
 
 ## Сводка команд (префикс weeek обязателен)
+
+Команда **`weeek проекты`** вызывает API: **GET** `https://api.weeek.net/public/v1/tm/projects` (ответ: `{ success, projects: [{ id, name, ... }] }`).
 
 | Действие | Что ввести в чат |
 |----------|------------------|

@@ -42,6 +42,8 @@ async function getWorkspaceInfo() {
   return `Weeeek Workspace: ${ws.title || ws.name || "—"} (ID: ${ws.id}).`;
 }
 
+// GET /tm/projects — список проектов (команда: weeek проекты)
+// API: https://api.weeek.net/public/v1/tm/projects, ответ: { success, projects: [{ id, name, ... }] }
 async function getProjects() {
   const r = await request("GET", "/tm/projects");
   if (!r.ok) return `Ошибка Weeeek: ${r.status}. ${r.text || ""}`;
