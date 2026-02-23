@@ -351,7 +351,10 @@ async def rag_evaluate():
 async def rag_load_pdf(file: UploadFile = File(...)):
     """Загрузка PDF файла в RAG базу знаний"""
     if not RAG_AVAILABLE:
-        raise HTTPException(status_code=503, detail="RAG система недоступна")
+        raise HTTPException(
+            status_code=503,
+            detail="Процессор документов недоступен. Мы не можем загрузить ваши файлы, так как процессор документов недоступен. Пожалуйста, попробуйте позже.",
+        )
     
     from pathlib import Path
     from load_pdf import load_pdf

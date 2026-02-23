@@ -111,7 +111,16 @@ export async function loadPDF(file: File) {
   });
 
   if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
+    let message = `HTTP error! status: ${response.status}`;
+    try {
+      const body = await response.json();
+      if (body?.detail) {
+        message = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
   }
 
   return response.json();
