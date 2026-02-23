@@ -4,6 +4,7 @@
 import os
 import sys
 import logging
+import time
 from contextlib import asynccontextmanager
 
 # Добавляем корневую директорию в path
@@ -13,6 +14,31 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from datetime import datetime
+
+# CollectorApi: проверка здоровья сервиса коллектора на 127.0.0.1 (избегаем IPv6)
+COLLECTOR_PORT = int(os.getenv("COLLECTOR_PORT", "8888"))
+COLLECTOR_HOST = "127.0.0.1"
+
+
+def _collector_health_check() -> bool:
+    """Проверяет доступность коллектора по HTTP. Возвращает True если 200 OK."""
+    try:
+        import urllib.request
+        url = f"http://{COLLECTOR_HOST}:{COLLECTOR_PORT}"
+        t0 = time.perf_counter()
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            elapsed_ms = int((time.perf_counter() - t0) * 1000)
+            log.info(
+                "[CollectorApi] Collector health check response: %s %s (%dms)",
+                resp.status,
+                "OK" if resp.status == 200 else "",
+                elapsed_ms,
+            )
+            return resp.status == 200
+    except Exception as e:
+        log.warning("[CollectorApi] Collector health check failed: %s", e)
+        return False
 
 # Настройка логирования
 logging.basicConfig(
@@ -28,6 +54,20 @@ async def lifespan(app: FastAPI):
     """Lifecycle менеджер приложения"""
     # Startup
     log.info("🚀 Запуск HR Bot Backend...")
+
+    # CollectorApi: проверка коллектора (127.0.0.1 для избежания IPv6)
+    collector_url = f"http://{COLLECTOR_HOST}:{COLLECTOR_PORT}"
+    log.info("[CollectorApi] Checking collector health at: %s", collector_url)
+    log.info("[CollectorApi] CollectorApi initialized")
+    log.info("[CollectorApi]   Endpoint: %s", collector_url)
+    log.info("[CollectorApi]   Host: %s (NODE_ENV=%s, RUNTIME=%s)", COLLECTOR_HOST, os.getenv("NODE_ENV", ""), os.getenv("RUNTIME", ""))
+    log.info("[CollectorApi]   Port: %s (COLLECTOR_PORT=%s)", COLLECTOR_PORT, os.getenv("COLLECTOR_PORT", str(COLLECTOR_PORT)))
+    log.info("[CollectorApi]   Note: Using 127.0.0.1 (IPv4) to avoid IPv6 resolution issues with localhost")
+    log.info("[CollectorApi] Checking collector health at: %s", collector_url)
+    if _collector_health_check():
+        log.info("[CollectorApi] ✓ Collector is online and responding")
+    else:
+        log.warning("[CollectorApi] Collector is not responding")
     
     # Инициализация базы данных
     try:
