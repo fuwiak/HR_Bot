@@ -78,12 +78,27 @@ async def email_draft_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     try:
-        from lead_processor import generate_proposal
-        
         await update.message.reply_text("⏳ Готовлю черновик ответа на письмо...")
         
-        # Генерируем ответ используя generate_proposal
-        draft = await generate_proposal(request_text, lead_contact={})
+        # Сначала пробуем AnythingLLM (workspace для email)
+        draft = None
+        try:
+            from services.integrations.anythingllm_client import (
+                use_anythingllm_rag,
+                is_configured,
+                chat_for_email_reply,
+            )
+            if use_anythingllm_rag() and is_configured():
+                answer, _ = await chat_for_email_reply(
+                    message=f"Запрос клиента (для черновика ответа на письмо):\n\n{request_text}\n\nСформируй краткий вежливый черновик ответа (без приветствия в начале, только суть)."
+                )
+                if answer:
+                    draft = answer
+        except Exception as e:
+            log.warning("⚠️ [AnythingLLM] /email_draft: %s, fallback на generate_proposal", e)
+        if not draft:
+            from services.agents.lead_processor import generate_proposal
+            draft = await generate_proposal(request_text, lead_contact={})
         
         text = f"📧 *Черновик ответа на письмо:*\n\n{draft}\n\n"
         text += "💡 Отредактируйте черновик и отправьте через WEEEK или почтовый клиент."
@@ -221,8 +236,6 @@ async def handle_email_reply_last(query):
 async def handle_email_reply(query, email_id: str):
     """Обработка кнопки 'Подготовить ответ' для письма"""
     try:
-        from services.agents.lead_processor import generate_proposal
-        
         email_data = email_cache.get(email_id)
         if not email_data:
             await query.answer("❌ Данные письма не найдены", show_alert=True)
@@ -233,8 +246,25 @@ async def handle_email_reply(query, email_id: str):
         
         await query.answer("⏳ Генерирую черновик ответа...")
         
-        # Генерируем черновик ответа
-        draft = await generate_proposal(body, lead_contact={})
+        # Сначала пробуем AnythingLLM (workspace для email, если задан ANYTHINGLLM_EMAIL_WORKSPACE_SLUG)
+        draft = None
+        try:
+            from services.integrations.anythingllm_client import (
+                use_anythingllm_rag,
+                is_configured,
+                chat_for_email_reply,
+            )
+            if use_anythingllm_rag() and is_configured():
+                answer, _ = await chat_for_email_reply(
+                    message=f"Тема письма: {subject}\n\nТекст письма:\n{body}\n\nСформируй краткий вежливый черновик ответа на это письмо (без приветствия в начале, только суть ответа)."
+                )
+                if answer:
+                    draft = answer
+        except Exception as e:
+            log.warning("⚠️ [AnythingLLM] черновик по email: %s, fallback на generate_proposal", e)
+        if not draft:
+            from services.agents.lead_processor import generate_proposal
+            draft = await generate_proposal(body, lead_contact={})
         
         text = f"📧 *Черновик ответа на письмо:*\n\n"
         text += f"*Тема:* {subject}\n\n"

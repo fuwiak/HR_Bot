@@ -22,6 +22,13 @@ def _api_key() -> Optional[str]:
 def _workspace_slug() -> str:
     return (os.getenv("ANYTHINGLLM_WORKSPACE_SLUG") or "hr-bot").strip()
 
+
+def _email_workspace_slug() -> Optional[str]:
+    """Slug отдельной рабочей области для ответов на email (опционально)."""
+    slug = (os.getenv("ANYTHINGLLM_EMAIL_WORKSPACE_SLUG") or "").strip()
+    return slug if slug else None
+
+
 def use_anythingllm_rag() -> bool:
     return os.getenv("USE_ANYTHINGLLM_RAG", "").strip().lower() in ("true", "1", "yes")
 
@@ -140,3 +147,16 @@ async def chat_with_workspace_env(
     Вызов chat с workspace_slug из переменной окружения ANYTHINGLLM_WORKSPACE_SLUG.
     """
     return await chat(_workspace_slug(), message, history=history)
+
+
+async def chat_for_email_reply(
+    message: str,
+    history: Optional[List[Dict[str, str]]] = None,
+) -> Tuple[Optional[str], List[Dict[str, Any]]]:
+    """
+    Генерация черновика ответа на письмо через отдельный workspace AnythingLLM.
+    Использует ANYTHINGLLM_EMAIL_WORKSPACE_SLUG, если задан; иначе ANYTHINGLLM_WORKSPACE_SLUG.
+    Возвращает (текст_ответа, sources). При ошибке — (None, []).
+    """
+    slug = _email_workspace_slug() or _workspace_slug()
+    return await chat(slug, message, history=history)
