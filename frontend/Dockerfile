@@ -11,8 +11,8 @@ FROM mintplexlabs/anythingllm:latest
 ENV SERVER_PORT=3001
 ENV PORT=3001
 ENV STORAGE_DIR=/app/server/storage
-# Чтобы customModels.js не падал при старте (можно переопределить в Railway реальным ключом или использовать OpenRouter в UI)
-ENV OPENAI_API_KEY=sk-placeholder
+# Коллектор (документ-процессор) — обязателен для загрузки файлов в RAG
+ENV COLLECTOR_PORT=8888
 
 # Каталог хранилища обязателен; 777 — запись от любого пользователя образа
 RUN mkdir -p /app/server/storage && chmod 777 /app/server/storage
@@ -30,6 +30,7 @@ COPY plugins/agent-skills/ /app/skills-bundle/
 COPY frontend/docker-entrypoint.sh /app/docker-entrypoint.sh
 
 EXPOSE 3001
+EXPOSE 8888
 
 # В Railway: Settings → Networking → Port = 3001; Variables: PORT=3001, SERVER_PORT=3001.
 # Для сохранения данных: Dashboard → Volumes, mount path /app/server/storage

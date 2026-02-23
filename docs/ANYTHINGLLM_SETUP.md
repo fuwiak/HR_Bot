@@ -73,9 +73,12 @@ Frontend (AnythingLLM) z tego repozytorium jest dostępny pod adresem: **https:/
 | `DISABLE_TELEMETRY` | `true` | нет       | Отключить анонимную телеметрию AnythingLLM. |
 | `WEEEEK_TOKEN`  | `e9b78361-...` | нет    | API-ключ Weeeek — нужен для работы custom agent skill «Weeeek Manager». |
 | `DATABASE_URL`  | —              | нет    | Если задан (PostgreSQL), AnythingLLM использует его; при старте контейнера применяются миграции Prisma. Без — встроенная SQLite. |
-| `OPENAI_API_KEY` | —             | нет    | В образе задан placeholder, чтобы приложение не падало при старте. Для использования OpenAI задайте реальный ключ в Railway; при использовании только OpenRouter в UI можно не менять. |
+| `OPENROUTER_API_KEY` | ваш ключ OpenRouter | да, для OpenRouter | Если задан, а `OPENAI_API_KEY` не задан — entrypoint подставляет его в `OPENAI_API_KEY` и выставляет `OPENAI_API_BASE_URL=https://openrouter.ai/api/v1`. Тогда запросы «OpenAI» (в т.ч. customModels) идут в OpenRouter, без отдельного ключа OpenAI. |
+| `OPENAI_API_KEY` | — | нет | Задайте только если нужен именно OpenAI. При использовании только OpenRouter достаточно `OPENROUTER_API_KEY`. |
 
 Остальное (LLM, Embedder, векторная БД) настраивается после первого входа через веб-интерфейс AnythingLLM (Settings в приложении). В entrypoint создаются каталоги `direct-uploads` и `documents` в хранилище (устраняет ошибку «No direct uploads path found»).
+
+**Ошибка «Процессор документов недоступен»:** AnythingLLM требует два процесса — сервер (порт 3001) и **коллектор** (порт 8888). Entrypoint теперь запускает оба. Если ошибка остаётся — проверьте логи Railway: должна быть строка `[entrypoint] Коллектор запущен`. Также убедитесь, что в Variables сервиса Frontend задан `COLLECTOR_PORT=8888`.
 
 **Ошибка «The table main.system_settings does not exist»:** при старте контейнера entrypoint автоматически запускает `prisma migrate deploy` (или `prisma db push`), создавая нужные таблицы. После обновления образа сделайте **Redeploy** сервиса Frontend.
 
@@ -87,6 +90,7 @@ Frontend (AnythingLLM) z tego repozytorium jest dostępny pod adresem: **https:/
 1. Убедиться, что в переменных сервиса Frontend на Railway задан **`WEEEEK_TOKEN`** (тот же ключ, что у Telegram-бота — `WEEEK_API_KEY`).
 2. После деплоя открыть AnythingLLM UI → **Agents** → найти скилл **«Weeeek Manager»** и включить его.
 3. Если скилл не появился — перезагрузить страницу (F5). Если всё равно нет — проверить логи Railway: должна быть строка `[entrypoint] Скиллы скопированы`.
+4. **Если агент отвечает текстом вместо вызова API Weeeek:** в настройках агента (Workspace → Agent → System Prompt) добавьте инструкцию: *When the user message starts with "weeek", you MUST call the skill "Weeeek Manager" with the full user message; return the skill result. Do not answer yourself.* Готовый блок — в `plugins/agent-skills/weeek-manager/README.md`, раздел «Готовый System Prompt».
 
 **Локальная сборка (из корня репозитория):**
 ```bash

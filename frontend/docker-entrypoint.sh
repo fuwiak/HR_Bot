@@ -38,5 +38,17 @@ else
   echo "[entrypoint] Папка ${SKILLS_SRC} не найдена, скиллы не скопированы"
 fi
 
-echo "[entrypoint] Запускаю AnythingLLM..."
+echo "[entrypoint] Запускаю коллектор (документ-процессор) на порту ${COLLECTOR_PORT:-8888}..."
+COLLECTOR_PORT="${COLLECTOR_PORT:-8888}"
+export COLLECTOR_PORT
+
+if [ -f /app/collector/index.js ]; then
+  node /app/collector/index.js &
+  COLLECTOR_PID=$!
+  echo "[entrypoint] Коллектор запущен (pid=${COLLECTOR_PID}, port=${COLLECTOR_PORT})"
+else
+  echo "[entrypoint] WARNING: /app/collector/index.js не найден, документ-процессор недоступен"
+fi
+
+echo "[entrypoint] Запускаю AnythingLLM server..."
 exec node /app/server/index.js
